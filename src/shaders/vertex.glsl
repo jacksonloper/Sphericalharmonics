@@ -101,8 +101,9 @@ void main() {
   // Evaluate spherical harmonic at this direction
   float shValue = evaluateSH(dir);
 
-  // Use absolute value directly as radius
-  vec3 newPosition = dir * abs(shValue) * displacementScale;
+  // Displace vertex based on magnitude
+  float displacement = abs(shValue) * displacementScale;
+  vec3 newPosition = dir * (1.0 + displacement);
 
   // Pass value to fragment shader for coloring
   vValue = shValue;
