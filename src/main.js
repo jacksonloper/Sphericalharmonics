@@ -61,16 +61,64 @@ const frequencies = {
   freq10: 0.9
 };
 
-// Setup frequency sliders
-['freq3', 'freq6', 'freq8', 'freq10'].forEach(id => {
-  const slider = document.getElementById(id);
-  const valueDisplay = document.getElementById(`${id}-value`);
+const freqLabels = {
+  freq3: 'Y_1^0 (coeff[3])',
+  freq6: 'Y_2^-2 (coeff[6])',
+  freq8: 'Y_2^0 (coeff[8])',
+  freq10: 'Y_2^2 (coeff[10])'
+};
 
-  slider.addEventListener('input', (e) => {
-    const value = parseFloat(e.target.value);
-    frequencies[id] = value;
-    valueDisplay.textContent = value.toFixed(1);
+let currentFreq = null;
+
+// UI elements
+const hamburger = document.getElementById('hamburger');
+const frequencyList = document.getElementById('frequency-list');
+const sliderPanel = document.getElementById('slider-panel');
+const slider = document.getElementById('slider');
+const sliderTitle = document.getElementById('slider-title');
+const sliderValueDisplay = document.getElementById('slider-value-display');
+const backBtn = document.querySelector('.back-btn');
+
+// Toggle hamburger menu
+hamburger.addEventListener('click', () => {
+  const isOpen = frequencyList.classList.contains('show');
+  if (isOpen) {
+    frequencyList.classList.remove('show');
+    sliderPanel.classList.remove('show');
+    hamburger.classList.remove('open');
+  } else {
+    frequencyList.classList.add('show');
+    hamburger.classList.add('open');
+  }
+});
+
+// Open slider for specific frequency
+document.querySelectorAll('.freq-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const freqId = item.dataset.freq;
+    currentFreq = freqId;
+
+    sliderTitle.textContent = freqLabels[freqId];
+    slider.value = frequencies[freqId];
+    sliderValueDisplay.textContent = frequencies[freqId].toFixed(1);
+
+    frequencyList.classList.remove('show');
+    sliderPanel.classList.add('show');
   });
+});
+
+// Update frequency from slider
+slider.addEventListener('input', (e) => {
+  const value = parseFloat(e.target.value);
+  sliderValueDisplay.textContent = value.toFixed(1);
+  frequencies[currentFreq] = value;
+  document.getElementById(`${currentFreq}-display`).textContent = value.toFixed(1);
+});
+
+// Back button
+backBtn.addEventListener('click', () => {
+  sliderPanel.classList.remove('show');
+  frequencyList.classList.add('show');
 });
 
 // Animation loop

@@ -15,69 +15,167 @@
     canvas {
       display: block;
     }
-    #controls {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      background: rgba(0, 0, 0, 0.8);
-      padding: 20px;
-      border-radius: 8px;
-      min-width: 280px;
+
+    /* Hamburger button */
+    #hamburger {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 50px;
+      height: 50px;
+      background: rgba(0, 0, 0, 0.9);
+      border: 2px solid #4ecdc4;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 4px;
+      z-index: 1000;
+      transition: transform 0.3s;
+    }
+    #hamburger:active {
+      transform: translateX(-50%) scale(0.95);
+    }
+    #hamburger span {
+      width: 24px;
+      height: 2px;
+      background: #4ecdc4;
+      transition: all 0.3s;
+    }
+    #hamburger.open span:nth-child(1) {
+      transform: rotate(45deg) translate(5px, 5px);
+    }
+    #hamburger.open span:nth-child(2) {
+      opacity: 0;
+    }
+    #hamburger.open span:nth-child(3) {
+      transform: rotate(-45deg) translate(5px, -5px);
+    }
+
+    /* Frequency list */
+    #frequency-list {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.95);
+      border: 1px solid #4ecdc4;
+      border-radius: 12px;
+      padding: 10px;
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      min-width: 200px;
+      max-width: 280px;
       backdrop-filter: blur(10px);
     }
-    #controls h3 {
-      margin: 0 0 15px 0;
-      font-size: 16px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
+    #frequency-list.show {
+      display: flex;
     }
-    .control-group {
-      margin-bottom: 15px;
+    .freq-item {
+      padding: 12px 15px;
+      background: rgba(78, 205, 196, 0.1);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
-    .control-group label {
-      display: block;
-      margin-bottom: 5px;
+    .freq-item:active {
+      background: rgba(78, 205, 196, 0.3);
+    }
+    .freq-item .freq-value {
+      color: #4ecdc4;
+      font-size: 11px;
+    }
+
+    /* Slider panel */
+    #slider-panel {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.95);
+      border: 1px solid #4ecdc4;
+      border-radius: 12px;
+      padding: 15px;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 250px;
+      max-width: 300px;
+      backdrop-filter: blur(10px);
+    }
+    #slider-panel.show {
+      display: flex;
+    }
+    #slider-panel .title {
       font-size: 12px;
       color: #aaa;
+      text-align: center;
     }
-    .control-group input[type="range"] {
+    #slider-panel input[type="range"] {
       width: 100%;
-      margin-bottom: 5px;
     }
-    .control-group .value {
-      font-size: 11px;
+    #slider-panel .value-display {
+      text-align: center;
+      font-size: 18px;
       color: #4ecdc4;
-      text-align: right;
+      font-weight: bold;
+    }
+    #slider-panel .back-btn {
+      padding: 8px;
+      background: rgba(78, 205, 196, 0.2);
+      border-radius: 6px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    #slider-panel .back-btn:active {
+      background: rgba(78, 205, 196, 0.4);
     }
   </style>
 </head>
 <body>
-  <div id="controls">
-    <h3>Frequencies</h3>
+  <!-- Hamburger button -->
+  <div id="hamburger">
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
 
-    <div class="control-group">
-      <label>Y_1^0 (coeff[3])</label>
-      <input type="range" id="freq3" min="0" max="2" step="0.1" value="0.5">
-      <div class="value" id="freq3-value">0.5</div>
+  <!-- Frequency list menu -->
+  <div id="frequency-list">
+    <div class="freq-item" data-freq="freq3">
+      <span>Y_1^0 (coeff[3])</span>
+      <span class="freq-value" id="freq3-display">0.5</span>
     </div>
+    <div class="freq-item" data-freq="freq6">
+      <span>Y_2^-2 (coeff[6])</span>
+      <span class="freq-value" id="freq6-display">0.7</span>
+    </div>
+    <div class="freq-item" data-freq="freq8">
+      <span>Y_2^0 (coeff[8])</span>
+      <span class="freq-value" id="freq8-display">0.3</span>
+    </div>
+    <div class="freq-item" data-freq="freq10">
+      <span>Y_2^2 (coeff[10])</span>
+      <span class="freq-value" id="freq10-display">0.9</span>
+    </div>
+  </div>
 
-    <div class="control-group">
-      <label>Y_2^-2 (coeff[6])</label>
-      <input type="range" id="freq6" min="0" max="2" step="0.1" value="0.7">
-      <div class="value" id="freq6-value">0.7</div>
-    </div>
-
-    <div class="control-group">
-      <label>Y_2^0 (coeff[8])</label>
-      <input type="range" id="freq8" min="0" max="2" step="0.1" value="0.3">
-      <div class="value" id="freq8-value">0.3</div>
-    </div>
-
-    <div class="control-group">
-      <label>Y_2^2 (coeff[10])</label>
-      <input type="range" id="freq10" min="0" max="2" step="0.1" value="0.9">
-      <div class="value" id="freq10-value">0.9</div>
-    </div>
+  <!-- Slider panel -->
+  <div id="slider-panel">
+    <div class="title" id="slider-title"></div>
+    <div class="value-display" id="slider-value-display">0.0</div>
+    <input type="range" id="slider" min="0" max="2" step="0.1" value="0">
+    <div class="back-btn">← Back</div>
   </div>
 
   <script type="module" src="/src/main.js"></script>
