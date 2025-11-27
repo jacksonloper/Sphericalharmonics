@@ -9,13 +9,215 @@
       margin: 0;
       overflow: hidden;
       background: #000;
+      font-family: 'Monaco', 'Courier New', monospace;
+      color: #fff;
     }
     canvas {
       display: block;
     }
+
+    /* Hamburger button */
+    #hamburger {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 50px;
+      height: 50px;
+      background: rgba(0, 0, 0, 0.9);
+      border: 2px solid #4ecdc4;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 4px;
+      z-index: 1000;
+      transition: transform 0.3s;
+    }
+    #hamburger:active {
+      transform: translateX(-50%) scale(0.95);
+    }
+    #hamburger span {
+      width: 24px;
+      height: 2px;
+      background: #4ecdc4;
+      transition: all 0.3s;
+    }
+    #hamburger.open span:nth-child(1) {
+      transform: rotate(45deg) translate(5px, 5px);
+    }
+    #hamburger.open span:nth-child(2) {
+      opacity: 0;
+    }
+    #hamburger.open span:nth-child(3) {
+      transform: rotate(-45deg) translate(5px, -5px);
+    }
+
+    /* Frequency list */
+    #frequency-list {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.95);
+      border: 1px solid #4ecdc4;
+      border-radius: 12px;
+      padding: 10px;
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      min-width: 200px;
+      max-width: 280px;
+      backdrop-filter: blur(10px);
+    }
+    #frequency-list.show {
+      display: flex;
+    }
+    .freq-item {
+      padding: 12px 15px;
+      background: rgba(78, 205, 196, 0.1);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .freq-item:active {
+      background: rgba(78, 205, 196, 0.3);
+    }
+    .freq-item .freq-value {
+      color: #4ecdc4;
+      font-size: 11px;
+    }
+
+    /* Slider panel */
+    #slider-panel {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.95);
+      border: 1px solid #4ecdc4;
+      border-radius: 12px;
+      padding: 15px;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 250px;
+      max-width: 300px;
+      backdrop-filter: blur(10px);
+    }
+    #slider-panel.show {
+      display: flex;
+    }
+    #slider-panel .title {
+      font-size: 12px;
+      color: #aaa;
+      text-align: center;
+    }
+    #slider-panel input[type="range"] {
+      width: 100%;
+    }
+    #slider-panel .value-display {
+      text-align: center;
+      font-size: 18px;
+      color: #4ecdc4;
+      font-weight: bold;
+    }
+    #slider-panel .back-btn {
+      padding: 8px;
+      background: rgba(78, 205, 196, 0.2);
+      border-radius: 6px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    #slider-panel .back-btn:active {
+      background: rgba(78, 205, 196, 0.4);
+    }
+
+    /* Coefficient display */
+    #coeff-display {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(78, 205, 196, 0.3);
+      border-radius: 8px;
+      padding: 10px 15px;
+      font-size: 10px;
+      color: #aaa;
+      font-family: 'Courier New', monospace;
+      max-height: 80vh;
+      overflow-y: auto;
+      min-width: 120px;
+    }
+    #coeff-display .coeff-label {
+      color: #666;
+      font-size: 9px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    #coeff-display .coeff-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 3px;
+      font-size: 10px;
+    }
+    #coeff-display .coeff-index {
+      color: #888;
+    }
+    #coeff-display .coeff-value {
+      color: #4ecdc4;
+      font-weight: bold;
+      margin-left: 10px;
+    }
   </style>
 </head>
 <body>
+  <!-- Coefficient display -->
+  <div id="coeff-display">
+    <div class="coeff-label">Coefficients</div>
+    <div id="coeff-list"></div>
+  </div>
+
+  <!-- Hamburger button -->
+  <div id="hamburger">
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+
+  <!-- Parameter list menu -->
+  <div id="frequency-list">
+    <div class="freq-item" data-freq="theta">
+      <span>Mean Reversion (θ)</span>
+      <span class="freq-value" id="theta-display">0.50</span>
+    </div>
+    <div class="freq-item" data-freq="sigma">
+      <span>Volatility (σ)</span>
+      <span class="freq-value" id="sigma-display">0.30</span>
+    </div>
+    <div class="freq-item" id="wireframe-toggle">
+      <span>Wireframe</span>
+      <span class="freq-value" id="wireframe-status">OFF</span>
+    </div>
+  </div>
+
+  <!-- Slider panel -->
+  <div id="slider-panel">
+    <div class="title" id="slider-title"></div>
+    <div class="value-display" id="slider-value-display">0.0</div>
+    <input type="range" id="slider" min="0" max="2" step="0.1" value="0">
+    <div class="back-btn">← Back</div>
+  </div>
+
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
