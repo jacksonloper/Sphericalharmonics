@@ -53,6 +53,26 @@ const material = new THREE.ShaderMaterial({
 const mesh = new THREE.Mesh(geometry, material);
 scene.add(mesh);
 
+// Frequency controls
+const frequencies = {
+  freq3: 0.5,
+  freq6: 0.7,
+  freq8: 0.3,
+  freq10: 0.9
+};
+
+// Setup frequency sliders
+['freq3', 'freq6', 'freq8', 'freq10'].forEach(id => {
+  const slider = document.getElementById(id);
+  const valueDisplay = document.getElementById(`${id}-value`);
+
+  slider.addEventListener('input', (e) => {
+    const value = parseFloat(e.target.value);
+    frequencies[id] = value;
+    valueDisplay.textContent = value.toFixed(1);
+  });
+});
+
 // Animation loop
 let time = 0;
 function animate() {
@@ -61,11 +81,11 @@ function animate() {
   time += 0.01;
   material.uniforms.time.value = time;
 
-  // Animate coefficients for lava lamp effect
-  coefficients[3] = 0.5 + Math.sin(time * 0.5) * 0.3;
-  coefficients[6] = 0.4 + Math.cos(time * 0.7) * 0.2;
-  coefficients[8] = 0.3 + Math.sin(time * 0.3) * 0.2;
-  coefficients[10] = 0.2 + Math.cos(time * 0.9) * 0.15;
+  // Animate coefficients for lava lamp effect using user-controlled frequencies
+  coefficients[3] = 0.5 + Math.sin(time * frequencies.freq3) * 0.3;
+  coefficients[6] = 0.4 + Math.cos(time * frequencies.freq6) * 0.2;
+  coefficients[8] = 0.3 + Math.sin(time * frequencies.freq8) * 0.2;
+  coefficients[10] = 0.2 + Math.cos(time * frequencies.freq10) * 0.15;
 
   // Update orbit controls
   controls.update();
