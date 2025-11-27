@@ -25,15 +25,12 @@ controls.maxDistance = 10;
 const geometry = new THREE.IcosahedronGeometry(1, 64);
 
 // Initialize spherical harmonic coefficients
-// Starting with a simple pattern (modify these to create different patterns)
+// Starting with just Y_0^0 (constant) and Y_1^1 (dipole)
 const coefficients = new Float32Array(25);
 
-// Example: Set some interesting coefficients
-coefficients[0] = 1.0;   // Y_0^0
-coefficients[3] = 0.5;   // Y_1^0
-coefficients[8] = 0.3;   // Y_2^0
-coefficients[6] = 0.4;   // Y_2^-2
-coefficients[10] = 0.2;  // Y_2^2
+// Simple pattern: g0 (Y_0^0) and p1 (Y_1^1)
+coefficients[0] = 0.5;   // Y_0^0 (l=0, m=0) - constant term
+coefficients[3] = 0.5;   // Y_1^1 (l=1, m=1) - dipole term
 
 // Shader material
 const material = new THREE.ShaderMaterial({
@@ -61,12 +58,8 @@ function animate() {
   time += 0.01;
   material.uniforms.time.value = time;
 
-  // Animate coefficients for lava lamp effect
-  // These sinusoidal changes to coefficients create smooth morphing
-  coefficients[3] = 0.5 + Math.sin(time * 0.5) * 0.3;
-  coefficients[6] = 0.4 + Math.cos(time * 0.7) * 0.2;
-  coefficients[8] = 0.3 + Math.sin(time * 0.3) * 0.2;
-  coefficients[10] = 0.2 + Math.cos(time * 0.9) * 0.15;
+  // Animate Y_1^1 coefficient for simple morphing
+  coefficients[3] = Math.sin(time * 0.5) * 0.8;
 
   // Update orbit controls
   controls.update();
