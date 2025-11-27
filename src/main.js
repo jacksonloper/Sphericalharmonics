@@ -53,22 +53,83 @@ const material = new THREE.ShaderMaterial({
 const mesh = new THREE.Mesh(geometry, material);
 scene.add(mesh);
 
-// Frequency controls
-const frequencies = {
-  freq3: 0.5,
-  freq6: 0.7,
-  freq8: 0.3,
-  freq10: 0.9
+// OU process parameters
+const ouParams = {
+  theta: 0.5,  // Mean reversion rate
+  sigma: 0.3   // Volatility/noise level
 };
 
-const freqLabels = {
-  freq3: 'Y_1^0 (coeff[3])',
-  freq6: 'Y_2^-2 (coeff[6])',
-  freq8: 'Y_2^0 (coeff[8])',
-  freq10: 'Y_2^2 (coeff[10])'
+const ouParamLabels = {
+  theta: 'Mean Reversion (θ)',
+  sigma: 'Volatility (σ)'
 };
 
-let currentFreq = null;
+// Coefficient indices we'll evolve
+const activeIndices = [3, 6, 8, 10];
+
+// Initialize position x (coefficients on n-sphere) and velocity v
+const n = activeIndices.length;
+const x = new Float32Array(n);
+const v = new Float32Array(n);
+
+// Initialize x on the sphere with the current coefficient values
+x[0] = 0.5;  // coeff[3]
+x[1] = 0.4;  // coeff[6]
+x[2] = 0.3;  // coeff[8]
+x[3] = 0.2;  // coeff[10]
+
+// Normalize to sphere
+let norm = Math.sqrt(x[0]*x[0] + x[1]*x[1] + x[2]*x[2] + x[3]*x[3]);
+for (let i = 0; i < n; i++) {
+  x[i] /= norm;
+}
+
+// Initialize velocity to zero
+for (let i = 0; i < n; i++) {
+  v[i] = 0;
+}
+
+// Box-Muller transform for Gaussian noise
+function gaussianRandom() {
+  let u1 = Math.random();
+  let u2 = Math.random();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+// OU process update function
+function updateOU(dt) {
+  const theta = ouParams.theta;
+  const sigma = ouParams.sigma;
+  const sqrtDt = Math.sqrt(dt);
+
+  // Update velocity using OU process: dv = -theta*v*dt + sigma*sqrt(dt)*N(0,1)
+  for (let i = 0; i < n; i++) {
+    const noise = gaussianRandom();
+    v[i] = v[i] * (1 - theta * dt) + sigma * sqrtDt * noise;
+  }
+
+  // Update position: x += v*dt
+  for (let i = 0; i < n; i++) {
+    x[i] += v[i] * dt;
+  }
+
+  // Project back onto sphere: normalize x
+  let norm = 0;
+  for (let i = 0; i < n; i++) {
+    norm += x[i] * x[i];
+  }
+  norm = Math.sqrt(norm);
+  for (let i = 0; i < n; i++) {
+    x[i] /= norm;
+  }
+
+  // Update coefficients from x
+  for (let i = 0; i < n; i++) {
+    coefficients[activeIndices[i]] = x[i];
+  }
+}
+
+let currentParam = null;
 
 // UI elements
 const hamburger = document.getElementById('hamburger');
@@ -92,27 +153,38 @@ hamburger.addEventListener('click', () => {
   }
 });
 
-// Open slider for specific frequency
+// Open slider for specific parameter
 document.querySelectorAll('.freq-item').forEach(item => {
   item.addEventListener('click', () => {
-    const freqId = item.dataset.freq;
-    currentFreq = freqId;
+    const paramId = item.dataset.freq;
+    currentParam = paramId;
 
-    sliderTitle.textContent = freqLabels[freqId];
-    slider.value = frequencies[freqId];
-    sliderValueDisplay.textContent = frequencies[freqId].toFixed(1);
+    sliderTitle.textContent = ouParamLabels[paramId];
+    slider.value = ouParams[paramId];
+    sliderValueDisplay.textContent = ouParams[paramId].toFixed(2);
+
+    // Update slider range based on parameter
+    if (paramId === 'theta') {
+      slider.min = 0;
+      slider.max = 2;
+      slider.step = 0.05;
+    } else if (paramId === 'sigma') {
+      slider.min = 0;
+      slider.max = 1;
+      slider.step = 0.05;
+    }
 
     frequencyList.classList.remove('show');
     sliderPanel.classList.add('show');
   });
 });
 
-// Update frequency from slider
+// Update parameter from slider
 slider.addEventListener('input', (e) => {
   const value = parseFloat(e.target.value);
-  sliderValueDisplay.textContent = value.toFixed(1);
-  frequencies[currentFreq] = value;
-  document.getElementById(`${currentFreq}-display`).textContent = value.toFixed(1);
+  sliderValueDisplay.textContent = value.toFixed(2);
+  ouParams[currentParam] = value;
+  document.getElementById(`${currentParam}-display`).textContent = value.toFixed(2);
 });
 
 // Back button
@@ -123,17 +195,20 @@ backBtn.addEventListener('click', () => {
 
 // Animation loop
 let time = 0;
+let lastTime = performance.now();
+
 function animate() {
   requestAnimationFrame(animate);
 
-  time += 0.01;
+  const currentTime = performance.now();
+  const dt = Math.min((currentTime - lastTime) / 1000, 0.1); // Cap dt to avoid instability
+  lastTime = currentTime;
+
+  time += dt;
   material.uniforms.time.value = time;
 
-  // Animate coefficients for lava lamp effect using user-controlled frequencies
-  coefficients[3] = 0.5 + Math.sin(time * frequencies.freq3) * 0.3;
-  coefficients[6] = 0.4 + Math.cos(time * frequencies.freq6) * 0.2;
-  coefficients[8] = 0.3 + Math.sin(time * frequencies.freq8) * 0.2;
-  coefficients[10] = 0.2 + Math.cos(time * frequencies.freq10) * 0.15;
+  // Update coefficients using OU process
+  updateOU(dt);
 
   // Update orbit controls
   controls.update();
