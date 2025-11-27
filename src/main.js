@@ -32,7 +32,7 @@ const material = new THREE.ShaderMaterial({
   uniforms: {
     coefficients: { value: coefficients },
     time: { value: 0 },
-    displacementScale: { value: 0.3 },
+    displacementScale: { value: 1.5 },
     positiveColor: { value: new THREE.Color(0xff6b35) }, // Orange/red for positive
     negativeColor: { value: new THREE.Color(0x4ecdc4) }, // Teal for negative
     lightDirection: { value: new THREE.Vector3(1, 1, 1).normalize() }
