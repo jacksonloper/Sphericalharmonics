@@ -102,11 +102,47 @@ void main() {
   float shValue = evaluateSH(dir);
 
   // Use |f(x)| directly as radius
-  vec3 newPosition = dir * abs(shValue) * displacementScale;
+  float radius = abs(shValue) * displacementScale;
+  vec3 newPosition = dir * radius;
+
+  // Compute proper normal using finite differences
+  // Small epsilon for numerical derivatives
+  float eps = 0.001;
+
+  // Get current spherical coordinates
+  float theta = acos(clamp(dir.z, -1.0, 1.0));
+  float phi = atan(dir.y, dir.x);
+
+  // Perturb theta
+  float thetaPlus = theta + eps;
+  vec3 dirThetaPlus = vec3(
+    sin(thetaPlus) * cos(phi),
+    sin(thetaPlus) * sin(phi),
+    cos(thetaPlus)
+  );
+  float shThetaPlus = evaluateSH(dirThetaPlus);
+  vec3 posThetaPlus = dirThetaPlus * abs(shThetaPlus) * displacementScale;
+
+  // Perturb phi
+  float phiPlus = phi + eps;
+  vec3 dirPhiPlus = vec3(
+    sin(theta) * cos(phiPlus),
+    sin(theta) * sin(phiPlus),
+    cos(theta)
+  );
+  float shPhiPlus = evaluateSH(dirPhiPlus);
+  vec3 posPhiPlus = dirPhiPlus * abs(shPhiPlus) * displacementScale;
+
+  // Compute tangent vectors via finite differences
+  vec3 tangentTheta = (posThetaPlus - newPosition) / eps;
+  vec3 tangentPhi = (posPhiPlus - newPosition) / eps;
+
+  // Normal is cross product of tangent vectors
+  vec3 normal = cross(tangentTheta, tangentPhi);
 
   // Pass value to fragment shader for coloring
   vValue = shValue;
-  vNormal = normalize(newPosition);
+  vNormal = normalize(normal);
 
   gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
 }
