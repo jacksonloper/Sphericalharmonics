@@ -140,9 +140,53 @@
     #slider-panel .back-btn:active {
       background: rgba(78, 205, 196, 0.4);
     }
+
+    /* Coefficient display */
+    #coeff-display {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(78, 205, 196, 0.3);
+      border-radius: 8px;
+      padding: 10px 15px;
+      font-size: 10px;
+      color: #aaa;
+      font-family: 'Courier New', monospace;
+      max-height: 80vh;
+      overflow-y: auto;
+      min-width: 120px;
+    }
+    #coeff-display .coeff-label {
+      color: #666;
+      font-size: 9px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    #coeff-display .coeff-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 3px;
+      font-size: 10px;
+    }
+    #coeff-display .coeff-index {
+      color: #888;
+    }
+    #coeff-display .coeff-value {
+      color: #4ecdc4;
+      font-weight: bold;
+      margin-left: 10px;
+    }
   </style>
 </head>
 <body>
+  <!-- Coefficient display -->
+  <div id="coeff-display">
+    <div class="coeff-label">Coefficients</div>
+    <div id="coeff-list"></div>
+  </div>
+
   <!-- Hamburger button -->
   <div id="hamburger">
     <span></span>

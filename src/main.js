@@ -141,6 +141,38 @@ const sliderTitle = document.getElementById('slider-title');
 const sliderValueDisplay = document.getElementById('slider-value-display');
 const backBtn = document.querySelector('.back-btn');
 
+// Initialize coefficient display
+const coeffList = document.getElementById('coeff-list');
+const coeffDisplayElements = [];
+
+// Create display elements for all active coefficients
+for (let i = 0; i < activeIndices.length; i++) {
+  const row = document.createElement('div');
+  row.className = 'coeff-row';
+
+  const index = document.createElement('span');
+  index.className = 'coeff-index';
+  index.textContent = `[${activeIndices[i]}]`;
+
+  const value = document.createElement('span');
+  value.className = 'coeff-value';
+  value.textContent = '0.00';
+
+  row.appendChild(index);
+  row.appendChild(value);
+  coeffList.appendChild(row);
+
+  coeffDisplayElements.push(value);
+}
+
+// Function to update coefficient display
+function updateCoeffDisplay() {
+  for (let i = 0; i < activeIndices.length; i++) {
+    const val = coefficients[activeIndices[i]];
+    coeffDisplayElements[i].textContent = val.toFixed(2);
+  }
+}
+
 // Toggle hamburger menu
 hamburger.addEventListener('click', () => {
   const isOpen = frequencyList.classList.contains('show');
@@ -210,6 +242,9 @@ function animate() {
 
   // Update coefficients using OU process
   updateOU(dt);
+
+  // Update coefficient display
+  updateCoeffDisplay();
 
   // Update orbit controls
   controls.update();
