@@ -43,7 +43,8 @@ const material = new THREE.ShaderMaterial({
     displacementScale: { value: 1.5 },
     positiveColor: { value: new THREE.Color(0xff6b35) }, // Orange/red for positive
     negativeColor: { value: new THREE.Color(0x4ecdc4) }, // Teal for negative
-    lightDirection: { value: new THREE.Vector3(1, 1, 1).normalize() }
+    lightDirection: { value: new THREE.Vector3(1, 1, 1).normalize() },     // Key light from top-right
+    lightDirection2: { value: new THREE.Vector3(-1, -0.5, 0.5).normalize() } // Fill light from left-bottom
   },
   vertexShader,
   fragmentShader,
