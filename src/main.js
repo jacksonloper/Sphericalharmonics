@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import vertexShader from './shaders/vertex.glsl?raw';
 import fragmentShader from './shaders/fragment.glsl?raw';
 
@@ -12,6 +13,13 @@ renderer.setPixelRatio(window.devicePixelRatio);
 document.body.appendChild(renderer.domElement);
 
 camera.position.z = 3;
+
+// Add orbit controls for interactive camera movement
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.minDistance = 1;
+controls.maxDistance = 10;
 
 // Create sphere geometry with high detail for smooth deformation
 const geometry = new THREE.IcosahedronGeometry(1, 64);
@@ -53,15 +61,15 @@ function animate() {
   time += 0.01;
   material.uniforms.time.value = time;
 
-  // Slowly rotate the sphere
-  mesh.rotation.y = time * 0.2;
-  mesh.rotation.x = Math.sin(time * 0.1) * 0.2;
-
   // Animate coefficients for lava lamp effect
+  // These sinusoidal changes to coefficients create smooth morphing
   coefficients[3] = 0.5 + Math.sin(time * 0.5) * 0.3;
   coefficients[6] = 0.4 + Math.cos(time * 0.7) * 0.2;
   coefficients[8] = 0.3 + Math.sin(time * 0.3) * 0.2;
   coefficients[10] = 0.2 + Math.cos(time * 0.9) * 0.15;
+
+  // Update orbit controls
+  controls.update();
 
   renderer.render(scene, camera);
 }
@@ -74,22 +82,3 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
-
-// Mouse interaction for rotation control
-let mouseX = 0;
-let mouseY = 0;
-let targetRotationX = 0;
-let targetRotationY = 0;
-
-document.addEventListener('mousemove', (event) => {
-  mouseX = (event.clientX / window.innerWidth) * 2 - 1;
-  mouseY = (event.clientY / window.innerHeight) * 2 - 1;
-  targetRotationY = mouseX * Math.PI;
-  targetRotationX = mouseY * Math.PI;
-});
-
-// Smooth rotation following mouse
-setInterval(() => {
-  mesh.rotation.y += (targetRotationY - mesh.rotation.y) * 0.05;
-  mesh.rotation.x += (targetRotationX - mesh.rotation.x) * 0.05;
-}, 16);
