@@ -25,15 +25,11 @@ controls.maxDistance = 10;
 const geometry = new THREE.IcosahedronGeometry(1, 64);
 
 // Initialize spherical harmonic coefficients
-// Starting with a simple pattern (modify these to create different patterns)
+// Up to l=4 (25 total), but only evolving through l=3
 const coefficients = new Float32Array(25);
 
-// Example: Set some interesting coefficients
-coefficients[0] = 0.0;   // Y_0^0 - set to zero for balanced colors
-coefficients[3] = 0.5;   // Y_1^0
-coefficients[8] = 0.3;   // Y_2^0
-coefficients[6] = 0.4;   // Y_2^-2
-coefficients[10] = 0.2;  // Y_2^2
+// Y_0^0 set to zero for balanced colors (not evolved)
+coefficients[0] = 0.0;
 
 // Shader material
 const material = new THREE.ShaderMaterial({
@@ -65,22 +61,26 @@ const ouParamLabels = {
   sigma: 'Volatility (σ)'
 };
 
-// Coefficient indices we'll evolve
-const activeIndices = [3, 6, 8, 10];
+// Coefficient indices we'll evolve: all through l=3 (excluding l=0)
+// l=1: 1,2,3 | l=2: 4,5,6,7,8 | l=3: 9,10,11,12,13,14,15
+const activeIndices = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
 // Initialize position x (coefficients on n-sphere) and velocity v
-const n = activeIndices.length;
+const n = activeIndices.length; // 15 dimensions
 const x = new Float32Array(n);
 const v = new Float32Array(n);
 
-// Initialize x on the sphere with the current coefficient values
-x[0] = 0.5;  // coeff[3]
-x[1] = 0.4;  // coeff[6]
-x[2] = 0.3;  // coeff[8]
-x[3] = 0.2;  // coeff[10]
+// Initialize x with random values on the sphere
+for (let i = 0; i < n; i++) {
+  x[i] = (Math.random() - 0.5) * 2;
+}
 
 // Normalize to sphere
-let norm = Math.sqrt(x[0]*x[0] + x[1]*x[1] + x[2]*x[2] + x[3]*x[3]);
+let norm = 0;
+for (let i = 0; i < n; i++) {
+  norm += x[i] * x[i];
+}
+norm = Math.sqrt(norm);
 for (let i = 0; i < n; i++) {
   x[i] /= norm;
 }
