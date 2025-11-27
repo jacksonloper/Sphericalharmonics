@@ -190,6 +190,10 @@ hamburger.addEventListener('click', () => {
 document.querySelectorAll('.freq-item').forEach(item => {
   item.addEventListener('click', () => {
     const paramId = item.dataset.freq;
+
+    // Skip if no data-freq attribute (wireframe toggle)
+    if (!paramId) return;
+
     currentParam = paramId;
 
     sliderTitle.textContent = ouParamLabels[paramId];
@@ -224,6 +228,20 @@ slider.addEventListener('input', (e) => {
 backBtn.addEventListener('click', () => {
   sliderPanel.classList.remove('show');
   frequencyList.classList.add('show');
+});
+
+// Wireframe toggle
+const wireframeToggle = document.getElementById('wireframe-toggle');
+const wireframeStatus = document.getElementById('wireframe-status');
+let wireframeEnabled = false;
+
+wireframeToggle.addEventListener('click', (e) => {
+  // Prevent opening slider for wireframe toggle
+  e.stopPropagation();
+
+  wireframeEnabled = !wireframeEnabled;
+  material.wireframe = wireframeEnabled;
+  wireframeStatus.textContent = wireframeEnabled ? 'ON' : 'OFF';
 });
 
 // Animation loop
