@@ -1,0 +1,45 @@
+name: Download Earth2014 Data
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download and truncate Earth2014 data
+        run: |
+          cd data/earth2014
+          python download_and_truncate.py --max-degree 1143
+          ls -la
+
+      - name: Verify file size
+        run: |
+          FILE="data/earth2014/Earth2014.BED2014.degree1143.bshc"
+          SIZE=$(stat -c %s "$FILE")
+          MAX_SIZE=$((10 * 1024 * 1024))  # 10 MB
+          echo "File size: $SIZE bytes"
+          if [ "$SIZE" -gt "$MAX_SIZE" ]; then
+            echo "ERROR: File size exceeds 10 MB limit"
+            exit 1
+          fi
+          echo "File size is within limits"
+
+      - name: Commit data file
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/earth2014/Earth2014.BED2014.degree1143.bshc
+          git commit -m "Add truncated Earth2014 BED2014 data (degree 1143)"
+          git push
