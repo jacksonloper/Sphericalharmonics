@@ -3,3 +3,7 @@ dist
 .DS_Store
 *.log
 .vite
+
+# Large HEALPix data files (generate with convert_bshc_to_healpix.py)
+*.fits
+*.npy
