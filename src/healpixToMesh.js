@@ -1,142 +1,98 @@
 /**
- * Convert HEALPix data to a proper quad/triangle mesh
- * Uses HEALPix's native quad structure for correct topology
+ * Convert HEALPix data to icosahedral mesh
+ * Uses icosahedron subdivision for uniform spherical triangulation
  */
 
 /**
- * Convert HEALPix pixel index to Cartesian coordinates (RING ordering)
+ * Create icosahedron base mesh
  */
-function pix2vec(nside, ipix) {
-  const npix = 12 * nside * nside;
-  const ncap = 2 * nside * (nside - 1);
+function createIcosahedron() {
+  const t = (1 + Math.sqrt(5)) / 2; // Golden ratio
 
-  let z, phi;
+  const positions = [
+    [-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0],
+    [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t],
+    [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]
+  ];
 
-  // North polar cap
-  if (ipix < ncap) {
-    const iring = Math.floor((Math.sqrt(1 + 2 * ipix) + 1) / 2);
-    const iphi = ipix - 2 * iring * (iring - 1);
+  // Normalize to unit sphere
+  const vertices = positions.map(([x, y, z]) => {
+    const len = Math.sqrt(x * x + y * y + z * z);
+    return [x / len, y / len, z / len];
+  });
 
-    z = 1 - (iring * iring) / (3 * nside * nside);
-    phi = (iphi + 0.5) * Math.PI / (2 * iring);
-  }
-  // Equatorial belt
-  else if (ipix < npix - ncap) {
-    const ip = ipix - ncap;
-    const iring = Math.floor(ip / (4 * nside)) + nside;
-    const iphi = ip % (4 * nside);
+  const indices = [
+    0, 11, 5, 0, 5, 1, 0, 1, 7, 0, 7, 10, 0, 10, 11,
+    1, 5, 9, 5, 11, 4, 11, 10, 2, 10, 7, 6, 7, 1, 8,
+    3, 9, 4, 3, 4, 2, 3, 2, 6, 3, 6, 8, 3, 8, 9,
+    4, 9, 5, 2, 4, 11, 6, 2, 10, 8, 6, 7, 9, 8, 1
+  ];
 
-    const fodd = ((iring + nside) & 1) ? 1 : 0.5;
-    z = (2 * nside - iring) * 2 / (3 * nside);
-    phi = (iphi + fodd) * Math.PI / (2 * nside);
-  }
-  // South polar cap
-  else {
-    const ip = npix - ipix;
-    const iring = Math.floor((Math.sqrt(2 * ip - 1) + 1) / 2);
-    const iphi = 2 * iring * (iring + 1) - ip;
-
-    z = -1 + (iring * iring) / (3 * nside * nside);
-    phi = (iphi + 0.5) * Math.PI / (2 * iring);
-  }
-
-  // Convert to Cartesian
-  const stheta = Math.sqrt((1 - z) * (1 + z));
-  const x = stheta * Math.cos(phi);
-  const y = stheta * Math.sin(phi);
-
-  return [x, y, z];
+  return { vertices, indices };
 }
 
 /**
- * Get the 4 corner pixels of a HEALPix base pixel quad
- * HEALPix nside=128 has 12*128*128 pixels organized as quads
+ * Subdivide mesh by adding midpoint of each edge
  */
-function getQuadIndices(nside, basePixel, subI, subJ) {
-  // For simplicity, create mesh by treating each pixel as a point
-  // and connecting to neighbors in a regular grid pattern
-  const npix = 12 * nside * nside;
+function subdivideMesh(vertices, indices) {
+  const midpointCache = new Map();
 
-  // Simple approach: connect pixels in a regular latitude-longitude-like grid
-  // This is approximate but avoids the complex HEALPix neighbor logic
-  return null; // Will use different strategy
-}
+  function getMidpoint(i1, i2) {
+    const key = i1 < i2 ? `${i1},${i2}` : `${i2},${i1}`;
 
-/**
- * Create a triangulated sphere mesh from HEALPix data
- * Uses icosphere-based approach with HEALPix data mapped to vertices
- */
-export function createMeshFromHealpix(healpixData, nside, subdivisions = 32) {
-  console.log(`Creating mesh from HEALPix nside=${nside} with ${healpixData.length} pixels`);
-
-  // Strategy: Create a regular icosphere and interpolate HEALPix data onto it
-  // This gives us a proper quad/triangle mesh without HEALPix topology issues
-
-  const positions = [];
-  const indices = [];
-  const elevation = [];
-
-  // Create latitude-longitude grid (simpler and more reliable)
-  const latDivs = subdivisions;
-  const lonDivs = subdivisions * 2;
-
-  // Generate vertices
-  for (let lat = 0; lat <= latDivs; lat++) {
-    const theta = (lat / latDivs) * Math.PI; // 0 to PI
-    const sinTheta = Math.sin(theta);
-    const cosTheta = Math.cos(theta);
-
-    for (let lon = 0; lon <= lonDivs; lon++) {
-      const phi = (lon / lonDivs) * 2 * Math.PI; // 0 to 2PI
-
-      // Cartesian coordinates on unit sphere
-      const x = sinTheta * Math.cos(phi);
-      const y = sinTheta * Math.sin(phi);
-      const z = cosTheta;
-
-      positions.push(x, y, z);
-
-      // Find nearest HEALPix pixel and get its elevation
-      const elev = sampleHealpixAtDirection(healpixData, nside, x, y, z);
-      elevation.push(elev);
+    if (midpointCache.has(key)) {
+      return midpointCache.get(key);
     }
+
+    const [x1, y1, z1] = vertices[i1];
+    const [x2, y2, z2] = vertices[i2];
+
+    // Midpoint
+    let x = (x1 + x2) / 2;
+    let y = (y1 + y2) / 2;
+    let z = (z1 + z2) / 2;
+
+    // Project to unit sphere
+    const len = Math.sqrt(x * x + y * y + z * z);
+    x /= len;
+    y /= len;
+    z /= len;
+
+    const index = vertices.length;
+    vertices.push([x, y, z]);
+    midpointCache.set(key, index);
+
+    return index;
   }
 
-  // Generate indices (quads -> 2 triangles each)
-  for (let lat = 0; lat < latDivs; lat++) {
-    for (let lon = 0; lon < lonDivs; lon++) {
-      const i0 = lat * (lonDivs + 1) + lon;
-      const i1 = i0 + 1;
-      const i2 = (lat + 1) * (lonDivs + 1) + lon;
-      const i3 = i2 + 1;
+  const newIndices = [];
 
-      // First triangle
-      indices.push(i0, i2, i1);
-      // Second triangle
-      indices.push(i1, i2, i3);
-    }
+  for (let i = 0; i < indices.length; i += 3) {
+    const v1 = indices[i];
+    const v2 = indices[i + 1];
+    const v3 = indices[i + 2];
+
+    const a = getMidpoint(v1, v2);
+    const b = getMidpoint(v2, v3);
+    const c = getMidpoint(v3, v1);
+
+    newIndices.push(v1, a, c);
+    newIndices.push(v2, b, a);
+    newIndices.push(v3, c, b);
+    newIndices.push(a, b, c);
   }
 
-  return {
-    positions: new Float32Array(positions),
-    indices: new Uint32Array(indices),
-    elevation: new Float32Array(elevation),
-    numVertices: positions.length / 3,
-    numTriangles: indices.length / 3
-  };
+  return { vertices, indices: newIndices };
 }
 
 /**
  * Sample HEALPix data at a given direction (x, y, z)
- * Finds nearest HEALPix pixel
  */
 function sampleHealpixAtDirection(healpixData, nside, x, y, z) {
-  // Convert direction to HEALPix pixel index
   const theta = Math.acos(Math.max(-1, Math.min(1, z)));
   const phi = Math.atan2(y, x);
   const phiPos = phi < 0 ? phi + 2 * Math.PI : phi;
 
-  // Approximate pixel index (inverse of pix2vec)
   const ipix = ang2pix(nside, theta, phiPos);
 
   if (ipix >= 0 && ipix < healpixData.length) {
@@ -181,15 +137,60 @@ function ang2pix(nside, theta, phi) {
 }
 
 /**
+ * Create mesh from HEALPix data using icosahedral subdivision
+ * @param {Float32Array} healpixData - HEALPix elevation data
+ * @param {number} nside - HEALPix nside parameter
+ * @param {number} subdivisions - Number of subdivision levels (0-5)
+ * @returns {Object} Mesh data with positions, indices, and elevation
+ */
+export function createMeshFromHealpix(healpixData, nside, subdivisions = 4) {
+  console.log(`Creating icosahedral mesh with ${subdivisions} subdivisions`);
+
+  // Start with icosahedron
+  let { vertices, indices } = createIcosahedron();
+
+  // Subdivide
+  for (let i = 0; i < subdivisions; i++) {
+    const result = subdivideMesh(vertices, indices);
+    vertices = result.vertices;
+    indices = result.indices;
+    console.log(`  Subdivision ${i + 1}: ${vertices.length} vertices, ${indices.length / 3} triangles`);
+  }
+
+  // Flatten positions and sample elevation
+  const positions = new Float32Array(vertices.length * 3);
+  const elevation = new Float32Array(vertices.length);
+
+  for (let i = 0; i < vertices.length; i++) {
+    const [x, y, z] = vertices[i];
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+
+    elevation[i] = sampleHealpixAtDirection(healpixData, nside, x, y, z);
+  }
+
+  const indicesArray = new Uint32Array(indices);
+
+  return {
+    positions,
+    indices: indicesArray,
+    elevation,
+    numVertices: vertices.length,
+    numTriangles: indices.length / 3
+  };
+}
+
+/**
  * Export mesh to binary format
  */
 export function exportMeshBinary(meshData) {
   const { positions, indices, elevation } = meshData;
 
-  // Calculate sizes
-  const headerSize = 15; // 6 + 4 + 4 + 1
+  const headerSize = 15;
   const positionsSize = positions.length * 4;
-  const indicesSize = indices.length * (indices.length < 65536 ? 2 : 4);
+  const useShortIndices = positions.length / 3 < 65536;
+  const indicesSize = indices.length * (useShortIndices ? 2 : 4);
   const elevationSize = elevation.length * 4;
 
   const totalSize = headerSize + positionsSize + indicesSize + elevationSize;
@@ -211,7 +212,7 @@ export function exportMeshBinary(meshData) {
   view.setUint32(offset, indices.length, true);
   offset += 4;
 
-  const indexType = indices.length < 65536 ? 2 : 4;
+  const indexType = useShortIndices ? 2 : 4;
   view.setUint8(offset, indexType);
   offset += 1;
 
@@ -222,7 +223,7 @@ export function exportMeshBinary(meshData) {
   }
 
   // Indices
-  if (indexType === 2) {
+  if (useShortIndices) {
     for (let i = 0; i < indices.length; i++) {
       view.setUint16(offset, indices[i], true);
       offset += 2;

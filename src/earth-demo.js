@@ -50,8 +50,8 @@ let earthMesh;
 
 async function init() {
   try {
-    // Load the HEALPix mesh
-    const geometry = await loadHealpixMesh('./earthtoposources/sur_mesh32.bin');
+    // Load the HEALPix mesh (icosahedral subdivision 5: 10K vertices, 280KB)
+    const geometry = await loadHealpixMesh('./earthtoposources/sur_mesh_ico5.bin');
 
     // Create material
     const material = createElevationMaterial(
@@ -96,7 +96,7 @@ function addInfoPanel(geometry) {
   panel.innerHTML = `
     <strong>Earth Surface Topography</strong><br>
     <br>
-    Resolution: nside=32<br>
+    Icosahedral mesh (5 subdivisions)<br>
     Vertices: ${vertices.toLocaleString()}<br>
     Triangles: ${triangles.toLocaleString()}<br>
     <br>
