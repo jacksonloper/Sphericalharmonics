@@ -2,6 +2,11 @@ name: Download Earth2014 Data
 
 on:
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to commit the data file to'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -12,6 +17,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -41,5 +48,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/earth2014/Earth2014.BED2014.degree1143.bshc
-          git commit -m "Add truncated Earth2014 BED2014 data (degree 1143)"
-          git push
+          if git diff --staged --quiet; then
+            echo "No changes to commit (file already exists with same content)"
+          else
+            git commit -m "Add truncated Earth2014 BED2014 data (degree 1143)"
+            git push
+          fi

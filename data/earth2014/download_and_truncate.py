@@ -9,10 +9,10 @@ Usage:
     python download_and_truncate.py [--max-degree 1143] [--output-dir .]
 """
 
-import struct
-import urllib.request
 import argparse
 import os
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 # Source URL for the full Earth2014 BED2014 BSHC file
@@ -24,8 +24,15 @@ DEFAULT_TRUNCATED_DEGREE = 1143  # Results in ~9.99 MB file
 def download_file(url: str, output_path: str) -> None:
     """Download a file from a URL."""
     print(f"Downloading from {url}...")
-    urllib.request.urlretrieve(url, output_path)
-    print(f"Downloaded to {output_path}")
+    try:
+        urllib.request.urlretrieve(url, output_path)
+        print(f"Downloaded to {output_path}")
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Failed to download file: {e.reason}") from e
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"HTTP error {e.code}: {e.reason}") from e
+    except OSError as e:
+        raise RuntimeError(f"Failed to save file: {e}") from e
 
 
 def count_coefficients(max_degree: int) -> int:
@@ -51,11 +58,18 @@ def truncate_bshc(input_path: str, output_path: str, max_degree: int) -> None:
     print(f"Truncating to degree {max_degree}")
     print(f"Keeping {num_coeffs:,} coefficient pairs ({bytes_to_keep:,} bytes = {bytes_to_keep/(1024*1024):.2f} MB)")
     
-    with open(input_path, 'rb') as f_in:
-        data = f_in.read(bytes_to_keep)
+    # Use buffered I/O to handle large files efficiently
+    chunk_size = 1024 * 1024  # 1 MB chunks
+    bytes_written = 0
     
-    with open(output_path, 'wb') as f_out:
-        f_out.write(data)
+    with open(input_path, 'rb') as f_in, open(output_path, 'wb') as f_out:
+        while bytes_written < bytes_to_keep:
+            bytes_remaining = bytes_to_keep - bytes_written
+            chunk = f_in.read(min(chunk_size, bytes_remaining))
+            if not chunk:
+                break
+            f_out.write(chunk)
+            bytes_written += len(chunk)
     
     actual_size = os.path.getsize(output_path)
     print(f"Output file size: {actual_size:,} bytes ({actual_size/(1024*1024):.2f} MB)")
@@ -93,8 +107,11 @@ def main():
         
         # Remove original unless --keep-original
         if not args.keep_original:
-            os.remove(original_file)
-            print(f"Removed original file: {original_file}")
+            try:
+                os.remove(original_file)
+                print(f"Removed original file: {original_file}")
+            except OSError as e:
+                print(f"Warning: Could not remove original file: {e}")
     else:
         print(f"No truncation needed (max_degree = {args.max_degree})")
         truncated_file = original_file
