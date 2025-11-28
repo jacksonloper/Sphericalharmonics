@@ -3,3 +3,6 @@ dist
 .DS_Store
 *.log
 .vite
+
+# Keep large bedrock data files local only
+sources/bed_f64_2160.bshc
