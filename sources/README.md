@@ -27,6 +27,30 @@ Each `.bshc` file contains:
 - **High detail visualization**: Use `bed_f32_510.bshc` (best quality under 1MB)
 - **Scientific analysis**: Use `bed.bshc` (full resolution)
 
+## Loading in Browser JavaScript
+
+```javascript
+async function loadBedrockHarmonics(url, format = 'float32') {
+  const response = await fetch(url);
+  const arrayBuffer = await response.arrayBuffer();
+
+  const TypedArray = format === 'float32' ? Float32Array : Float64Array;
+  const data = new TypedArray(arrayBuffer);
+
+  return {
+    metadata: data[0],
+    maxDegree: data[1],
+    coefficients: data.subarray(2)  // All coefficients after 2-value header
+  };
+}
+
+// Example usage:
+const bedrock = await loadBedrockHarmonics('sources/bed_f32_361.bshc', 'float32');
+console.log(`Loaded L=${bedrock.maxDegree}, ${bedrock.coefficients.length} coefficients`);
+```
+
+See `load-bedrock.js` in the root directory for a complete example with error handling.
+
 ## Notes
 
 - Float32 precision (~7 decimal digits) is sufficient for topography visualization
