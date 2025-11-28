@@ -46,22 +46,35 @@ export async function loadHealpixMesh(url) {
   console.log(`  Index type: uint${indexType * 8}`);
 
   // Read positions (float32[numVertices * 3])
-  const positionsSize = numVertices * 3 * 4;
-  const positions = new Float32Array(buffer, offset, numVertices * 3);
-  offset += positionsSize;
+  // Copy data to avoid alignment issues
+  const positions = new Float32Array(numVertices * 3);
+  for (let i = 0; i < numVertices * 3; i++) {
+    positions[i] = dataView.getFloat32(offset, true);
+    offset += 4;
+  }
 
   // Read indices (uint16 or uint32)
   let indices;
   if (indexType === 2) {
-    indices = new Uint16Array(buffer, offset, numIndices);
-    offset += numIndices * 2;
+    indices = new Uint16Array(numIndices);
+    for (let i = 0; i < numIndices; i++) {
+      indices[i] = dataView.getUint16(offset, true);
+      offset += 2;
+    }
   } else {
-    indices = new Uint32Array(buffer, offset, numIndices);
-    offset += numIndices * 4;
+    indices = new Uint32Array(numIndices);
+    for (let i = 0; i < numIndices; i++) {
+      indices[i] = dataView.getUint32(offset, true);
+      offset += 4;
+    }
   }
 
   // Read elevation data (float32[numVertices])
-  const elevation = new Float32Array(buffer, offset, numVertices);
+  const elevation = new Float32Array(numVertices);
+  for (let i = 0; i < numVertices; i++) {
+    elevation[i] = dataView.getFloat32(offset, true);
+    offset += 4;
+  }
 
   // Create geometry
   const geometry = new THREE.BufferGeometry();
