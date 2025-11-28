@@ -7,3 +7,6 @@ dist
 # Large HEALPix data files (generate with convert_bshc_to_healpix.py)
 *.fits
 *.npy
+
+# Keep small float32 HEALPix binaries (768KB each)
+!*_healpix_nside128.bin
