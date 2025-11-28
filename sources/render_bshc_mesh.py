@@ -141,23 +141,13 @@ def evaluate_real_spherical_harmonics(cosine_coeffs, sine_coeffs, theta, phi, ma
                 values += c_lm * Y_real_c
                 # S(l,0) is typically 0 by convention
             else:
-                # For m > 0, real SH are:
-                # Y_l^m_c = sqrt(2) * Re(Y_l^m) ~ cos(m*phi)
-                # Y_l^m_s = sqrt(2) * Im(Y_l^m) ~ sin(m*phi)
-                # But more commonly, real SH use associated Legendre * cos/sin directly
-                # The BSHC format uses: f = Σ C_lm * P_lm * cos(m*phi) + S_lm * P_lm * sin(m*phi)
-                
-                # scipy's sph_harm_y returns fully normalized complex SH
-                # For real SH with cosine/sine coefficients, we compute:
-                Y_real_c = np.sqrt(2) * np.real(Y_complex)  # cos component
-                Y_real_s = np.sqrt(2) * np.imag(Y_complex)  # sin component (note: imag part has (-1)^m factor)
-                
-                # Actually, for the standard convention used in geodesy/geophysics:
-                # Y_l^m_cos = P_l^m(cos theta) * cos(m*phi) * normalization
-                # Y_l^m_sin = P_l^m(cos theta) * sin(m*phi) * normalization
-                # And complex SH: Y_l^m = P_l^m * exp(i*m*phi) * norm
-                # So: Re(Y_l^m) = P_l^m * cos(m*phi) * norm
-                #     Im(Y_l^m) = P_l^m * sin(m*phi) * norm (with possible sign)
+                # For m > 0, real SH are combinations of complex SH.
+                # scipy's sph_harm_y returns fully normalized complex SH: Y_l^m = P_l^m * exp(i*m*phi) * norm
+                # Real part gives cos(m*phi) component, imaginary part gives sin(m*phi) component.
+                # The sqrt(2) factor accounts for the normalization difference between
+                # complex and real SH conventions.
+                Y_real_c = np.sqrt(2) * np.real(Y_complex)  # cos(m*phi) component
+                Y_real_s = np.sqrt(2) * np.imag(Y_complex)  # sin(m*phi) component
                 
                 values += c_lm * Y_real_c + s_lm * Y_real_s
     
