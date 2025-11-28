@@ -174,7 +174,6 @@ def create_glb_mesh(vertices, faces, colors):
         GLB bytes
     """
     from pygltflib import GLTF2, Scene, Node, Mesh, Primitive, Accessor, BufferView, Buffer, Asset
-    import base64
     
     # Prepare binary data
     vertices_flat = vertices.astype(np.float32).tobytes()
@@ -299,7 +298,6 @@ def render_png_matplotlib(vertices, faces, colors, output_path, title="Spherical
     import matplotlib
     matplotlib.use('Agg')  # Non-interactive backend
     import matplotlib.pyplot as plt
-    from mpl_toolkits.mplot3d import Axes3D
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
     
     fig = plt.figure(figsize=(10, 10), dpi=100)
@@ -340,12 +338,14 @@ def render_png_matplotlib(vertices, faces, colors, output_path, title="Spherical
     print(f"PNG saved to: {output_path}")
 
 
-def load_bshc(filepath):
+def load_bshc(filepath, n_coeffs=None):
     """
     Load spherical harmonic coefficients from a .bshc file.
     
     Args:
         filepath: Path to .bshc file
+        n_coeffs: Number of coefficients per sample (if None, auto-detect based on
+                  common SH orders or use 284 as default for this specific file)
     
     Returns:
         coefficients: 2D array of shape (n_samples, n_coeffs)
@@ -354,10 +354,23 @@ def load_bshc(filepath):
         data = f.read()
     
     arr = np.frombuffer(data, dtype=np.float64)
-    
-    # The file has 4672084 values = 16451 samples × 284 coefficients
     n_total = len(arr)
-    n_coeffs = 284
+    
+    if n_coeffs is None:
+        # Try to auto-detect based on common SH coefficient counts
+        # (lmax+1)^2 for lmax = 2,3,4,5,6,7,8,...
+        common_counts = [(lmax + 1) ** 2 for lmax in range(2, 20)]
+        # Also include 284 as it's a known format for this specific file
+        common_counts.append(284)
+        
+        for count in sorted(common_counts, reverse=True):
+            if n_total % count == 0:
+                n_coeffs = count
+                break
+        
+        if n_coeffs is None:
+            raise ValueError(f"Could not auto-detect coefficient count from file size {n_total}")
+    
     n_samples = n_total // n_coeffs
     
     if n_samples * n_coeffs != n_total:
@@ -377,6 +390,7 @@ def main():
     parser.add_argument('--sample', '-s', type=int, default=0, help='Sample index to render (default: 0)')
     parser.add_argument('--subdivisions', '-d', type=int, default=4, help='Icosahedron subdivisions (default: 4)')
     parser.add_argument('--max-lmax', type=int, default=8, help='Maximum L to use for SH evaluation (default: 8)')
+    parser.add_argument('--n-coeffs', type=int, default=None, help='Number of coefficients per sample (auto-detect if not specified)')
     args = parser.parse_args()
     
     # Get script directory for relative paths
@@ -388,7 +402,7 @@ def main():
     output_png = os.path.join(repo_root, args.output_png) if not os.path.isabs(args.output_png) else args.output_png
     
     print(f"Loading BSHC file: {input_path}")
-    coefficients = load_bshc(input_path)
+    coefficients = load_bshc(input_path, n_coeffs=args.n_coeffs)
     print(f"Loaded {coefficients.shape[0]} samples with {coefficients.shape[1]} coefficients each")
     
     # Select sample
