@@ -6,3 +6,6 @@ dist
 
 # Keep large bedrock data files local only
 sources/bed_f64_2160.bshc
+
+# Keep JSON meshes local (binary versions are committed)
+sources/*.json
