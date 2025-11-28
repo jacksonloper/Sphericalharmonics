@@ -95,54 +95,71 @@ def subdivide_mesh(vertices, faces):
     return np.array(vertices, dtype=np.float32), np.array(new_faces, dtype=np.int32)
 
 
-def evaluate_real_spherical_harmonics(coefficients, theta, phi):
+def evaluate_real_spherical_harmonics(cosine_coeffs, sine_coeffs, theta, phi, max_lmax=None):
     """
-    Evaluate real spherical harmonics at given angles.
+    Evaluate real spherical harmonics at given angles using cosine/sine coefficients.
     
-    Uses scipy's sph_harm which returns complex SH, then converts to real basis.
+    Real SH expansion: f(θ, φ) = Σ_{l,m} [C(l,m) * Y_l^m_c(θ, φ) + S(l,m) * Y_l^m_s(θ, φ)]
+    
+    Where Y_l^m_c and Y_l^m_s are the real spherical harmonics:
+    - Y_l^0 = P_l^0(cos θ) * normalization
+    - Y_l^m_c = P_l^m(cos θ) * cos(m φ) * normalization (for m > 0)
+    - Y_l^m_s = P_l^m(cos θ) * sin(m φ) * normalization (for m > 0)
     
     Args:
-        coefficients: Array of SH coefficients (lmax+1)^2 length
+        cosine_coeffs: 2D array of cosine coefficients [l, m]
+        sine_coeffs: 2D array of sine coefficients [l, m]
         theta: Polar angle (0 to pi) - array
         phi: Azimuthal angle (0 to 2*pi) - array
+        max_lmax: Maximum l to use (if None, use all available)
     
     Returns:
         values: SH function values at each direction
     """
-    n_coeffs = len(coefficients)
-    
-    # Determine lmax from number of coefficients
-    # For real SH: (lmax+1)^2 coefficients
-    lmax = int(np.sqrt(n_coeffs)) - 1
+    lmax = cosine_coeffs.shape[0] - 1
+    if max_lmax is not None:
+        lmax = min(lmax, max_lmax)
     
     values = np.zeros_like(theta)
-    idx = 0
     
     for l in range(lmax + 1):
-        for m in range(-l, l + 1):
-            if idx >= n_coeffs:
-                break
+        for m in range(l + 1):
+            c_lm = cosine_coeffs[l, m]
+            s_lm = sine_coeffs[l, m]
             
-            coeff = coefficients[idx]
-            if abs(coeff) > 1e-10:  # Skip negligible coefficients
-                # scipy's sph_harm_y uses (l, m, theta, phi) convention
-                # and returns complex values
-                Y_complex = sph_harm_y(l, abs(m), theta, phi)
-                
-                # Convert to real spherical harmonics
-                if m > 0:
-                    # Y_l^m (real) = sqrt(2) * Re(Y_l^m)
-                    Y_real = np.sqrt(2) * np.real(Y_complex)
-                elif m < 0:
-                    # Y_l^(-m) (real) = sqrt(2) * Im(Y_l^|m|)
-                    Y_real = np.sqrt(2) * np.imag(Y_complex)
-                else:
-                    # m = 0: already real
-                    Y_real = np.real(Y_complex)
-                
-                values += coeff * Y_real
+            # Skip if both coefficients are negligible
+            if abs(c_lm) < 1e-15 and abs(s_lm) < 1e-15:
+                continue
             
-            idx += 1
+            # scipy's sph_harm_y(l, m, theta, phi) returns the complex SH Y_l^m
+            # We need real SH which are combinations of complex SH
+            Y_complex = sph_harm_y(l, m, theta, phi)
+            
+            if m == 0:
+                # For m=0, Y_l^0 is already real
+                Y_real_c = np.real(Y_complex)
+                values += c_lm * Y_real_c
+                # S(l,0) is typically 0 by convention
+            else:
+                # For m > 0, real SH are:
+                # Y_l^m_c = sqrt(2) * Re(Y_l^m) ~ cos(m*phi)
+                # Y_l^m_s = sqrt(2) * Im(Y_l^m) ~ sin(m*phi)
+                # But more commonly, real SH use associated Legendre * cos/sin directly
+                # The BSHC format uses: f = Σ C_lm * P_lm * cos(m*phi) + S_lm * P_lm * sin(m*phi)
+                
+                # scipy's sph_harm_y returns fully normalized complex SH
+                # For real SH with cosine/sine coefficients, we compute:
+                Y_real_c = np.sqrt(2) * np.real(Y_complex)  # cos component
+                Y_real_s = np.sqrt(2) * np.imag(Y_complex)  # sin component (note: imag part has (-1)^m factor)
+                
+                # Actually, for the standard convention used in geodesy/geophysics:
+                # Y_l^m_cos = P_l^m(cos theta) * cos(m*phi) * normalization
+                # Y_l^m_sin = P_l^m(cos theta) * sin(m*phi) * normalization
+                # And complex SH: Y_l^m = P_l^m * exp(i*m*phi) * norm
+                # So: Re(Y_l^m) = P_l^m * cos(m*phi) * norm
+                #     Im(Y_l^m) = P_l^m * sin(m*phi) * norm (with possible sign)
+                
+                values += c_lm * Y_real_c + s_lm * Y_real_s
     
     return values
 
@@ -338,45 +355,58 @@ def render_png_matplotlib(vertices, faces, colors, output_path, title="Spherical
     print(f"PNG saved to: {output_path}")
 
 
-def load_bshc(filepath, n_coeffs=None):
+def load_bshc(filepath):
     """
-    Load spherical harmonic coefficients from a .bshc file.
+    Load spherical harmonic coefficients from a binary .bshc file.
+    
+    BSHC format (as used by SHTOOLS/Curtin University):
+    - File is composed of 8-byte little-endian floats
+    - First two values: min_degree, max_degree (lmax)
+    - Then cosine coefficients: C(0,0), C(1,0), C(1,1), C(2,0), C(2,1), ... C(lmax,lmax)
+    - Then sine coefficients: S(0,0), S(1,0), S(1,1), S(2,0), S(2,1), ... S(lmax,lmax)
     
     Args:
         filepath: Path to .bshc file
-        n_coeffs: Number of coefficients per sample (if None, auto-detect based on
-                  common SH orders or use 284 as default for this specific file)
     
     Returns:
-        coefficients: 2D array of shape (n_samples, n_coeffs)
+        lmax: Maximum spherical harmonic degree
+        cosine_coeffs: 2D array of cosine coefficients, shape (lmax+1, lmax+1)
+                       cosine_coeffs[l, m] = C(l, m)
+        sine_coeffs: 2D array of sine coefficients, shape (lmax+1, lmax+1)
+                     sine_coeffs[l, m] = S(l, m)
     """
     with open(filepath, 'rb') as f:
         data = f.read()
     
-    arr = np.frombuffer(data, dtype=np.float64)
-    n_total = len(arr)
+    arr = np.frombuffer(data, dtype='<f8')  # little-endian float64
     
-    if n_coeffs is None:
-        # Try to auto-detect based on common SH coefficient counts
-        # (lmax+1)^2 for lmax = 2,3,4,5,6,7,8,...
-        common_counts = [(lmax + 1) ** 2 for lmax in range(2, 20)]
-        # Also include 284 as it's a known format for this specific file
-        common_counts.append(284)
-        
-        for count in sorted(common_counts, reverse=True):
-            if n_total % count == 0:
-                n_coeffs = count
-                break
-        
-        if n_coeffs is None:
-            raise ValueError(f"Could not auto-detect coefficient count from file size {n_total}")
+    # First two values are min_degree and max_degree
+    min_deg = int(arr[0])
+    max_deg = int(arr[1])
+    lmax = max_deg
     
-    n_samples = n_total // n_coeffs
+    # Number of coefficients for each type (cosine or sine)
+    # For degrees 0 to lmax, we have: sum_{l=0}^{lmax} (l+1) = (lmax+1)(lmax+2)/2
+    n_coeffs = (lmax + 1) * (lmax + 2) // 2
     
-    if n_samples * n_coeffs != n_total:
-        raise ValueError(f"File size {n_total} doesn't divide evenly by {n_coeffs}")
+    # Extract cosine and sine coefficients
+    cosine_flat = arr[2:2 + n_coeffs]
+    sine_flat = arr[2 + n_coeffs:2 + 2 * n_coeffs]
     
-    return arr.reshape((n_samples, n_coeffs))
+    # Create 2D arrays indexed by [l, m]
+    cosine_coeffs = np.zeros((lmax + 1, lmax + 1), dtype=np.float64)
+    sine_coeffs = np.zeros((lmax + 1, lmax + 1), dtype=np.float64)
+    
+    # Fill in the coefficients
+    # Order in file: C(0,0), C(1,0), C(1,1), C(2,0), C(2,1), C(2,2), ...
+    idx = 0
+    for l in range(lmax + 1):
+        for m in range(l + 1):
+            cosine_coeffs[l, m] = cosine_flat[idx]
+            sine_coeffs[l, m] = sine_flat[idx]
+            idx += 1
+    
+    return lmax, cosine_coeffs, sine_coeffs
 
 
 def main():
@@ -387,10 +417,8 @@ def main():
     parser.add_argument('--input', '-i', default='sources/bed.bshc', help='Input BSHC file')
     parser.add_argument('--output-mesh', '-m', default='sources/bed_mesh.glb', help='Output GLB mesh file')
     parser.add_argument('--output-png', '-p', default='sources/bed_mesh.png', help='Output PNG screenshot')
-    parser.add_argument('--sample', '-s', type=int, default=0, help='Sample index to render (default: 0)')
     parser.add_argument('--subdivisions', '-d', type=int, default=4, help='Icosahedron subdivisions (default: 4)')
     parser.add_argument('--max-lmax', type=int, default=8, help='Maximum L to use for SH evaluation (default: 8)')
-    parser.add_argument('--n-coeffs', type=int, default=None, help='Number of coefficients per sample (auto-detect if not specified)')
     args = parser.parse_args()
     
     # Get script directory for relative paths
@@ -402,17 +430,14 @@ def main():
     output_png = os.path.join(repo_root, args.output_png) if not os.path.isabs(args.output_png) else args.output_png
     
     print(f"Loading BSHC file: {input_path}")
-    coefficients = load_bshc(input_path, n_coeffs=args.n_coeffs)
-    print(f"Loaded {coefficients.shape[0]} samples with {coefficients.shape[1]} coefficients each")
+    lmax, cosine_coeffs, sine_coeffs = load_bshc(input_path)
+    print(f"Loaded SH coefficients up to lmax={lmax}")
+    print(f"Cosine coeff range: [{cosine_coeffs.min():.2f}, {cosine_coeffs.max():.2f}]")
+    print(f"Sine coeff range: [{sine_coeffs.min():.2f}, {sine_coeffs.max():.2f}]")
     
-    # Select sample
-    sample_coeffs = coefficients[args.sample, :]
-    print(f"Using sample {args.sample}, coefficient range: [{sample_coeffs.min():.2f}, {sample_coeffs.max():.2f}]")
-    
-    # Limit to max_lmax
-    max_coeffs = (args.max_lmax + 1) ** 2
-    sample_coeffs = sample_coeffs[:max_coeffs]
-    print(f"Using {len(sample_coeffs)} coefficients (lmax={args.max_lmax})")
+    # Limit to max_lmax for visualization
+    effective_lmax = min(lmax, args.max_lmax)
+    print(f"Using lmax={effective_lmax} for visualization")
     
     # Create subdivided icosahedron
     print(f"Creating subdivided icosahedron with {args.subdivisions} subdivisions...")
@@ -424,7 +449,7 @@ def main():
     
     # Evaluate SH function at each vertex
     print("Evaluating spherical harmonics...")
-    sh_values = evaluate_real_spherical_harmonics(sample_coeffs, theta, phi)
+    sh_values = evaluate_real_spherical_harmonics(cosine_coeffs, sine_coeffs, theta, phi, max_lmax=effective_lmax)
     print(f"SH values range: [{sh_values.min():.2f}, {sh_values.max():.2f}]")
     
     # Balloon style: radius = |f(θ, φ)|, normalized
@@ -486,7 +511,7 @@ def main():
     # Render PNG screenshot
     print(f"Rendering PNG: {output_png}")
     render_png_matplotlib(vertices, faces, colors, output_png, 
-                         title=f"Spherical Harmonics (Sample {args.sample}, lmax={args.max_lmax})")
+                         title=f"Spherical Harmonics (lmax={effective_lmax})")
     
     print("Done!")
 
