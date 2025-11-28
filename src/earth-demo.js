@@ -51,7 +51,7 @@ let earthMesh;
 async function init() {
   try {
     // Load the HEALPix mesh
-    const geometry = await loadHealpixMesh('/earthtoposources/sur_mesh32.bin');
+    const geometry = await loadHealpixMesh('./earthtoposources/sur_mesh32.bin');
 
     // Create material
     const material = createElevationMaterial(
