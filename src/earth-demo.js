@@ -64,9 +64,9 @@ async function init() {
       }
     };
 
-    // Load compact mesh (subdivision 8: ~655K vertices, ~2.5 MB)
+    // Load compact mesh (subdivision 9: ~2.6M vertices, ~10 MB)
     // Use Web Worker for smoother loading experience
-    const geometry = await loadCompactMesh('./earthtoposources/sur_compact8.bin', {
+    const geometry = await loadCompactMesh('./earthtoposources/sur_compact9.bin', {
       onProgress,
       useWorker: true
     });
@@ -120,7 +120,7 @@ function addInfoPanel(geometry) {
 
   const vertices = geometry.attributes.position.count;
   const triangles = geometry.index.count / 3;
-  const subdivisions = geometry.userData.subdivisions || 8;
+  const subdivisions = geometry.userData.subdivisions || 9;
 
   panel.innerHTML = `
     <strong>Earth Surface Topography</strong><br>
@@ -128,7 +128,7 @@ function addInfoPanel(geometry) {
     Icosahedral mesh (${subdivisions} subdivisions)<br>
     Vertices: ${vertices.toLocaleString()}<br>
     Triangles: ${triangles.toLocaleString()}<br>
-    File: ~2.5 MB (geometry generated procedurally)<br>
+    File: ~10 MB (geometry generated procedurally)<br>
     <br>
     Elevation Range:<br>
     ${geometry.userData.elevationMin.toFixed(1)} to ${geometry.userData.elevationMax.toFixed(1)} m<br>
