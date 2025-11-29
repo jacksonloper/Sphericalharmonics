@@ -5,32 +5,32 @@
       "description": "Low quality - fast loading, mobile devices",
       "max_vertices": 25000,
       "error_threshold": 50.0,
-      "size_bytes": 804176,
-      "size_mb": 0.77
+      "size_bytes": 750184,
+      "size_mb": 0.72
     },
     "medium": {
       "file": "earthtoposources/sur_adaptive_medium.mesh",
       "description": "Medium quality - balanced performance",
       "max_vertices": 50000,
       "error_threshold": 25.0,
-      "size_bytes": 1621940,
-      "size_mb": 1.55
+      "size_bytes": 1500148,
+      "size_mb": 1.43
     },
     "high": {
       "file": "earthtoposources/sur_adaptive_high.mesh",
       "description": "High quality - detailed visualization",
       "max_vertices": 100000,
       "error_threshold": 15.0,
-      "size_bytes": 3251436,
-      "size_mb": 3.1
+      "size_bytes": 3000184,
+      "size_mb": 2.86
     },
     "ultra": {
       "file": "earthtoposources/sur_adaptive_ultra.mesh",
       "description": "Ultra quality - maximum detail",
       "max_vertices": 200000,
       "error_threshold": 8.0,
-      "size_bytes": 6538144,
-      "size_mb": 6.24
+      "size_bytes": 6000148,
+      "size_mb": 5.72
     }
   },
   "format_version": 1

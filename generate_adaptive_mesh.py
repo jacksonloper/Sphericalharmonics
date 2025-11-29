@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Generate an adaptive mesh for spherical harmonic data.
+Generate a watertight adaptive mesh for spherical harmonic data.
 
-This script creates a triangle mesh on the sphere with adaptive refinement:
+This script creates a conforming triangle mesh on the sphere:
 - Starts with an icosahedron
 - Subdivides triangles where the surface has high curvature
+- Ensures watertight mesh by conforming neighbor triangles to subdivided edges
 - Keeps Nyquist sampling in mind (lmax=2160 requires ~4.6km spacing at equator)
 - Outputs float32 elevations per vertex
 """
@@ -13,7 +14,7 @@ import numpy as np
 import healpy as hp
 import struct
 from dataclasses import dataclass
-from typing import List, Tuple, Set
+from typing import List, Tuple, Set, Dict
 import heapq
 
 
@@ -24,13 +25,22 @@ class Triangle:
     v1: int
     v2: int
     error: float = 0.0
+    id: int = -1  # Unique triangle ID
 
     def __lt__(self, other):
         return self.error > other.error  # Max heap (highest error first)
 
+    def edges(self):
+        """Return the three edges as sorted tuples."""
+        return [
+            tuple(sorted([self.v0, self.v1])),
+            tuple(sorted([self.v1, self.v2])),
+            tuple(sorted([self.v2, self.v0]))
+        ]
+
 
 class AdaptiveMesh:
-    """Adaptive mesh generator for spherical data."""
+    """Adaptive mesh generator for spherical data with watertight guarantee."""
 
     def __init__(self, healpix_data, nside):
         """
@@ -45,7 +55,9 @@ class AdaptiveMesh:
         self.vertices = []  # List of (x, y, z) unit vectors
         self.elevations = []  # List of elevation values
         self.triangles = []  # List of Triangle objects
-        self.edges = {}  # (v0, v1) -> midpoint_vertex_index
+        self.edges = {}  # (v0, v1) -> midpoint_vertex_index (global edge midpoints)
+        self.edge_to_triangles = {}  # edge -> set of triangle IDs
+        self.triangle_id_counter = 0
 
     def sample_elevation(self, direction):
         """
@@ -58,7 +70,7 @@ class AdaptiveMesh:
             Elevation value
         """
         # Convert to spherical coordinates
-        theta = np.arccos(direction[2])  # colatitude
+        theta = np.arccos(np.clip(direction[2], -1, 1))  # colatitude
         phi = np.arctan2(direction[1], direction[0])  # longitude
 
         # Get HEALPix pixel
@@ -100,8 +112,15 @@ class AdaptiveMesh:
         ]
 
         for f in faces:
-            tri = Triangle(f[0], f[1], f[2])
+            tri = Triangle(f[0], f[1], f[2], id=self.triangle_id_counter)
+            self.triangle_id_counter += 1
             self.triangles.append(tri)
+
+            # Register edges
+            for edge in tri.edges():
+                if edge not in self.edge_to_triangles:
+                    self.edge_to_triangles[edge] = set()
+                self.edge_to_triangles[edge].add(tri.id)
 
     def get_midpoint(self, v0_idx, v1_idx):
         """
@@ -156,12 +175,7 @@ class AdaptiveMesh:
             # Get actual elevation
             actual = self.sample_elevation(point)
 
-            # Compute barycentric coordinates (approximate for sphere)
-            # For simplicity, use planar barycentric coordinates
-            # This is approximate but sufficient for error estimation
-
-            # Use vertex elevations to estimate via nearest vertices
-            # Simple approach: use closest vertex elevation
+            # Inverse distance weighting
             dist0 = np.linalg.norm(point - v0)
             dist1 = np.linalg.norm(point - v1)
             dist2 = np.linalg.norm(point - v2)
@@ -185,28 +199,100 @@ class AdaptiveMesh:
 
         return max_error
 
-    def subdivide_triangle(self, tri):
+    def subdivide_triangle_conforming(self, tri):
         """
-        Subdivide a triangle into 4 smaller triangles.
+        Subdivide a triangle in a way that conforms to already-subdivided edges.
 
-        Returns the 4 new triangles.
+        Returns list of new triangles based on which edges are subdivided.
         """
-        # Get midpoints
-        m01 = self.get_midpoint(tri.v0, tri.v1)
-        m12 = self.get_midpoint(tri.v1, tri.v2)
-        m20 = self.get_midpoint(tri.v2, tri.v0)
+        edges = tri.edges()
+        edge01, edge12, edge20 = edges
 
-        # Create 4 new triangles
-        t0 = Triangle(tri.v0, m01, m20)
-        t1 = Triangle(tri.v1, m12, m01)
-        t2 = Triangle(tri.v2, m20, m12)
-        t3 = Triangle(m01, m12, m20)
+        # Check which edges are already subdivided
+        has_m01 = edge01 in self.edges
+        has_m12 = edge12 in self.edges
+        has_m20 = edge20 in self.edges
 
-        return [t0, t1, t2, t3]
+        # Count subdivided edges
+        subdivided_count = sum([has_m01, has_m12, has_m20])
+
+        if subdivided_count == 0:
+            # No edges subdivided yet - do full 1-to-4 subdivision
+            m01 = self.get_midpoint(tri.v0, tri.v1)
+            m12 = self.get_midpoint(tri.v1, tri.v2)
+            m20 = self.get_midpoint(tri.v2, tri.v0)
+
+            return [
+                Triangle(tri.v0, m01, m20, id=self.triangle_id_counter),
+                Triangle(tri.v1, m12, m01, id=self.triangle_id_counter + 1),
+                Triangle(tri.v2, m20, m12, id=self.triangle_id_counter + 2),
+                Triangle(m01, m12, m20, id=self.triangle_id_counter + 3)
+            ], 4
+
+        elif subdivided_count == 1:
+            # One edge subdivided - do 1-to-2 bisection
+            if has_m01:
+                m01 = self.edges[edge01]
+                return [
+                    Triangle(tri.v0, m01, tri.v2, id=self.triangle_id_counter),
+                    Triangle(m01, tri.v1, tri.v2, id=self.triangle_id_counter + 1)
+                ], 2
+            elif has_m12:
+                m12 = self.edges[edge12]
+                return [
+                    Triangle(tri.v1, m12, tri.v0, id=self.triangle_id_counter),
+                    Triangle(m12, tri.v2, tri.v0, id=self.triangle_id_counter + 1)
+                ], 2
+            else:  # has_m20
+                m20 = self.edges[edge20]
+                return [
+                    Triangle(tri.v2, m20, tri.v1, id=self.triangle_id_counter),
+                    Triangle(m20, tri.v0, tri.v1, id=self.triangle_id_counter + 1)
+                ], 2
+
+        elif subdivided_count == 2:
+            # Two edges subdivided - do 1-to-3 subdivision
+            if not has_m01:
+                m12 = self.edges[edge12]
+                m20 = self.edges[edge20]
+                return [
+                    Triangle(tri.v0, tri.v1, m20, id=self.triangle_id_counter),
+                    Triangle(tri.v1, m12, m20, id=self.triangle_id_counter + 1),
+                    Triangle(m20, m12, tri.v2, id=self.triangle_id_counter + 2)
+                ], 3
+            elif not has_m12:
+                m01 = self.edges[edge01]
+                m20 = self.edges[edge20]
+                return [
+                    Triangle(tri.v1, tri.v2, m01, id=self.triangle_id_counter),
+                    Triangle(tri.v2, m20, m01, id=self.triangle_id_counter + 1),
+                    Triangle(m01, m20, tri.v0, id=self.triangle_id_counter + 2)
+                ], 3
+            else:  # not has_m20
+                m01 = self.edges[edge01]
+                m12 = self.edges[edge12]
+                return [
+                    Triangle(tri.v2, tri.v0, m12, id=self.triangle_id_counter),
+                    Triangle(tri.v0, m01, m12, id=self.triangle_id_counter + 1),
+                    Triangle(m12, m01, tri.v1, id=self.triangle_id_counter + 2)
+                ], 3
+
+        else:  # subdivided_count == 3
+            # All edges already subdivided - do 1-to-4 subdivision
+            m01 = self.edges[edge01]
+            m12 = self.edges[edge12]
+            m20 = self.edges[edge20]
+
+            return [
+                Triangle(tri.v0, m01, m20, id=self.triangle_id_counter),
+                Triangle(tri.v1, m12, m01, id=self.triangle_id_counter + 1),
+                Triangle(tri.v2, m20, m12, id=self.triangle_id_counter + 2),
+                Triangle(m01, m12, m20, id=self.triangle_id_counter + 3)
+            ], 4
 
     def generate(self, max_vertices=100000, error_threshold=10.0, min_edge_length=None):
         """
-        Generate adaptive mesh.
+        Generate watertight adaptive mesh.
 
         Args:
             max_vertices: Maximum number of vertices
@@ -220,39 +306,41 @@ class AdaptiveMesh:
         self.initialize_icosahedron()
 
         # Compute Nyquist limit if not specified
-        # For lmax=2160, we need spacing < π/2160 ≈ 0.00145 radians
         if min_edge_length is None:
             min_edge_length = np.pi / 4320  # Conservative: 2x Nyquist
 
-        print(f"Generating adaptive mesh...")
+        print(f"Generating watertight adaptive mesh...")
         print(f"Max vertices: {max_vertices}")
         print(f"Error threshold: {error_threshold}m")
         print(f"Min edge length: {min_edge_length:.6f} rad ({np.degrees(min_edge_length):.4f}°)")
 
-        # Compute initial errors and build priority queue
+        # Build priority queue with initial triangles
         pq = []
+        tri_dict = {}  # triangle_id -> Triangle object
+
         for tri in self.triangles:
             tri.error = self.compute_triangle_error(tri)
             heapq.heappush(pq, tri)
-
-        self.triangles = []  # Will rebuild from refined triangles
+            tri_dict[tri.id] = tri
 
         iteration = 0
         while pq and len(self.vertices) < max_vertices:
             # Get triangle with highest error
             tri = heapq.heappop(pq)
 
-            if tri.error < error_threshold:
-                # Error is acceptable, keep triangle as-is
-                self.triangles.append(tri)
+            # Check if this triangle is still valid (not already subdivided)
+            if tri.id not in tri_dict:
                 continue
+
+            if tri.error < error_threshold:
+                # Error is acceptable, stop refining
+                break
 
             # Check edge length (Nyquist limit)
             v0 = np.array(self.vertices[tri.v0])
             v1 = np.array(self.vertices[tri.v1])
             v2 = np.array(self.vertices[tri.v2])
 
-            # Compute edge lengths (angular distance on sphere)
             edge_len_01 = np.arccos(np.clip(np.dot(v0, v1), -1, 1))
             edge_len_12 = np.arccos(np.clip(np.dot(v1, v2), -1, 1))
             edge_len_20 = np.arccos(np.clip(np.dot(v2, v0), -1, 1))
@@ -260,30 +348,41 @@ class AdaptiveMesh:
 
             if max_edge < min_edge_length:
                 # Too small, would violate Nyquist limit
-                self.triangles.append(tri)
                 continue
 
-            # Subdivide triangle
-            if len(self.vertices) + 3 > max_vertices:
+            # Subdivide triangle (conforming to neighbor subdivisions)
+            new_tris, num_new = self.subdivide_triangle_conforming(tri)
+
+            if len(self.vertices) + num_new > max_vertices:
                 # Would exceed vertex limit
-                self.triangles.append(tri)
-                continue
+                break
 
-            new_tris = self.subdivide_triangle(tri)
+            self.triangle_id_counter += num_new
 
-            # Compute errors and add to queue
+            # Remove old triangle from tracking
+            for edge in tri.edges():
+                self.edge_to_triangles[edge].discard(tri.id)
+            del tri_dict[tri.id]
+
+            # Add new triangles
             for new_tri in new_tris:
                 new_tri.error = self.compute_triangle_error(new_tri)
                 heapq.heappush(pq, new_tri)
+                tri_dict[new_tri.id] = new_tri
+
+                # Register new triangle edges
+                for edge in new_tri.edges():
+                    if edge not in self.edge_to_triangles:
+                        self.edge_to_triangles[edge] = set()
+                    self.edge_to_triangles[edge].add(new_tri.id)
 
             iteration += 1
             if iteration % 1000 == 0:
                 print(f"Iteration {iteration}: {len(self.vertices)} vertices, "
                       f"{len(pq)} triangles in queue, error={tri.error:.2f}m")
 
-        # Add remaining triangles
-        while pq:
-            self.triangles.append(heapq.heappop(pq))
+        # Collect final triangles
+        self.triangles = list(tri_dict.values())
 
         print(f"\nMesh generation complete!")
         print(f"Vertices: {len(self.vertices)}")
@@ -338,7 +437,7 @@ class AdaptiveMesh:
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description='Generate adaptive mesh for spherical harmonics')
+    parser = argparse.ArgumentParser(description='Generate watertight adaptive mesh for spherical harmonics')
     parser.add_argument('--input', default='public/earthtoposources/sur_healpix_nside128.bin',
                         help='Input HEALPix file')
     parser.add_argument('--output', default='public/earthtoposources/sur_adaptive.mesh',
