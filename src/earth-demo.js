@@ -77,6 +77,9 @@ async function init() {
     // Add wireframe toggle
     addWireframeToggle(material);
 
+    // Add alpha slider
+    addAlphaSlider(material);
+
     console.log('Earth mesh loaded successfully!');
   } catch (error) {
     console.error('Failed to load Earth mesh:', error);
@@ -155,6 +158,50 @@ function addWireframeToggle(material) {
   });
 
   document.body.appendChild(toggle);
+}
+
+function addAlphaSlider(material) {
+  const container = document.createElement('div');
+  container.style.position = 'absolute';
+  container.style.bottom = '60px';
+  container.style.right = '20px';
+  container.style.color = 'white';
+  container.style.fontFamily = 'monospace';
+  container.style.fontSize = '12px';
+  container.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+  container.style.padding = '10px 15px';
+  container.style.borderRadius = '5px';
+  container.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+  container.style.minWidth = '200px';
+
+  const label = document.createElement('div');
+  label.style.marginBottom = '8px';
+  label.textContent = 'Relief Exponent (α)';
+
+  const valueDisplay = document.createElement('div');
+  valueDisplay.style.color = '#4ecdc4';
+  valueDisplay.style.fontSize = '14px';
+  valueDisplay.style.marginBottom = '8px';
+  valueDisplay.textContent = '0.001';
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = '0.001';
+  slider.max = '1';
+  slider.step = '0.001';
+  slider.value = '0.001';
+  slider.style.width = '100%';
+
+  slider.addEventListener('input', (e) => {
+    const alpha = parseFloat(e.target.value);
+    material.uniforms.alpha.value = alpha;
+    valueDisplay.textContent = alpha.toFixed(3);
+  });
+
+  container.appendChild(label);
+  container.appendChild(valueDisplay);
+  container.appendChild(slider);
+  document.body.appendChild(container);
 }
 
 // Animation loop

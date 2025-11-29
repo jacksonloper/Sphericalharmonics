@@ -111,15 +111,26 @@ export async function loadHealpixMesh(url) {
 export function createElevationMaterial(minElevation = -500, maxElevation = 9000) {
   const vertexShader = `
     attribute float elevation;
+    uniform float alpha;
     varying float vElevation;
     varying vec3 vNormal;
     varying vec3 vPosition;
 
     void main() {
       vElevation = elevation;
-      vNormal = normalMatrix * normal;
-      vPosition = (modelViewMatrix * vec4(position, 1.0)).xyz;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+
+      // Compute radial displacement: r = (e/6006)^alpha
+      float e = max(0.0, elevation); // Clamp to non-negative
+      float displacementFactor = pow(e / 6006.0, alpha);
+
+      // Displace vertex radially
+      vec3 displacedPosition = position * (1.0 + displacementFactor);
+
+      // Compute normal from displaced surface (normalize displaced position)
+      vNormal = normalize(normalMatrix * displacedPosition);
+
+      vPosition = (modelViewMatrix * vec4(displacedPosition, 1.0)).xyz;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(displacedPosition, 1.0);
     }
   `;
 
@@ -176,6 +187,7 @@ export function createElevationMaterial(minElevation = -500, maxElevation = 9000
     uniforms: {
       minElevation: { value: minElevation },
       maxElevation: { value: maxElevation },
+      alpha: { value: 0.001 },
       lightDirection: { value: new THREE.Vector3(1, 1, 1).normalize() }
     },
     vertexShader,
