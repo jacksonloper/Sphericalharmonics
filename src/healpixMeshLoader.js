@@ -132,8 +132,6 @@ export function createElevationMaterial(minElevation = -500, maxElevation = 9000
   `;
 
   const fragmentShader = `
-    #extension GL_OES_standard_derivatives : enable
-
     uniform float minElevation;
     uniform float maxElevation;
     uniform vec3 lightDirection;
@@ -194,6 +192,9 @@ export function createElevationMaterial(minElevation = -500, maxElevation = 9000
     },
     vertexShader,
     fragmentShader,
-    side: THREE.DoubleSide
+    side: THREE.DoubleSide,
+    extensions: {
+      derivatives: true // Enable GL_OES_standard_derivatives
+    }
   });
 }
