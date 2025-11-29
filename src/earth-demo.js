@@ -62,6 +62,10 @@ async function init() {
 
     // Create mesh
     earthMesh = new THREE.Mesh(geometry, material);
+
+    // Rotate to align poles vertically (HEALPix uses z-up, Three.js uses y-up)
+    earthMesh.rotation.x = Math.PI / 2;
+
     scene.add(earthMesh);
 
     // Remove loading indicator
