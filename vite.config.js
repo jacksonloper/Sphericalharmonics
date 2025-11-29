@@ -11,7 +11,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
-        earth: resolve(__dirname, 'earth.html')
+        earth: resolve(__dirname, 'earth.html'),
+        adaptive: resolve(__dirname, 'adaptive.html')
       },
       output: {
         manualChunks: undefined
