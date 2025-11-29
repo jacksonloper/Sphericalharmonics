@@ -86,12 +86,17 @@ export async function loadHealpixMesh(url) {
   // Compute normals for lighting
   geometry.computeVertexNormals();
 
-  // Store elevation range as metadata
-  const elevationArray = Array.from(elevation);
-  geometry.userData.elevationMin = Math.min(...elevationArray);
-  geometry.userData.elevationMax = Math.max(...elevationArray);
+  // Store elevation range as metadata (avoid spread operator for large arrays)
+  let elevationMin = elevation[0];
+  let elevationMax = elevation[0];
+  for (let i = 1; i < elevation.length; i++) {
+    if (elevation[i] < elevationMin) elevationMin = elevation[i];
+    if (elevation[i] > elevationMax) elevationMax = elevation[i];
+  }
+  geometry.userData.elevationMin = elevationMin;
+  geometry.userData.elevationMax = elevationMax;
 
-  console.log(`  Elevation range: ${geometry.userData.elevationMin.toFixed(1)} to ${geometry.userData.elevationMax.toFixed(1)} m`);
+  console.log(`  Elevation range: ${elevationMin.toFixed(1)} to ${elevationMax.toFixed(1)} m`);
 
   return geometry;
 }
