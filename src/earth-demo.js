@@ -34,7 +34,7 @@ controls.maxDistance = 10;
 controls.autoRotate = true;
 controls.autoRotateSpeed = 0.5;
 
-// Loading indicator
+// Loading indicator with progress support
 const loadingDiv = document.createElement('div');
 loadingDiv.style.position = 'absolute';
 loadingDiv.style.top = '50%';
@@ -42,17 +42,34 @@ loadingDiv.style.left = '50%';
 loadingDiv.style.transform = 'translate(-50%, -50%)';
 loadingDiv.style.color = 'white';
 loadingDiv.style.fontFamily = 'monospace';
-loadingDiv.style.fontSize = '20px';
-loadingDiv.textContent = 'Loading Earth mesh...';
+loadingDiv.style.fontSize = '16px';
+loadingDiv.style.textAlign = 'center';
+loadingDiv.style.lineHeight = '1.8';
+loadingDiv.innerHTML = 'Loading Earth mesh...<br><span id="loadStatus" style="color: #4ecdc4;"></span>';
 document.body.appendChild(loadingDiv);
+
+const loadStatus = loadingDiv.querySelector('#loadStatus');
 
 // Load and render the mesh
 let earthMesh;
 
 async function init() {
   try {
-    // Load compact mesh (subdivision 7: 164K vertices, only 640KB!)
-    const geometry = await loadCompactMesh('./earthtoposources/sur_compact7.bin');
+    // Progress callback for loading indicator
+    const onProgress = (progress) => {
+      if (progress.type === 'status') {
+        loadStatus.textContent = progress.message;
+      } else if (progress.type === 'subdivision') {
+        loadStatus.textContent = `Subdivision ${progress.current}/${progress.total} (${progress.vertices.toLocaleString()} vertices)`;
+      }
+    };
+
+    // Load compact mesh (subdivision 8: ~655K vertices, ~2.5 MB)
+    // Use Web Worker for smoother loading experience
+    const geometry = await loadCompactMesh('./earthtoposources/sur_compact8.bin', {
+      onProgress,
+      useWorker: true
+    });
 
     // Create material
     const material = createElevationMaterial(
@@ -83,7 +100,7 @@ async function init() {
     console.log('Earth mesh loaded successfully!');
   } catch (error) {
     console.error('Failed to load Earth mesh:', error);
-    loadingDiv.textContent = 'Failed to load mesh: ' + error.message;
+    loadingDiv.innerHTML = 'Failed to load mesh: ' + error.message;
     loadingDiv.style.color = '#ff4444';
   }
 }
@@ -103,14 +120,15 @@ function addInfoPanel(geometry) {
 
   const vertices = geometry.attributes.position.count;
   const triangles = geometry.index.count / 3;
+  const subdivisions = geometry.userData.subdivisions || 8;
 
   panel.innerHTML = `
     <strong>Earth Surface Topography</strong><br>
     <br>
-    Icosahedral mesh (7 subdivisions)<br>
+    Icosahedral mesh (${subdivisions} subdivisions)<br>
     Vertices: ${vertices.toLocaleString()}<br>
     Triangles: ${triangles.toLocaleString()}<br>
-    File: 640 KB (geometry generated procedurally)<br>
+    File: ~2.5 MB (geometry generated procedurally)<br>
     <br>
     Elevation Range:<br>
     ${geometry.userData.elevationMin.toFixed(1)} to ${geometry.userData.elevationMax.toFixed(1)} m<br>
