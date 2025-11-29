@@ -113,7 +113,6 @@ export function createElevationMaterial(minElevation = -500, maxElevation = 9000
     attribute float elevation;
     uniform float alpha;
     varying float vElevation;
-    varying vec3 vNormal;
     varying vec3 vPosition;
 
     void main() {
@@ -127,21 +126,19 @@ export function createElevationMaterial(minElevation = -500, maxElevation = 9000
       // Displace vertex radially
       vec3 displacedPosition = position * radius;
 
-      // Compute normal from displaced surface (normalize displaced position)
-      vNormal = normalize(normalMatrix * displacedPosition);
-
-      vPosition = (modelViewMatrix * vec4(displacedPosition, 1.0)).xyz;
+      vPosition = displacedPosition;
       gl_Position = projectionMatrix * modelViewMatrix * vec4(displacedPosition, 1.0);
     }
   `;
 
   const fragmentShader = `
+    #extension GL_OES_standard_derivatives : enable
+
     uniform float minElevation;
     uniform float maxElevation;
     uniform vec3 lightDirection;
 
     varying float vElevation;
-    varying vec3 vNormal;
     varying vec3 vPosition;
 
     void main() {
@@ -171,8 +168,12 @@ export function createElevationMaterial(minElevation = -500, maxElevation = 9000
         }
       }
 
+      // Flat shading: compute face normal from position derivatives
+      vec3 fdx = dFdx(vPosition);
+      vec3 fdy = dFdy(vPosition);
+      vec3 normal = normalize(cross(fdx, fdy));
+
       // Simple lighting
-      vec3 normal = normalize(vNormal);
       vec3 lightDir = normalize(lightDirection);
       float diffuse = max(dot(normal, lightDir), 0.0);
 
