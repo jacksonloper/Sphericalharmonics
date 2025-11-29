@@ -3,245 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Adaptive Spherical Mesh Demo</title>
+  <title>Earth Topography - Adaptive Mesh</title>
   <style>
-    body {
+    * {
       margin: 0;
       padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
       overflow: hidden;
-      background: #000;
-      font-family: 'Courier New', monospace;
-      color: #0f0;
+      font-family: monospace;
     }
 
-    #canvas {
+    canvas {
       display: block;
-      width: 100vw;
-      height: 100vh;
-    }
-
-    #info {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      background: rgba(0, 0, 0, 0.8);
-      padding: 15px;
-      border: 1px solid #0f0;
-      border-radius: 5px;
-      max-width: 400px;
-      font-size: 12px;
-      line-height: 1.5;
-    }
-
-    #info h2 {
-      margin: 0 0 10px 0;
-      font-size: 16px;
-      color: #0ff;
-    }
-
-    #info .stat {
-      margin: 3px 0;
-    }
-
-    #info .label {
-      color: #888;
-      display: inline-block;
-      width: 150px;
-    }
-
-    #info .value {
-      color: #0f0;
-      font-weight: bold;
-    }
-
-    #controls {
-      position: absolute;
-      bottom: 20px;
-      left: 20px;
-      background: rgba(0, 0, 0, 0.8);
-      padding: 15px;
-      border: 1px solid #0f0;
-      border-radius: 5px;
-      max-width: 400px;
-      font-size: 12px;
-    }
-
-    #controls h3 {
-      margin: 0 0 10px 0;
-      font-size: 14px;
-      color: #0ff;
-    }
-
-    #controls label {
-      display: block;
-      margin: 8px 0;
-      color: #888;
-    }
-
-    #controls input[type="range"] {
-      width: 200px;
-      vertical-align: middle;
-    }
-
-    #controls .value {
-      color: #0f0;
-      font-weight: bold;
-      display: inline-block;
-      width: 60px;
-      text-align: right;
-    }
-
-    .loading {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 24px;
-      color: #0ff;
-      text-align: center;
-    }
-
-    .loading::after {
-      content: '';
-      animation: dots 1.5s steps(4, end) infinite;
-    }
-
-    @keyframes dots {
-      0%, 20% { content: ''; }
-      40% { content: '.'; }
-      60% { content: '..'; }
-      80%, 100% { content: '...'; }
     }
   </style>
 </head>
 <body>
-  <canvas id="canvas" width="1920" height="1080"></canvas>
-
-  <div id="loading" class="loading">Loading adaptive mesh</div>
-
-  <div id="info" style="display: none;">
-    <h2>Adaptive Mesh Stats</h2>
-    <div class="stat"><span class="label">Vertices:</span><span class="value" id="vertices">-</span></div>
-    <div class="stat"><span class="label">Triangles:</span><span class="value" id="triangles">-</span></div>
-    <div class="stat"><span class="label">File Size:</span><span class="value" id="filesize">-</span></div>
-    <div class="stat"><span class="label">Elevation Range:</span><span class="value" id="elevation">-</span></div>
-    <div class="stat"><span class="label">FPS:</span><span class="value" id="fps">60</span></div>
-    <div style="margin-top: 10px; color: #888; font-size: 11px;">
-      The mesh is adaptively refined: more vertices in mountainous regions, fewer in flat areas.
-      This captures the surface elevation data with high fidelity while minimizing vertex count.
-    </div>
-  </div>
-
-  <div id="controls" style="display: none;">
-    <h3>Controls</h3>
-    <label>
-      Elevation Scale: <span class="value" id="scaleValue">0.02</span><br>
-      <input type="range" id="elevationScale" min="0" max="0.1" step="0.001" value="0.02">
-    </label>
-    <label>
-      Rotation Speed: <span class="value" id="rotationValue">0.002</span><br>
-      <input type="range" id="rotationSpeed" min="0" max="0.01" step="0.0001" value="0.002">
-    </label>
-  </div>
-
-  <script type="module">
-    import { createAdaptiveMeshScene, animateAdaptiveMesh } from './src/adaptiveMeshLoader.js';
-
-    const canvas = document.getElementById('canvas');
-    const loading = document.getElementById('loading');
-    const info = document.getElementById('info');
-    const controls = document.getElementById('controls');
-
-    // FPS counter
-    let frameCount = 0;
-    let lastTime = performance.now();
-
-    function updateFPS() {
-      frameCount++;
-      const now = performance.now();
-      if (now - lastTime >= 1000) {
-        const fps = Math.round(frameCount * 1000 / (now - lastTime));
-        document.getElementById('fps').textContent = fps;
-        frameCount = 0;
-        lastTime = now;
-      }
-    }
-
-    // Load and display adaptive mesh
-    async function init() {
-      try {
-        // Create scene with adaptive mesh
-        const sceneData = await createAdaptiveMeshScene(
-          'earthtoposources/sur_adaptive.mesh',
-          canvas,
-          {
-            elevationScale: 0.02,
-            oceanColor: 0x0066aa,
-            landColor: 0x228B22,
-            mountainColor: 0x8B4513,
-            peakColor: 0xFFFFFF
-          }
-        );
-
-        const { mesh, stats } = sceneData;
-
-        // Update info panel
-        document.getElementById('vertices').textContent = stats.numVertices.toLocaleString();
-        document.getElementById('triangles').textContent = stats.numTriangles.toLocaleString();
-        document.getElementById('filesize').textContent = (stats.fileSize / 1024 / 1024).toFixed(2) + ' MB';
-        document.getElementById('elevation').textContent =
-          `${stats.minElevation.toFixed(1)}m to ${stats.maxElevation.toFixed(1)}m`;
-
-        // Show UI
-        loading.style.display = 'none';
-        info.style.display = 'block';
-        controls.style.display = 'block';
-
-        // Set up controls
-        const elevationScale = document.getElementById('elevationScale');
-        const scaleValue = document.getElementById('scaleValue');
-        const rotationSpeed = document.getElementById('rotationSpeed');
-        const rotationValue = document.getElementById('rotationValue');
-
-        let currentRotationSpeed = 0.002;
-
-        elevationScale.addEventListener('input', (e) => {
-          const value = parseFloat(e.target.value);
-          scaleValue.textContent = value.toFixed(3);
-          mesh.material.uniforms.elevationScale.value = value;
-        });
-
-        rotationSpeed.addEventListener('input', (e) => {
-          const value = parseFloat(e.target.value);
-          rotationValue.textContent = value.toFixed(4);
-          currentRotationSpeed = value;
-        });
-
-        // Start animation
-        animateAdaptiveMesh(sceneData, (time, mesh) => {
-          mesh.rotation.y = time * currentRotationSpeed;
-          updateFPS();
-        });
-
-        console.log('Adaptive mesh demo ready!');
-        console.log('Mesh stats:', stats);
-
-      } catch (error) {
-        console.error('Failed to load adaptive mesh:', error);
-        loading.innerHTML = `<span style="color: #f00;">Error loading mesh: ${error.message}</span>`;
-      }
-    }
-
-    // Handle window resize
-    window.addEventListener('resize', () => {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      canvas.width = width;
-      canvas.height = height;
-    });
-
-    // Start
-    init();
-  </script>
+  <script type="module" src="/src/adaptive-demo.js"></script>
 </body>
 </html>
