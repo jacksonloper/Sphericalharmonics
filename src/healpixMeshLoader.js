@@ -133,22 +133,25 @@ export function createElevationMaterial(minElevation = -500, maxElevation = 9000
     varying vec3 vPosition;
 
     void main() {
-      // Normalize elevation to [0, 1] where 0 is sea level
-      float t = (vElevation - 0.0) / (maxElevation - 0.0);
-      t = clamp(t, -1.0, 1.0);
-
-      // Vibrant color gradient: blue (0) -> red (max)
+      // Vibrant color gradient with DISCONTINUITY at sea level (0m)
       vec3 color;
-      if (t < 0.0) {
-        // Below sea level: deep blue to bright blue
-        float oceanT = abs(t);
-        color = mix(vec3(0.0, 0.3, 1.0), vec3(0.0, 0.1, 0.4), oceanT);
+
+      if (vElevation < 0.0) {
+        // Below sea level: dark blue gradient
+        float oceanT = vElevation / minElevation;
+        color = mix(vec3(0.0, 0.1, 0.3), vec3(0.0, 0.2, 0.5), oceanT);
+      } else if (vElevation < 1.0) {
+        // At sea level (0-1m): BRIGHT BLUE - discontinuous jump
+        color = vec3(0.0, 0.4, 1.0);
       } else {
-        // Above sea level: bright blue -> green -> yellow -> red
+        // Above sea level: green -> yellow -> orange -> red
+        float t = (vElevation - 1.0) / (maxElevation - 1.0);
+        t = clamp(t, 0.0, 1.0);
+
         if (t < 0.25) {
-          color = mix(vec3(0.0, 0.3, 1.0), vec3(0.0, 0.8, 0.3), t / 0.25);
+          color = mix(vec3(0.0, 0.8, 0.2), vec3(0.5, 0.9, 0.2), t / 0.25);
         } else if (t < 0.5) {
-          color = mix(vec3(0.0, 0.8, 0.3), vec3(1.0, 1.0, 0.0), (t - 0.25) / 0.25);
+          color = mix(vec3(0.5, 0.9, 0.2), vec3(1.0, 1.0, 0.0), (t - 0.25) / 0.25);
         } else if (t < 0.75) {
           color = mix(vec3(1.0, 1.0, 0.0), vec3(1.0, 0.5, 0.0), (t - 0.5) / 0.25);
         } else {
