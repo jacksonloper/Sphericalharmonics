@@ -119,12 +119,13 @@ export function createElevationMaterial(minElevation = -500, maxElevation = 9000
     void main() {
       vElevation = elevation;
 
-      // Compute radial displacement: r = (e/6006)^alpha
+      // Compute radial displacement: r = (clamp(e)/6006) + alpha * (1 - clamp(e)/6006)
       float e = max(0.0, elevation); // Clamp to non-negative
-      float displacementFactor = pow(e / 6006.0, alpha);
+      float normalizedE = e / 6006.0;
+      float radius = normalizedE + alpha * (1.0 - normalizedE);
 
       // Displace vertex radially
-      vec3 displacedPosition = position * (1.0 + displacementFactor);
+      vec3 displacedPosition = position * radius;
 
       // Compute normal from displaced surface (normalize displaced position)
       vNormal = normalize(normalMatrix * displacedPosition);
