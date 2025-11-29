@@ -126,10 +126,6 @@ export function createElevationMaterial(minElevation = -500, maxElevation = 9000
   const fragmentShader = `
     uniform float minElevation;
     uniform float maxElevation;
-    uniform vec3 oceanColor;
-    uniform vec3 lowColor;
-    uniform vec3 midColor;
-    uniform vec3 highColor;
     uniform vec3 lightDirection;
 
     varying float vElevation;
@@ -137,25 +133,27 @@ export function createElevationMaterial(minElevation = -500, maxElevation = 9000
     varying vec3 vPosition;
 
     void main() {
-      // Normalize elevation to [0, 1]
-      float t = (vElevation - minElevation) / (maxElevation - minElevation);
-      t = clamp(t, 0.0, 1.0);
+      // Normalize elevation to [0, 1] where 0 is sea level
+      float t = (vElevation - 0.0) / (maxElevation - 0.0);
+      t = clamp(t, -1.0, 1.0);
 
-      // Color mapping
+      // Vibrant color gradient: blue (0) -> red (max)
       vec3 color;
-      if (vElevation < 0.0) {
-        // Below sea level - ocean blue
-        float oceanT = (vElevation - minElevation) / (0.0 - minElevation);
-        color = mix(oceanColor, lowColor, oceanT);
-      } else if (t < 0.33) {
-        // Low elevation - green
-        color = mix(lowColor, midColor, t / 0.33);
-      } else if (t < 0.66) {
-        // Mid elevation - brown/tan
-        color = mix(midColor, highColor, (t - 0.33) / 0.33);
+      if (t < 0.0) {
+        // Below sea level: deep blue to bright blue
+        float oceanT = abs(t);
+        color = mix(vec3(0.0, 0.3, 1.0), vec3(0.0, 0.1, 0.4), oceanT);
       } else {
-        // High elevation - white
-        color = highColor;
+        // Above sea level: bright blue -> green -> yellow -> red
+        if (t < 0.25) {
+          color = mix(vec3(0.0, 0.3, 1.0), vec3(0.0, 0.8, 0.3), t / 0.25);
+        } else if (t < 0.5) {
+          color = mix(vec3(0.0, 0.8, 0.3), vec3(1.0, 1.0, 0.0), (t - 0.25) / 0.25);
+        } else if (t < 0.75) {
+          color = mix(vec3(1.0, 1.0, 0.0), vec3(1.0, 0.5, 0.0), (t - 0.5) / 0.25);
+        } else {
+          color = mix(vec3(1.0, 0.5, 0.0), vec3(1.0, 0.0, 0.0), (t - 0.75) / 0.25);
+        }
       }
 
       // Simple lighting
@@ -175,10 +173,6 @@ export function createElevationMaterial(minElevation = -500, maxElevation = 9000
     uniforms: {
       minElevation: { value: minElevation },
       maxElevation: { value: maxElevation },
-      oceanColor: { value: new THREE.Color(0x1e3a5f) }, // Deep blue
-      lowColor: { value: new THREE.Color(0x4a7c59) },   // Green
-      midColor: { value: new THREE.Color(0x9b6b4e) },   // Brown
-      highColor: { value: new THREE.Color(0xffffff) },  // White
       lightDirection: { value: new THREE.Vector3(1, 1, 1).normalize() }
     },
     vertexShader,
