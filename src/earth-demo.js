@@ -74,6 +74,9 @@ async function init() {
     // Add info panel
     addInfoPanel(geometry);
 
+    // Add wireframe toggle
+    addWireframeToggle(material);
+
     console.log('Earth mesh loaded successfully!');
   } catch (error) {
     console.error('Failed to load Earth mesh:', error);
@@ -113,6 +116,45 @@ function addInfoPanel(geometry) {
   `;
 
   document.body.appendChild(panel);
+}
+
+function addWireframeToggle(material) {
+  const toggle = document.createElement('div');
+  toggle.style.position = 'absolute';
+  toggle.style.bottom = '20px';
+  toggle.style.right = '20px';
+  toggle.style.color = 'white';
+  toggle.style.fontFamily = 'monospace';
+  toggle.style.fontSize = '14px';
+  toggle.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+  toggle.style.padding = '10px 15px';
+  toggle.style.borderRadius = '5px';
+  toggle.style.cursor = 'pointer';
+  toggle.style.userSelect = 'none';
+  toggle.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+  toggle.style.transition = 'background-color 0.2s';
+
+  let wireframeEnabled = false;
+  toggle.textContent = 'Wireframe: OFF';
+
+  toggle.addEventListener('click', () => {
+    wireframeEnabled = !wireframeEnabled;
+    material.wireframe = wireframeEnabled;
+    toggle.textContent = `Wireframe: ${wireframeEnabled ? 'ON' : 'OFF'}`;
+    toggle.style.backgroundColor = wireframeEnabled ? 'rgba(78, 205, 196, 0.3)' : 'rgba(0, 0, 0, 0.7)';
+  });
+
+  toggle.addEventListener('mouseenter', () => {
+    if (!wireframeEnabled) {
+      toggle.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
+    }
+  });
+
+  toggle.addEventListener('mouseleave', () => {
+    toggle.style.backgroundColor = wireframeEnabled ? 'rgba(78, 205, 196, 0.3)' : 'rgba(0, 0, 0, 0.7)';
+  });
+
+  document.body.appendChild(toggle);
 }
 
 // Animation loop
