@@ -16,6 +16,18 @@ from dataclasses import dataclass
 from typing import Set
 
 
+@dataclass
+class Triangle:
+    """Triangle for adaptive subdivision."""
+    v0: int
+    v1: int
+    v2: int
+    error: float = 0.0
+
+    def __lt__(self, other):
+        return self.error > other.error  # Max heap
+
+
 class AdaptiveMeshConvex:
     """Adaptive mesh generator using convex hull for guaranteed watertightness."""
 
@@ -24,7 +36,8 @@ class AdaptiveMeshConvex:
         self.nside = nside
         self.vertices = []  # List of (x, y, z) unit vectors
         self.elevations = []  # Elevation at each vertex
-        self.edges_to_subdivide = set()  # Edges that need subdivision
+        self.edge_midpoints = {}  # Cache: (v0, v1) -> midpoint_index
+        self.triangles_to_check = []  # Priority queue of triangles
 
     def sample_elevation(self, direction):
         """Sample elevation at a direction (unit vector)."""
@@ -44,37 +57,74 @@ class AdaptiveMeshConvex:
         self.elevations.append(self.sample_elevation((x, y, z)))
         return idx
 
-    def edge_error(self, v0_idx, v1_idx):
-        """
-        Compute error along an edge.
+    def get_midpoint(self, v0_idx, v1_idx):
+        """Get or create edge midpoint."""
+        edge = tuple(sorted([v0_idx, v1_idx]))
 
-        Checks how well linear interpolation represents the midpoint.
-        """
+        if edge in self.edge_midpoints:
+            return self.edge_midpoints[edge]
+
         v0 = np.array(self.vertices[v0_idx])
         v1 = np.array(self.vertices[v1_idx])
-        e0 = self.elevations[v0_idx]
-        e1 = self.elevations[v1_idx]
-
-        # Midpoint on sphere
         mid = (v0 + v1) / 2.0
-        mid = mid / np.linalg.norm(mid)
+        mid_idx = self.add_vertex(mid[0], mid[1], mid[2])
 
-        # Actual elevation at midpoint
-        actual = self.sample_elevation(mid)
+        self.edge_midpoints[edge] = mid_idx
+        return mid_idx
 
-        # Interpolated elevation
-        interpolated = (e0 + e1) / 2.0
+    def compute_triangle_error(self, tri):
+        """Compute error for a triangle."""
+        v0 = np.array(self.vertices[tri.v0])
+        v1 = np.array(self.vertices[tri.v1])
+        v2 = np.array(self.vertices[tri.v2])
 
-        return abs(actual - interpolated)
+        e0 = self.elevations[tri.v0]
+        e1 = self.elevations[tri.v1]
+        e2 = self.elevations[tri.v2]
 
-    def edge_length(self, v0_idx, v1_idx):
-        """Compute edge length (angular distance)."""
-        v0 = np.array(self.vertices[v0_idx])
-        v1 = np.array(self.vertices[v1_idx])
-        return np.arccos(np.clip(np.dot(v0, v1), -1, 1))
+        # Test points: centroid and edge midpoints
+        test_points = [
+            (v0 + v1 + v2) / 3.0,  # Centroid
+            (v0 + v1) / 2.0,
+            (v1 + v2) / 2.0,
+            (v2 + v0) / 2.0,
+        ]
+
+        max_error = 0.0
+        for point in test_points:
+            point = point / np.linalg.norm(point)
+            actual = self.sample_elevation(point)
+
+            # Inverse distance weighted interpolation
+            d0 = np.linalg.norm(point - v0)
+            d1 = np.linalg.norm(point - v1)
+            d2 = np.linalg.norm(point - v2)
+
+            w0 = 1.0 / (d0 + 1e-10)
+            w1 = 1.0 / (d1 + 1e-10)
+            w2 = 1.0 / (d2 + 1e-10)
+            total_w = w0 + w1 + w2
+
+            interpolated = (w0 * e0 + w1 * e1 + w2 * e2) / total_w
+            error = abs(actual - interpolated)
+            max_error = max(max_error, error)
+
+        return max_error
+
+    def triangle_max_edge_length(self, tri):
+        """Get max edge length of triangle."""
+        v0 = np.array(self.vertices[tri.v0])
+        v1 = np.array(self.vertices[tri.v1])
+        v2 = np.array(self.vertices[tri.v2])
+
+        e01 = np.arccos(np.clip(np.dot(v0, v1), -1, 1))
+        e12 = np.arccos(np.clip(np.dot(v1, v2), -1, 1))
+        e20 = np.arccos(np.clip(np.dot(v2, v0), -1, 1))
+
+        return max(e01, e12, e20)
 
     def initialize_icosahedron(self):
-        """Create initial icosahedron vertices."""
+        """Create initial icosahedron vertices and triangles."""
         t = (1.0 + np.sqrt(5.0)) / 2.0
 
         vertices = [
@@ -86,32 +136,46 @@ class AdaptiveMeshConvex:
         for v in vertices:
             self.add_vertex(v[0], v[1], v[2])
 
-        # Initial edges (30 edges in icosahedron)
-        edges = [
-            (0, 1), (0, 5), (0, 7), (0, 10), (0, 11),
-            (1, 5), (1, 7), (1, 8), (1, 9),
-            (2, 3), (2, 4), (2, 6), (2, 10), (2, 11),
-            (3, 4), (3, 6), (3, 8), (3, 9),
-            (4, 5), (4, 9), (4, 11),
-            (5, 9), (5, 11),
-            (6, 7), (6, 8), (6, 10),
-            (7, 8), (7, 10),
-            (8, 9),
-            (10, 11)
+        # 20 faces of icosahedron
+        faces = [
+            (0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11),
+            (1, 5, 9), (5, 11, 4), (11, 10, 2), (10, 7, 6), (7, 1, 8),
+            (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8), (3, 8, 9),
+            (4, 9, 5), (2, 4, 11), (6, 2, 10), (8, 6, 7), (9, 8, 1)
         ]
 
-        for edge in edges:
-            self.edges_to_subdivide.add(tuple(sorted(edge)))
+        import heapq
+        for f in faces:
+            tri = Triangle(f[0], f[1], f[2])
+            tri.error = self.compute_triangle_error(tri)
+            heapq.heappush(self.triangles_to_check, tri)
+
+    def subdivide_triangle(self, tri):
+        """Subdivide a triangle into 4 sub-triangles."""
+        # Get edge midpoints (creates vertices if needed)
+        m01 = self.get_midpoint(tri.v0, tri.v1)
+        m12 = self.get_midpoint(tri.v1, tri.v2)
+        m20 = self.get_midpoint(tri.v2, tri.v0)
+
+        # Create 4 new triangles
+        return [
+            Triangle(tri.v0, m01, m20),
+            Triangle(tri.v1, m12, m01),
+            Triangle(tri.v2, m20, m12),
+            Triangle(m01, m12, m20)
+        ]
 
     def generate(self, max_vertices=100000, error_threshold=10.0, min_edge_length=None):
         """
-        Generate adaptive vertices.
+        Generate adaptive vertices by subdividing triangles.
 
         Args:
             max_vertices: Maximum number of vertices
             error_threshold: Error threshold in meters
             min_edge_length: Minimum edge length (Nyquist limit)
         """
+        import heapq
+
         self.initialize_icosahedron()
 
         if min_edge_length is None:
@@ -123,43 +187,35 @@ class AdaptiveMeshConvex:
         print(f"Min edge length: {min_edge_length:.6f} rad ({np.degrees(min_edge_length):.4f}°)")
 
         iteration = 0
-        while self.edges_to_subdivide and len(self.vertices) < max_vertices:
-            # Get next edge to check
-            edge = self.edges_to_subdivide.pop()
-            v0_idx, v1_idx = edge
+        while self.triangles_to_check and len(self.vertices) < max_vertices:
+            # Get triangle with highest error
+            tri = heapq.heappop(self.triangles_to_check)
 
-            # Check error
-            error = self.edge_error(v0_idx, v1_idx)
-
-            if error < error_threshold:
+            if tri.error < error_threshold:
+                # Error acceptable, don't subdivide further
                 continue
 
-            # Check edge length (Nyquist)
-            edge_len = self.edge_length(v0_idx, v1_idx)
-            if edge_len < min_edge_length:
+            # Check edge length (Nyquist limit)
+            max_edge = self.triangle_max_edge_length(tri)
+            if max_edge < min_edge_length:
                 continue
 
-            # Subdivide edge
-            if len(self.vertices) >= max_vertices:
+            # Would subdivision exceed vertex limit?
+            if len(self.vertices) + 3 > max_vertices:
                 break
 
-            # Create midpoint
-            v0 = np.array(self.vertices[v0_idx])
-            v1 = np.array(self.vertices[v1_idx])
-            mid = (v0 + v1) / 2.0
-            mid_idx = self.add_vertex(mid[0], mid[1], mid[2])
+            # Subdivide into 4 triangles
+            new_tris = self.subdivide_triangle(tri)
 
-            # Add new edges to check
-            edge0 = tuple(sorted([v0_idx, mid_idx]))
-            edge1 = tuple(sorted([mid_idx, v1_idx]))
-
-            self.edges_to_subdivide.add(edge0)
-            self.edges_to_subdivide.add(edge1)
+            # Compute errors and add to queue
+            for new_tri in new_tris:
+                new_tri.error = self.compute_triangle_error(new_tri)
+                heapq.heappush(self.triangles_to_check, new_tri)
 
             iteration += 1
             if iteration % 1000 == 0:
                 print(f"Iteration {iteration}: {len(self.vertices)} vertices, "
-                      f"{len(self.edges_to_subdivide)} edges to check, error={error:.2f}m")
+                      f"{len(self.triangles_to_check)} triangles in queue, error={tri.error:.2f}m")
 
         print(f"\nVertex generation complete!")
         print(f"Vertices: {len(self.vertices)}")
