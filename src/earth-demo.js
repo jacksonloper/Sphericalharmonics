@@ -5,7 +5,8 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { loadHealpixMesh, createElevationMaterial } from './healpixMeshLoader.js';
+import { loadCompactMesh } from './compactMeshLoader.js';
+import { createElevationMaterial } from './healpixMeshLoader.js';
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -50,8 +51,8 @@ let earthMesh;
 
 async function init() {
   try {
-    // Load the HEALPix mesh (icosahedral subdivision 5: 10K vertices, 280KB)
-    const geometry = await loadHealpixMesh('./earthtoposources/sur_mesh_ico5.bin');
+    // Load compact mesh (subdivision 7: 164K vertices, only 640KB!)
+    const geometry = await loadCompactMesh('./earthtoposources/sur_compact7.bin');
 
     // Create material
     const material = createElevationMaterial(
@@ -96,9 +97,10 @@ function addInfoPanel(geometry) {
   panel.innerHTML = `
     <strong>Earth Surface Topography</strong><br>
     <br>
-    Icosahedral mesh (5 subdivisions)<br>
+    Icosahedral mesh (7 subdivisions)<br>
     Vertices: ${vertices.toLocaleString()}<br>
     Triangles: ${triangles.toLocaleString()}<br>
+    File: 640 KB (geometry generated procedurally)<br>
     <br>
     Elevation Range:<br>
     ${geometry.userData.elevationMin.toFixed(1)} to ${geometry.userData.elevationMax.toFixed(1)} m<br>
