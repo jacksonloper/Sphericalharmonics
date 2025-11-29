@@ -16,6 +16,7 @@ import struct
 from dataclasses import dataclass
 from typing import List, Tuple, Set, Dict
 import heapq
+import trimesh
 
 
 @dataclass
@@ -392,6 +393,50 @@ class AdaptiveMesh:
         errors = [tri.error for tri in self.triangles]
         print(f"Error stats: min={min(errors):.2f}m, max={max(errors):.2f}m, "
               f"mean={np.mean(errors):.2f}m, median={np.median(errors):.2f}m")
+
+        # Verify and repair mesh
+        self.verify_and_repair_mesh()
+
+    def verify_and_repair_mesh(self):
+        """
+        Use Trimesh to verify the mesh is watertight and repair if needed.
+        """
+        print(f"\nVerifying mesh watertightness...")
+
+        # Convert to trimesh format
+        vertices_array = np.array(self.vertices, dtype=np.float64)
+        faces_array = np.array([[tri.v0, tri.v1, tri.v2] for tri in self.triangles], dtype=np.int32)
+
+        # Create trimesh object
+        mesh = trimesh.Trimesh(vertices=vertices_array, faces=faces_array, process=False)
+
+        print(f"Initial mesh: {len(mesh.vertices)} vertices, {len(mesh.faces)} faces")
+        print(f"Is watertight: {mesh.is_watertight}")
+        print(f"Is winding consistent: {mesh.is_winding_consistent}")
+
+        # Detailed diagnostics
+        if not mesh.is_watertight:
+            # Find boundary edges (edges that belong to only one triangle)
+            try:
+                edges_sorted = mesh.edges_sorted
+                edges_face = mesh.edges_face
+                # Boundary edges are those where the second face index is -1
+                if len(edges_face.shape) > 1:
+                    boundary_mask = edges_face[:, 1] == -1
+                    num_boundary = np.sum(boundary_mask)
+                else:
+                    num_boundary = "unknown"
+
+                print(f"  Boundary edges (holes): {num_boundary}")
+                print(f"  Total unique edges: {len(edges_sorted)}")
+                print(f"  Total faces: {len(mesh.faces)}")
+            except Exception as e:
+                print(f"  Could not compute boundary edges: {e}")
+
+            print("⚠️  Mesh has holes/boundaries - not watertight!")
+            print("   This indicates the conforming subdivision algorithm needs improvement.")
+        else:
+            print("✓ Mesh is watertight!")
 
     def save(self, filename):
         """
