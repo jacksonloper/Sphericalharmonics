@@ -2,7 +2,8 @@
   command = "npm run build"
   publish = "dist"
 
+# Only redirect root to index.html for SPA routing, not all paths
 [[redirects]]
-  from = "/*"
+  from = "/"
   to = "/index.html"
   status = 200
