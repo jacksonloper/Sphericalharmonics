@@ -140,12 +140,12 @@ export function createElevationMaterial(minElevation = -500, maxElevation = 9000
         // Below sea level: dark blue gradient
         float oceanT = vElevation / minElevation;
         color = mix(vec3(0.0, 0.1, 0.3), vec3(0.0, 0.2, 0.5), oceanT);
-      } else if (vElevation < 1.0) {
-        // At sea level (0-1m): BRIGHT BLUE - discontinuous jump
+      } else if (vElevation < 10.0) {
+        // At sea level (0-10m): BRIGHT BLUE - discontinuous jump
         color = vec3(0.0, 0.4, 1.0);
       } else {
         // Above sea level: green -> yellow -> orange -> red
-        float t = (vElevation - 1.0) / (maxElevation - 1.0);
+        float t = (vElevation - 10.0) / (maxElevation - 10.0);
         t = clamp(t, 0.0, 1.0);
 
         if (t < 0.25) {
