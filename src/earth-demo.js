@@ -1,12 +1,16 @@
 /**
  * Earth Topography Demo
  * Demonstrates loading and rendering spherical mesh data from BSHC spherical harmonics
+ * 
+ * Supports two rendering modes:
+ * 1. Flat shading (subdivision 9, 10 MB) - uses fragment derivatives for normals
+ * 2. Smooth shading (subdivision 8 + gradients, 7.5 MB) - uses analytical vertex normals
  */
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { loadCompactMesh } from './compactMeshLoader.js';
-import { createElevationMaterial } from './elevationMaterial.js';
+import { loadCompactMesh, loadGradientMesh } from './compactMeshLoader.js';
+import { createElevationMaterial, createSmoothElevationMaterial } from './elevationMaterial.js';
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -50,12 +54,20 @@ document.body.appendChild(loadingDiv);
 
 const loadStatus = loadingDiv.querySelector('#loadStatus');
 
-// Load and render the mesh
+// Global state
 let earthMesh;
+let currentMode = 'flat'; // 'flat' or 'smooth'
+let geometries = {}; // Cache loaded geometries
+let materials = {}; // Cache materials
+
+// Check URL params for initial mode
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('mode') === 'smooth') {
+  currentMode = 'smooth';
+}
 
 async function init() {
   try {
-    // Progress callback for loading indicator
     const onProgress = (progress) => {
       if (progress.type === 'status') {
         loadStatus.textContent = progress.message;
@@ -64,38 +76,43 @@ async function init() {
       }
     };
 
-    // Load compact mesh (subdivision 9: ~2.6M vertices, ~10 MB)
-    // Use Web Worker for smoother loading experience
-    const geometry = await loadCompactMesh('./earthtoposources/sur_compact9.bin', {
-      onProgress,
-      useWorker: true
-    });
+    // Load both modes in parallel (or just the selected one)
+    if (currentMode === 'smooth') {
+      loadStatus.textContent = 'Loading smooth shading mesh (subdivision 8 + gradients)...';
+      geometries.smooth = await loadGradientMesh('./earthtoposources/sur_gradient8.bin', {
+        onProgress,
+        useWorker: true
+      });
+      materials.smooth = createSmoothElevationMaterial(
+        geometries.smooth.userData.elevationMin,
+        geometries.smooth.userData.elevationMax
+      );
+    } else {
+      loadStatus.textContent = 'Loading flat shading mesh (subdivision 9)...';
+      geometries.flat = await loadCompactMesh('./earthtoposources/sur_compact9.bin', {
+        onProgress,
+        useWorker: true
+      });
+      materials.flat = createElevationMaterial(
+        geometries.flat.userData.elevationMin,
+        geometries.flat.userData.elevationMax
+      );
+    }
 
-    // Create material
-    const material = createElevationMaterial(
-      geometry.userData.elevationMin,
-      geometry.userData.elevationMax
-    );
-
-    // Create mesh
+    // Create initial mesh
+    const geometry = geometries[currentMode];
+    const material = materials[currentMode];
+    
     earthMesh = new THREE.Mesh(geometry, material);
-
-    // Rotate to align poles vertically (HEALPix uses z-up, Three.js uses y-up)
     earthMesh.rotation.x = -Math.PI / 2;
-
     scene.add(earthMesh);
 
-    // Remove loading indicator
     loadingDiv.remove();
 
-    // Add info panel
     addInfoPanel(geometry);
-
-    // Add wireframe toggle
     addWireframeToggle(material);
-
-    // Add alpha slider
     addAlphaSlider(material);
+    addModeToggle();
 
     console.log('Earth mesh loaded successfully!');
   } catch (error) {
@@ -105,42 +122,121 @@ async function init() {
   }
 }
 
-function addInfoPanel(geometry) {
-  const panel = document.createElement('div');
-  panel.style.position = 'absolute';
-  panel.style.top = '10px';
-  panel.style.left = '10px';
-  panel.style.color = 'white';
-  panel.style.fontFamily = 'monospace';
-  panel.style.fontSize = '12px';
-  panel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-  panel.style.padding = '10px';
-  panel.style.borderRadius = '5px';
-  panel.style.lineHeight = '1.5';
+async function switchMode(newMode) {
+  if (newMode === currentMode) return;
+  
+  // Show loading overlay
+  const overlay = document.createElement('div');
+  overlay.id = 'switchOverlay';
+  overlay.style.cssText = `
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-family: monospace; font-size: 16px;
+    z-index: 1000;
+  `;
+  overlay.textContent = 'Loading...';
+  document.body.appendChild(overlay);
 
+  try {
+    // Load geometry if not cached
+    if (!geometries[newMode]) {
+      const onProgress = (progress) => {
+        if (progress.type === 'status') {
+          overlay.textContent = progress.message;
+        }
+      };
+
+      if (newMode === 'smooth') {
+        geometries.smooth = await loadGradientMesh('./earthtoposources/sur_gradient8.bin', {
+          onProgress,
+          useWorker: true
+        });
+        materials.smooth = createSmoothElevationMaterial(
+          geometries.smooth.userData.elevationMin,
+          geometries.smooth.userData.elevationMax
+        );
+      } else {
+        geometries.flat = await loadCompactMesh('./earthtoposources/sur_compact9.bin', {
+          onProgress,
+          useWorker: true
+        });
+        materials.flat = createElevationMaterial(
+          geometries.flat.userData.elevationMin,
+          geometries.flat.userData.elevationMax
+        );
+      }
+    }
+
+    // Copy alpha value from current material
+    const currentAlpha = materials[currentMode].uniforms.alpha.value;
+    materials[newMode].uniforms.alpha.value = currentAlpha;
+
+    // Update mesh
+    earthMesh.geometry = geometries[newMode];
+    earthMesh.material = materials[newMode];
+    
+    currentMode = newMode;
+
+    // Update UI
+    updateInfoPanel();
+    updateModeToggleUI();
+
+    overlay.remove();
+  } catch (error) {
+    console.error('Failed to switch mode:', error);
+    overlay.textContent = 'Error: ' + error.message;
+    setTimeout(() => overlay.remove(), 3000);
+  }
+}
+
+let infoPanel;
+function addInfoPanel(geometry) {
+  infoPanel = document.createElement('div');
+  infoPanel.style.position = 'absolute';
+  infoPanel.style.top = '10px';
+  infoPanel.style.left = '10px';
+  infoPanel.style.color = 'white';
+  infoPanel.style.fontFamily = 'monospace';
+  infoPanel.style.fontSize = '12px';
+  infoPanel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+  infoPanel.style.padding = '10px';
+  infoPanel.style.borderRadius = '5px';
+  infoPanel.style.lineHeight = '1.5';
+
+  document.body.appendChild(infoPanel);
+  updateInfoPanel();
+}
+
+function updateInfoPanel() {
+  const geometry = geometries[currentMode];
   const vertices = geometry.attributes.position.count;
   const triangles = geometry.index.count / 3;
-  const subdivisions = geometry.userData.subdivisions || 9;
+  const subdivisions = geometry.userData.subdivisions;
+  const hasGradients = geometry.userData.hasGradients;
+  
+  const fileSize = currentMode === 'flat' ? '~10 MB' : '~7.5 MB';
+  const shadingType = currentMode === 'flat' ? 'Flat (fragment)' : 'Smooth (vertex)';
 
-  panel.innerHTML = `
+  infoPanel.innerHTML = `
     <strong>Earth Surface Topography</strong><br>
     <br>
+    Mode: <span style="color: #4ecdc4;">${shadingType}</span><br>
     Icosahedral mesh (${subdivisions} subdivisions)<br>
     Vertices: ${vertices.toLocaleString()}<br>
     Triangles: ${triangles.toLocaleString()}<br>
-    File: ~10 MB (geometry generated procedurally)<br>
+    File: ${fileSize}${hasGradients ? ' (elev + gradients)' : ''}<br>
     <br>
     Elevation Range:<br>
     ${geometry.userData.elevationMin.toFixed(1)} to ${geometry.userData.elevationMax.toFixed(1)} m<br>
     <br>
     <em>Drag to rotate • Scroll to zoom</em>
   `;
-
-  document.body.appendChild(panel);
 }
 
 function addWireframeToggle(material) {
   const toggle = document.createElement('div');
+  toggle.id = 'wireframeToggle';
   toggle.style.position = 'absolute';
   toggle.style.bottom = '20px';
   toggle.style.right = '20px';
@@ -160,18 +256,11 @@ function addWireframeToggle(material) {
 
   toggle.addEventListener('click', () => {
     wireframeEnabled = !wireframeEnabled;
-    material.wireframe = wireframeEnabled;
+    // Update both materials if they exist
+    Object.values(materials).forEach(mat => {
+      if (mat) mat.wireframe = wireframeEnabled;
+    });
     toggle.textContent = `Wireframe: ${wireframeEnabled ? 'ON' : 'OFF'}`;
-    toggle.style.backgroundColor = wireframeEnabled ? 'rgba(78, 205, 196, 0.3)' : 'rgba(0, 0, 0, 0.7)';
-  });
-
-  toggle.addEventListener('mouseenter', () => {
-    if (!wireframeEnabled) {
-      toggle.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
-    }
-  });
-
-  toggle.addEventListener('mouseleave', () => {
     toggle.style.backgroundColor = wireframeEnabled ? 'rgba(78, 205, 196, 0.3)' : 'rgba(0, 0, 0, 0.7)';
   });
 
@@ -180,6 +269,7 @@ function addWireframeToggle(material) {
 
 function addAlphaSlider(material) {
   const container = document.createElement('div');
+  container.id = 'alphaSlider';
   container.style.position = 'absolute';
   container.style.bottom = '60px';
   container.style.right = '20px';
@@ -212,7 +302,10 @@ function addAlphaSlider(material) {
 
   slider.addEventListener('input', (e) => {
     const alpha = parseFloat(e.target.value);
-    material.uniforms.alpha.value = alpha;
+    // Update all materials
+    Object.values(materials).forEach(mat => {
+      if (mat) mat.uniforms.alpha.value = alpha;
+    });
     valueDisplay.textContent = alpha.toFixed(3);
   });
 
@@ -220,6 +313,52 @@ function addAlphaSlider(material) {
   container.appendChild(valueDisplay);
   container.appendChild(slider);
   document.body.appendChild(container);
+}
+
+let modeToggle;
+function addModeToggle() {
+  modeToggle = document.createElement('div');
+  modeToggle.style.position = 'absolute';
+  modeToggle.style.bottom = '130px';
+  modeToggle.style.right = '20px';
+  modeToggle.style.color = 'white';
+  modeToggle.style.fontFamily = 'monospace';
+  modeToggle.style.fontSize = '12px';
+  modeToggle.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+  modeToggle.style.padding = '10px 15px';
+  modeToggle.style.borderRadius = '5px';
+  modeToggle.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+  modeToggle.style.minWidth = '200px';
+
+  modeToggle.innerHTML = `
+    <div style="margin-bottom: 8px;">Shading Mode</div>
+    <div style="display: flex; gap: 8px;">
+      <button id="flatBtn" style="flex: 1; padding: 8px; cursor: pointer; border-radius: 4px; font-family: monospace; font-size: 11px;">
+        Flat (9 sub)<br>10 MB
+      </button>
+      <button id="smoothBtn" style="flex: 1; padding: 8px; cursor: pointer; border-radius: 4px; font-family: monospace; font-size: 11px;">
+        Smooth (8 sub)<br>7.5 MB
+      </button>
+    </div>
+  `;
+
+  document.body.appendChild(modeToggle);
+  
+  document.getElementById('flatBtn').addEventListener('click', () => switchMode('flat'));
+  document.getElementById('smoothBtn').addEventListener('click', () => switchMode('smooth'));
+  
+  updateModeToggleUI();
+}
+
+function updateModeToggleUI() {
+  const flatBtn = document.getElementById('flatBtn');
+  const smoothBtn = document.getElementById('smoothBtn');
+  
+  const activeStyle = 'background: #4ecdc4; color: black; border: none;';
+  const inactiveStyle = 'background: transparent; color: white; border: 1px solid rgba(255,255,255,0.3);';
+  
+  flatBtn.style.cssText = `flex: 1; padding: 8px; cursor: pointer; border-radius: 4px; font-family: monospace; font-size: 11px; ${currentMode === 'flat' ? activeStyle : inactiveStyle}`;
+  smoothBtn.style.cssText = `flex: 1; padding: 8px; cursor: pointer; border-radius: 4px; font-family: monospace; font-size: 11px; ${currentMode === 'smooth' ? activeStyle : inactiveStyle}`;
 }
 
 // Animation loop

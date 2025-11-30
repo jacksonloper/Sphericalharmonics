@@ -30,9 +30,11 @@ coeffs, lmax = pysh.shio.read_bshc('sur.bshc')
 
 ---
 
-## Compact Mesh Files
+## Mesh Files
 
-Pre-computed icosahedral mesh elevation data for three.js visualization:
+### Compact Mesh (Elevation Only)
+
+Pre-computed icosahedral mesh elevation data for flat shading:
 
 | File | Subdivisions | Vertices | Triangles | File Size |
 |------|--------------|----------|-----------|-----------|
@@ -42,78 +44,106 @@ Pre-computed icosahedral mesh elevation data for three.js visualization:
 | `sur_compact8.bin` | 8 | 655,362 | 1,310,720 | 2.5 MB |
 | `sur_compact9.bin` | 9 | 2,621,442 | 5,242,880 | 10 MB |
 
-### Compact Mesh Format
-
+**Format:**
 ```
 Header:    'HPELEV' (6 bytes)
-Metadata:
-  - subdivisions: uint8 (1 byte)
-
-Data:
-  - elevation: float32[num_vertices] (elevation in meters)
+Metadata:  subdivisions: uint8 (1 byte)
+Data:      elevation: float32[num_vertices]
 ```
 
-The icosahedral mesh geometry is generated procedurally from the subdivision level, so only elevation data needs to be stored.
+### Gradient Mesh (Elevation + Normals)
+
+Pre-computed mesh with analytical gradients for smooth vertex shading:
+
+| File | Subdivisions | Vertices | Triangles | File Size |
+|------|--------------|----------|-----------|-----------|
+| `sur_gradient8.bin` | 8 | 655,362 | 1,310,720 | 7.5 MB |
+
+**Format:**
+```
+Header:    'HPGRAD' (6 bytes)
+Metadata:  subdivisions: uint8 (1 byte)
+Data:      elevation: float32[num_vertices]
+           d_lat: float32[num_vertices]  (gradient w.r.t. latitude, m/degree)
+           d_lon: float32[num_vertices]  (gradient w.r.t. longitude, m/degree)
+```
+
+The gradients are computed analytically from the spherical harmonic expansion using pyshtools' `gradient()` method. They enable smooth vertex normal computation without needing higher subdivision levels.
+
+---
+
+## Shading Comparison
+
+| Mode | Subdivision | Vertices | File Size | Quality |
+|------|-------------|----------|-----------|---------|
+| Flat (9 sub) | 9 | 2.6M | 10 MB | Sharp edges, high detail |
+| Smooth (8 sub) | 8 | 655K | 7.5 MB | Smooth normals, lower poly |
+
+- **Flat shading** computes normals per-fragment using screen-space derivatives
+- **Smooth shading** uses pre-computed vertex normals from analytical SH gradients
 
 ---
 
 ## Generating Mesh Data
 
-Use the Python script to generate mesh data from BSHC files:
+### Elevation-only mesh (flat shading)
 
 ```bash
-# Install dependencies
 pip install pyshtools numpy scipy
-
-# Generate subdivision 9 mesh with tapering (default)
-python generate_compact_mesh_from_bshc.py 9
-
-# Generate different subdivision level
-python generate_compact_mesh_from_bshc.py 8
-
-# Customize taper start (default: 50 degrees from end)
-python generate_compact_mesh_from_bshc.py 9 100
+python generate_compact_mesh_from_bshc.py 9    # subdivision 9
+python generate_compact_mesh_from_bshc.py 8    # subdivision 8
 ```
 
-The script:
-1. Reads BSHC spherical harmonic coefficients
-2. Applies cosine tapering to highest-order coefficients (avoids truncation artifacts)
-3. Uses fast SHT to expand to a regular grid
-4. Interpolates elevation at icosahedral mesh vertices
-5. Exports compact binary format
+### Gradient mesh (smooth shading)
+
+```bash
+python generate_gradient_mesh.py 8             # subdivision 8 with gradients
+```
+
+Both scripts:
+1. Read BSHC spherical harmonic coefficients
+2. Apply cosine tapering to highest-order coefficients (avoids truncation artifacts)
+3. Use fast SHT to expand to a regular grid
+4. Interpolate elevation (and gradients) at icosahedral mesh vertices
+5. Export binary format
 
 ---
 
 ## Loading in three.js
 
-### Basic Usage
+### Flat shading (elevation only)
 
 ```javascript
 import { loadCompactMesh } from './compactMeshLoader.js';
 import { createElevationMaterial } from './elevationMaterial.js';
 
-// Load mesh
 const geometry = await loadCompactMesh('/earthtoposources/sur_compact9.bin', {
-  useWorker: true,  // Use Web Worker for better performance
-  onProgress: (progress) => console.log(progress)
+  useWorker: true
 });
-
-// Create material with elevation coloring
 const material = createElevationMaterial(
   geometry.userData.elevationMin,
   geometry.userData.elevationMax
 );
+```
 
-// Create and add mesh to scene
-const earthMesh = new THREE.Mesh(geometry, material);
-scene.add(earthMesh);
+### Smooth shading (with gradients)
+
+```javascript
+import { loadGradientMesh } from './compactMeshLoader.js';
+import { createSmoothElevationMaterial } from './elevationMaterial.js';
+
+const geometry = await loadGradientMesh('/earthtoposources/sur_gradient8.bin', {
+  useWorker: true
+});
+const material = createSmoothElevationMaterial(
+  geometry.userData.elevationMin,
+  geometry.userData.elevationMax
+);
 ```
 
 ---
 
 ## Demo
-
-A complete demo is available in `earth.html`:
 
 ```bash
 npm run dev
@@ -121,8 +151,9 @@ npm run dev
 ```
 
 The demo includes:
+- Toggle between flat (9-subdivision) and smooth (8-subdivision) shading
 - Auto-rotating Earth with topography
-- Elevation-based color mapping (ocean blue → green → brown → white)
+- Elevation-based color mapping
 - Interactive orbit controls
 - Adjustable relief exponent
 - Wireframe toggle
@@ -135,13 +166,12 @@ The demo includes:
 - **Base**: Icosahedron (12 vertices, 20 faces)
 - **Subdivision**: Each triangle split into 4 per level
 - **Projection**: Vertices projected to unit sphere
-- **Elevation**: Sampled from spherical harmonic expansion
 
 ### Spherical Harmonic Processing
 - **Source**: Earth2014 model (lmax=2160, ~9 km resolution)
 - **Tapering**: Cosine taper on top 50 degrees to avoid Gibbs phenomenon
 - **Transform**: Fast SHT via pyshtools
-- **Interpolation**: Bivariate spline on regular lat/lon grid
+- **Gradients**: Analytical ∂f/∂θ and ∂f/∂φ from pyshtools gradient method
 
 ### Coordinate System
 - **Unit sphere**: All vertices on sphere with radius = 1.0
