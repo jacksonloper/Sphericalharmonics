@@ -30,13 +30,27 @@ coeffs, lmax = pysh.shio.read_bshc('sur.bshc')
 
 ---
 
-## Mesh File
+## Mesh Files
 
-Pre-computed icosahedral mesh elevation data for flat shading:
+Pre-computed icosahedral mesh elevation data at various spherical harmonic truncation levels.
+Each file uses cosine apodization to avoid Gibbs ringing artifacts at the cutoff frequency.
 
-| File | Subdivisions | Vertices | Triangles | File Size |
-|------|--------------|----------|-----------|-----------|
-| `sur_compact9.bin` | 9 | 2,621,442 | 5,242,880 | 10 MB |
+| File | lmax | Subdivisions | Vertices | File Size | Description |
+|------|------|--------------|----------|-----------|-------------|
+| `sur_lmax4.bin` | 4 | 2 | 162 | 0.6 KB | Very low - basic shape |
+| `sur_lmax8.bin` | 8 | 3 | 642 | 2.5 KB | Low - major features |
+| `sur_lmax16.bin` | 16 | 4 | 2,562 | 10 KB | Medium-low - continental shapes |
+| `sur_lmax32.bin` | 32 | 5 | 10,242 | 40 KB | Medium - mountain ranges visible |
+| `sur_lmax64.bin` | 64 | 6 | 40,962 | 160 KB | Higher - regional detail |
+| `sur_lmax128.bin` | 128 | 7 | 163,842 | 640 KB | High - significant detail |
+| `sur_lmax360.bin` | 360 | 8 | 655,362 | 2.5 MB | Very high - fine detail |
+| `sur_compact9.bin` | 2160 | 9 | 2,621,442 | 10 MB | Full resolution (~9km) |
+
+### Subdivision Level Selection
+
+The mesh subdivision level for each lmax is chosen based on Nyquist sampling:
+- To properly sample harmonics up to degree lmax, we need approximately `sqrt(N_vertices) / 2 >= lmax`
+- This ensures no aliasing artifacts from undersampling
 
 **Format:**
 ```
@@ -51,17 +65,28 @@ The icosahedral mesh geometry is generated procedurally from the subdivision lev
 
 ## Generating Mesh Data
 
+### Full Resolution (lmax=2160)
+
 ```bash
 pip install pyshtools numpy scipy
 python generate_compact_mesh_from_bshc.py 9    # subdivision 9
 ```
 
-The script:
-1. Reads BSHC spherical harmonic coefficients
-2. Applies cosine tapering to highest-order coefficients (avoids truncation artifacts)
-3. Uses fast SHT to expand to a regular grid
-4. Interpolates elevation at icosahedral mesh vertices
-5. Exports binary format
+### Multiple Truncation Levels
+
+```bash
+pip install pyshtools numpy scipy
+python generate_truncated_meshes.py           # generates all levels
+python generate_truncated_meshes.py 64        # generate only lmax=64
+```
+
+The scripts:
+1. Read BSHC spherical harmonic coefficients
+2. Truncate to desired lmax (for truncated meshes)
+3. Apply cosine tapering/apodization (avoids truncation artifacts)
+4. Use fast SHT to expand to a regular grid
+5. Interpolate elevation at icosahedral mesh vertices
+6. Export binary format
 
 ---
 
@@ -71,7 +96,8 @@ The script:
 import { loadCompactMesh } from './compactMeshLoader.js';
 import { createElevationMaterial } from './elevationMaterial.js';
 
-const geometry = await loadCompactMesh('/earthtoposources/sur_compact9.bin', {
+// Load any truncation level
+const geometry = await loadCompactMesh('/earthtoposources/sur_lmax32.bin', {
   useWorker: true
 });
 const material = createElevationMaterial(
@@ -90,6 +116,7 @@ npm run dev
 ```
 
 The demo includes:
+- **Truncation level selector**: Choose different lmax values to see how harmonic approximations improve
 - Auto-rotating Earth with topography
 - Elevation-based color mapping
 - Interactive orbit controls
@@ -107,7 +134,7 @@ The demo includes:
 
 ### Spherical Harmonic Processing
 - **Source**: Earth2014 model (lmax=2160, ~9 km resolution)
-- **Tapering**: Cosine taper on top 50 degrees to avoid Gibbs phenomenon
+- **Tapering**: Cosine taper on top 20% of coefficients to avoid Gibbs phenomenon
 - **Transform**: Fast SHT via pyshtools
 
 ### Coordinate System
