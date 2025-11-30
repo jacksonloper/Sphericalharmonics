@@ -8,6 +8,10 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { loadContourData, createContourGeometry } from './contourLoader.js';
 import { createContourMaterial } from './contourMaterial.js';
 
+// Constants
+const OCEAN_COLOR = 0x001133;
+const BASE_SPHERE_SUBDIVISIONS = 5;
+
 // Scene setup
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
@@ -79,9 +83,9 @@ async function init() {
     }
 
     // Create a base sphere to show ocean/land backdrop
-    const baseGeometry = new THREE.IcosahedronGeometry(1.0, 5);
+    const baseGeometry = new THREE.IcosahedronGeometry(1.0, BASE_SPHERE_SUBDIVISIONS);
     baseMaterial = new THREE.MeshBasicMaterial({
-      color: 0x001133,  // Dark blue for ocean
+      color: OCEAN_COLOR,
       side: THREE.FrontSide
     });
     const baseSphere = new THREE.Mesh(baseGeometry, baseMaterial);

@@ -196,6 +196,10 @@ function createExtrudedPolygon(vertices, baseRadius, topRadius) {
   };
 }
 
+// Constants for geometry generation
+const CONTOUR_BASE_OFFSET = 0.002;  // Offset to lift contours above base sphere
+const RELIEF_SCALE_FACTOR = 0.1;    // Scale factor for elevation to radius mapping
+
 /**
  * Create a THREE.js BufferGeometry from contour levels
  * @param {Array} levels - Array of { elevation, polygons } objects
@@ -232,9 +236,8 @@ export function createContourGeometry(levels, options = {}) {
     // Calculate radius based on elevation
     // Map elevation to a radius value - add small offset so 0m contours are visible above base sphere
     const normalizedElev = Math.max(0, elevation) / maxElevation;
-    const baseOffset = 0.002;  // Small offset to lift contours above base sphere
-    const topRadius = baseRadius * (1 + baseOffset + normalizedElev * reliefScale * 0.1);
-    const innerRadius = baseRadius * (1 + baseOffset);  // Inner surface at base offset
+    const topRadius = baseRadius * (1 + CONTOUR_BASE_OFFSET + normalizedElev * reliefScale * RELIEF_SCALE_FACTOR);
+    const innerRadius = baseRadius * (1 + CONTOUR_BASE_OFFSET);  // Inner surface at base offset
 
     for (const vertices of polygons) {
       const result = createExtrudedPolygon(vertices, innerRadius, topRadius);
