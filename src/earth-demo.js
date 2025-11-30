@@ -86,23 +86,26 @@ let currentHour = 12; // Start at noon
 const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 // Calculate sun position based on hour (equinox - sun travels along equator)
-// Native mesh: Z=poles, XY=equator, X=lon0, Y=lon90
-// After mesh rotation (x = -PI/2): Y=poles, XZ=equator, X=lon0, Z=lon90
+// The shader computes lighting in MODEL space where:
+//   - Z axis = poles
+//   - XY plane = equator
+// The mesh is then rotated to display correctly (Y=poles in world)
+// But the shader lighting happens BEFORE the rotation, so we work in model space.
 function getSunDirection(hours) {
   // At equinox, sun is at zenith at noon (12:00) at longitude 0 (prime meridian)
   // Sun moves westward (east to west), 15 degrees per hour
-  // The sun revolves AROUND the pole axis (Y axis / red line)
-  // hours=12 -> angle=0 -> sun at lon=0 (+X direction)
-  // hours=6 -> angle=90° -> sun at lon=90°E (+Z after rotation)
-  // hours=18 -> angle=-90° -> sun at lon=90°W (-Z after rotation)
+  // The sun revolves AROUND the Z axis (poles in model space)
+  // hours=12 -> angle=0 -> sun at lon=0 (+X direction in model space)
+  // hours=6 -> angle=90° -> sun at lon=90°E (+Y in model space)
+  // hours=18 -> angle=-90° -> sun at lon=90°W (-Y in model space)
   const angle = ((12 - hours) / 24) * Math.PI * 2;
   
-  // Sun direction at equinox - rotates in XZ plane around Y axis (poles)
-  // Y=0 because at equinox, sun is exactly on the equatorial plane
+  // Sun direction in MODEL space - rotates in XY plane around Z axis (poles)
+  // Z=0 because at equinox, sun is exactly on the equatorial plane
   return new THREE.Vector3(
-    Math.cos(angle),
-    0,  // Equinox: sun on equatorial plane (XZ plane after mesh rotation)
-    Math.sin(angle)
+    Math.cos(angle),  // X in model space
+    Math.sin(angle),  // Y in model space
+    0                 // Z=0 (equinox: sun on equatorial plane)
   ).normalize();
 }
 
