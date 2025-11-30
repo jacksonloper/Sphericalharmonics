@@ -51,8 +51,7 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.minDistance = 1.2;
 controls.maxDistance = 10;
-controls.autoRotate = true;
-controls.autoRotateSpeed = 0.5;
+controls.autoRotate = false; // Disable auto-rotate since we're rotating the light instead
 
 // Loading indicator
 const loadingDiv = document.createElement('div');
@@ -75,6 +74,41 @@ let material = null;
 let currentLevelIndex = DEFAULT_LEVEL_INDEX;
 let isLoading = false;
 let wireframeToggle = null;
+let clockDisplay = null;
+
+// Simulation start time
+const simulationStartTime = Date.now();
+const startDate = new Date();
+
+// Calculate simulated time (1 day per minute = 1440x speed)
+function getSimulatedTime() {
+  const elapsedMs = Date.now() - simulationStartTime;
+  const simulatedMs = elapsedMs * 1440; // 1 day per minute
+  const simulatedDate = new Date(startDate.getTime() + simulatedMs);
+  return simulatedDate;
+}
+
+// Calculate sun position based on time (equinox - sun travels along equator)
+function getSunDirection(date) {
+  const hours = date.getHours() + date.getMinutes() / 60 + date.getSeconds() / 3600;
+  // At equinox, sun is at zenith at noon (12:00) at longitude 0
+  // Convert local time to angle: 12:00 = sun at +X, 00:00 = sun at -X
+  // Sun moves 15 degrees per hour (360/24)
+  const angle = ((hours - 12) / 24) * Math.PI * 2;
+  
+  // Sun direction at equinox (Y=0 plane, circling in XZ plane)
+  // Slight Y offset for better lighting aesthetics
+  return new THREE.Vector3(
+    Math.cos(angle),
+    0.3,  // Slight elevation for better visibility
+    Math.sin(angle)
+  ).normalize();
+}
+
+// Format time for display (show simulated time)
+function formatTime(date) {
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
 
 async function loadLevel(levelIndex) {
   if (isLoading) return;
@@ -153,6 +187,13 @@ function addControlPanel() {
   panel.style.justifyContent = 'center';
   panel.style.maxWidth = '95vw';
 
+  // Clock display
+  clockDisplay = document.createElement('span');
+  clockDisplay.style.color = '#4ecdc4';
+  clockDisplay.style.minWidth = '70px';
+  clockDisplay.textContent = formatTime(new Date());
+  panel.appendChild(clockDisplay);
+
   // Level selector
   const levelGroup = document.createElement('div');
   levelGroup.style.display = 'flex';
@@ -161,7 +202,6 @@ function addControlPanel() {
 
   const levelLabel = document.createElement('span');
   levelLabel.textContent = 'lmax:';
-  levelLabel.style.color = '#4ecdc4';
   levelGroup.appendChild(levelLabel);
 
   const select = document.createElement('select');
@@ -245,6 +285,19 @@ function addControlPanel() {
 // Animation loop
 function animate() {
   requestAnimationFrame(animate);
+  
+  // Update sun/light position based on simulated time (1 day per minute)
+  const simulatedTime = getSimulatedTime();
+  if (material) {
+    const sunDir = getSunDirection(simulatedTime);
+    material.uniforms.lightDirection.value.copy(sunDir);
+  }
+  
+  // Update clock display with simulated time
+  if (clockDisplay) {
+    clockDisplay.textContent = formatTime(simulatedTime);
+  }
+  
   controls.update();
   renderer.render(scene, camera);
 }
