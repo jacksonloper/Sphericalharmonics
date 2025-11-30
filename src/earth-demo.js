@@ -87,15 +87,17 @@ function getSunDirection(hours) {
   // At 12:00, sun is over longitude 0 (+X direction when looking from above north pole)
   // At 06:00, sun is over longitude 90°E
   // At 18:00, sun is over longitude 90°W
-  // Angle increases clockwise when viewed from north (sun moves west)
-  const angle = ((12 - hours) / 24) * Math.PI * 2 + Math.PI; // +180° to correct longitude
+  // hours=12 -> angle=0 -> sun at +X (noon at prime meridian)
+  // hours=6 -> angle=π/2 -> sun at +Z (sunrise in east)
+  // hours=18 -> angle=-π/2 -> sun at -Z (sunset in west)
+  const angle = ((12 - hours) / 24) * Math.PI * 2;
   
   // Sun direction at equinox (Y=0 plane, circling in XZ plane)
   // Slight Y offset for better lighting aesthetics
   return new THREE.Vector3(
     Math.cos(angle),
     0.3,  // Slight elevation for better visibility
-    -Math.sin(angle)  // Negative to correct rotation direction (sun rises in east)
+    Math.sin(angle)
   ).normalize();
 }
 
