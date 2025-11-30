@@ -9,17 +9,29 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { loadCompactMesh } from './compactMeshLoader.js';
 import { createElevationMaterial } from './elevationMaterial.js';
 
+// File format constants
+const HEADER_SIZE = 7; // 'HPELEV' (6 bytes) + subdivision level (1 byte)
+
+// Use Web Worker for subdivision levels >= this threshold (for better performance)
+const WORKER_SUBDIVISION_THRESHOLD = 7;
+
+// Icosahedral mesh vertices: 10 * 4^subdivisions + 2
+function icosahedralVertices(subdivisions) {
+  return 10 * Math.pow(4, subdivisions) + 2;
+}
+
 // Available truncation levels with metadata
-// Each entry: { lmax, file, description, subdivisions, vertices (approx) }
+// Vertices are calculated from the icosahedral formula: 10 * 4^subdivisions + 2
+// Subdivisions are chosen based on Nyquist frequency: sqrt(vertices)/2 >= lmax
 const TRUNCATION_LEVELS = [
-  { lmax: 4, file: './earthtoposources/sur_lmax4.bin', description: 'Very low - basic shape', subdivisions: 2, vertices: 162 },
-  { lmax: 8, file: './earthtoposources/sur_lmax8.bin', description: 'Low - major features', subdivisions: 3, vertices: 642 },
-  { lmax: 16, file: './earthtoposources/sur_lmax16.bin', description: 'Medium-low - continental shapes', subdivisions: 4, vertices: 2562 },
-  { lmax: 32, file: './earthtoposources/sur_lmax32.bin', description: 'Medium - mountain ranges visible', subdivisions: 5, vertices: 10242 },
-  { lmax: 64, file: './earthtoposources/sur_lmax64.bin', description: 'Higher - regional detail', subdivisions: 6, vertices: 40962 },
-  { lmax: 128, file: './earthtoposources/sur_lmax128.bin', description: 'High - significant detail', subdivisions: 7, vertices: 163842 },
-  { lmax: 360, file: './earthtoposources/sur_lmax360.bin', description: 'Very high - fine detail', subdivisions: 8, vertices: 655362 },
-  { lmax: 2160, file: './earthtoposources/sur_compact9.bin', description: 'Full resolution (~9km)', subdivisions: 9, vertices: 2621442 }
+  { lmax: 4, file: './earthtoposources/sur_lmax4.bin', description: 'Very low - basic shape', subdivisions: 2 },
+  { lmax: 8, file: './earthtoposources/sur_lmax8.bin', description: 'Low - major features', subdivisions: 3 },
+  { lmax: 16, file: './earthtoposources/sur_lmax16.bin', description: 'Medium-low - continental shapes', subdivisions: 4 },
+  { lmax: 32, file: './earthtoposources/sur_lmax32.bin', description: 'Medium - mountain ranges visible', subdivisions: 5 },
+  { lmax: 64, file: './earthtoposources/sur_lmax64.bin', description: 'Higher - regional detail', subdivisions: 6 },
+  { lmax: 128, file: './earthtoposources/sur_lmax128.bin', description: 'High - significant detail', subdivisions: 7 },
+  { lmax: 360, file: './earthtoposources/sur_lmax360.bin', description: 'Very high - fine detail', subdivisions: 8 },
+  { lmax: 2160, file: './earthtoposources/sur_compact9.bin', description: 'Full resolution (~9km)', subdivisions: 9 }
 ];
 
 // Default to medium detail for faster initial load
@@ -93,10 +105,10 @@ async function loadLevel(levelIndex) {
       }
     };
 
-    // Load mesh
+    // Load mesh - use Web Worker for larger meshes to avoid blocking UI
     const geometry = await loadCompactMesh(level.file, {
       onProgress,
-      useWorker: level.subdivisions >= 7 // Use worker for larger meshes
+      useWorker: level.subdivisions >= WORKER_SUBDIVISION_THRESHOLD
     });
 
     // Remove old mesh if exists
@@ -168,7 +180,8 @@ function updateInfoPanel(geometry, level) {
 }
 
 function getApproxFileSize(vertices) {
-  const bytes = 7 + vertices * 4; // header + float32 per vertex
+  // File format: HEADER_SIZE bytes header + float32 (4 bytes) per vertex
+  const bytes = HEADER_SIZE + vertices * 4;
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;

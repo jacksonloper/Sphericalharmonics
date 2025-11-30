@@ -184,7 +184,22 @@ def export_compact_mesh(elevation, subdivisions, output_path):
 
 
 def icosahedral_vertices(s):
-    """Calculate number of vertices for subdivision level s."""
+    """
+    Calculate number of vertices for an icosahedral mesh at subdivision level s.
+    
+    Formula: N = 10 * 4^s + 2
+    
+    This comes from the icosahedron subdivision process:
+    - Base icosahedron has 12 vertices and 20 faces
+    - Each subdivision splits each triangle into 4, quadrupling the face count
+    - The vertex count follows: V = 10 * 4^s + 2 (derived from Euler's formula)
+    
+    Examples:
+    - s=0: 12 vertices (base icosahedron)
+    - s=1: 42 vertices
+    - s=2: 162 vertices
+    - s=9: 2,621,442 vertices
+    """
     return 10 * (4 ** s) + 2
 
 
