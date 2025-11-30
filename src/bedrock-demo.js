@@ -15,6 +15,7 @@ const WORKER_SUBDIVISION_THRESHOLD = 7;
 
 // Available truncation levels with metadata
 // Subdivisions are chosen based on Nyquist frequency: sqrt(vertices)/2 >= lmax
+// Note: The highest resolution file uses 'compact9' naming to match the sur.bshc convention
 const TRUNCATION_LEVELS = [
   { lmax: 4, file: './earthtoposources/bed_lmax4.bin', subdivisions: 2 },
   { lmax: 8, file: './earthtoposources/bed_lmax8.bin', subdivisions: 3 },

@@ -2,6 +2,11 @@
  * Bedrock Material for three.js
  * Creates shader materials for visualizing bedrock elevation data on spherical meshes
  * Uses |e|/6000 + alpha for radius, green for above 0, blue for below 0
+ * 
+ * Note: Bedrock data has a wider elevation range than surface data:
+ * - Bedrock min is around -10500m (deepest ocean trenches)
+ * - Bedrock max is around +6300m (highest peaks)
+ * The 6000 divisor is chosen to normalize the visualization appropriately.
  */
 
 import * as THREE from 'three';
@@ -10,8 +15,8 @@ import * as THREE from 'three';
  * Create a material for visualizing bedrock elevation data with FLAT shading
  * Uses fragment derivatives to compute face normals (good for high-resolution meshes)
  *
- * @param {number} minElevation - Minimum elevation value
- * @param {number} maxElevation - Maximum elevation value
+ * @param {number} minElevation - Minimum elevation value (default -10000m for deep ocean)
+ * @param {number} maxElevation - Maximum elevation value (default 6000m for land peaks)
  * @returns {THREE.ShaderMaterial} Material with elevation-based coloring
  */
 export function createBedrockMaterial(minElevation = -10000, maxElevation = 6000) {
@@ -25,6 +30,8 @@ export function createBedrockMaterial(minElevation = -10000, maxElevation = 6000
       vElevation = elevation;
 
       // Compute radial displacement: r = |e|/6000 + alpha
+      // The 6000 divisor normalizes bedrock elevations (typically -10500m to +6300m)
+      // to produce a reasonable visual radius range for the sphere
       float absE = abs(elevation);
       float radius = absE / 6000.0 + alpha;
 
