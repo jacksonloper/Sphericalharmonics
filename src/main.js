@@ -55,6 +55,10 @@ const material = new THREE.ShaderMaterial({
 const mesh = new THREE.Mesh(geometry, material);
 scene.add(mesh);
 
+// Coefficient indices we'll evolve: all through l=3 (excluding l=0)
+// l=1: 1,2,3 | l=2: 4,5,6,7,8 | l=3: 9,10,11,12,13,14,15
+const activeIndices = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+
 // Color palette for harmonic layers (vibrant, distinct colors)
 const harmonicColors = [
   0xff0066, // Hot pink (l=1, m=-1)
@@ -121,10 +125,6 @@ const ouParamLabels = {
   theta: 'Mean Reversion (θ)',
   sigma: 'Volatility (σ)'
 };
-
-// Coefficient indices we'll evolve: all through l=3 (excluding l=0)
-// l=1: 1,2,3 | l=2: 4,5,6,7,8 | l=3: 9,10,11,12,13,14,15
-const activeIndices = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
 // Initialize position x (coefficients on n-sphere) and velocity v
 const n = activeIndices.length; // 15 dimensions
