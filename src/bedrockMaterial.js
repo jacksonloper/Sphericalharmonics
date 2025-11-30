@@ -1,7 +1,8 @@
 /**
  * Bedrock Material for three.js
  * Creates shader materials for visualizing bedrock elevation data on spherical meshes
- * Uses alpha + (1-alpha)|e|/6000 for radius, green for above 0, blue for below 0
+ * Uses alpha + (1-alpha)|e|/6000 for radius
+ * Colormap: black at lowest depth → blue → green → white at highest peak
  * 
  * Note: Bedrock data has a wider elevation range than surface data:
  * - Bedrock min is around -10500m (deepest ocean trenches)
@@ -52,19 +53,21 @@ export function createBedrockMaterial(minElevation = -10000, maxElevation = 6000
     varying vec3 vPosition;
 
     void main() {
-      // Color based on sign: green for above 0, blue for below 0
+      // Colormap: black at lowest depth → blue → green → white at highest peak
       vec3 color;
 
       if (vElevation >= 0.0) {
-        // Above sea level: bright green gradient
+        // Above sea level: green gradient toward white at highest peak
         float t = vElevation / maxElevation;
         t = clamp(t, 0.0, 1.0);
-        color = mix(vec3(0.2, 0.7, 0.2), vec3(0.3, 1.0, 0.3), t);
+        // From green at sea level to white at highest peak
+        color = mix(vec3(0.2, 0.7, 0.2), vec3(1.0, 1.0, 1.0), t);
       } else {
-        // Below sea level: bright blue gradient
+        // Below sea level: black at deepest → blue at sea level
         float t = vElevation / minElevation;
         t = clamp(t, 0.0, 1.0);
-        color = mix(vec3(0.2, 0.4, 0.8), vec3(0.3, 0.5, 1.0), t);
+        // From blue at sea level (t=0) to black at deepest (t=1)
+        color = mix(vec3(0.2, 0.4, 0.8), vec3(0.0, 0.0, 0.0), t);
       }
 
       // Flat shading: compute face normal from position derivatives
