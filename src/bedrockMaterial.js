@@ -56,15 +56,15 @@ export function createBedrockMaterial(minElevation = -10000, maxElevation = 6000
       vec3 color;
 
       if (vElevation >= 0.0) {
-        // Above sea level: green gradient
+        // Above sea level: bright green gradient
         float t = vElevation / maxElevation;
         t = clamp(t, 0.0, 1.0);
-        color = mix(vec3(0.0, 0.5, 0.0), vec3(0.0, 1.0, 0.0), t);
+        color = mix(vec3(0.2, 0.7, 0.2), vec3(0.3, 1.0, 0.3), t);
       } else {
-        // Below sea level: blue gradient
+        // Below sea level: bright blue gradient
         float t = vElevation / minElevation;
         t = clamp(t, 0.0, 1.0);
-        color = mix(vec3(0.0, 0.0, 0.5), vec3(0.0, 0.0, 1.0), t);
+        color = mix(vec3(0.2, 0.4, 0.8), vec3(0.3, 0.5, 1.0), t);
       }
 
       // Flat shading: compute face normal from position derivatives
@@ -73,17 +73,19 @@ export function createBedrockMaterial(minElevation = -10000, maxElevation = 6000
       vec3 normal = normalize(cross(fdx, fdy));
 
       // Multi-directional lighting for full illumination
-      // Three lights from different directions ensure all surfaces are lit
+      // Multiple lights from different directions ensure all surfaces are well lit
       vec3 light1 = normalize(vec3(1.0, 1.0, 1.0));
       vec3 light2 = normalize(vec3(-1.0, 0.5, -0.5));
       vec3 light3 = normalize(vec3(0.0, -1.0, 0.5));
+      vec3 light4 = normalize(vec3(-0.5, 1.0, -1.0));
 
-      float diffuse1 = max(dot(normal, light1), 0.0) * 0.4;
-      float diffuse2 = max(dot(normal, light2), 0.0) * 0.3;
-      float diffuse3 = max(dot(normal, light3), 0.0) * 0.2;
-      float ambient = 0.3;
+      float diffuse1 = max(dot(normal, light1), 0.0) * 0.25;
+      float diffuse2 = max(dot(normal, light2), 0.0) * 0.2;
+      float diffuse3 = max(dot(normal, light3), 0.0) * 0.15;
+      float diffuse4 = max(dot(normal, light4), 0.0) * 0.15;
+      float ambient = 0.8;
 
-      float lighting = diffuse1 + diffuse2 + diffuse3 + ambient;
+      float lighting = diffuse1 + diffuse2 + diffuse3 + diffuse4 + ambient;
       vec3 finalColor = color * lighting;
 
       gl_FragColor = vec4(finalColor, 1.0);
