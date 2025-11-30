@@ -27,5 +27,6 @@ void main() {
   float lighting = diffuse1 + diffuse2 + ambient;
   vec3 finalColor = baseColor * lighting;
 
-  gl_FragColor = vec4(finalColor, 1.0);
+  // Use transparency (set via material.opacity)
+  gl_FragColor = vec4(finalColor, 0.3);
 }

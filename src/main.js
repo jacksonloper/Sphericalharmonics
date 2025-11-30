@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import vertexShader from './shaders/vertex.glsl?raw';
 import fragmentShader from './shaders/fragment.glsl?raw';
+import layerVertexShader from './shaders/harmonic_layer_vertex.glsl?raw';
+import layerFragmentShader from './shaders/harmonic_layer_fragment.glsl?raw';
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -31,7 +33,7 @@ const coefficients = new Float32Array(25);
 // Y_0^0 set to zero for balanced colors (not evolved)
 coefficients[0] = 0.0;
 
-// Shader material
+// Shader material for main composite surface (now transparent)
 const material = new THREE.ShaderMaterial({
   uniforms: {
     coefficients: { value: coefficients },
@@ -44,11 +46,70 @@ const material = new THREE.ShaderMaterial({
   },
   vertexShader,
   fragmentShader,
-  side: THREE.DoubleSide
+  side: THREE.DoubleSide,
+  transparent: true,
+  opacity: 0.3,
+  depthWrite: false
 });
 
 const mesh = new THREE.Mesh(geometry, material);
 scene.add(mesh);
+
+// Color palette for harmonic layers (vibrant, distinct colors)
+const harmonicColors = [
+  0xff0066, // Hot pink (l=1, m=-1)
+  0x00ff88, // Mint green (l=1, m=0)
+  0x6644ff, // Purple (l=1, m=1)
+  0xffaa00, // Orange (l=2, m=-2)
+  0x00ccff, // Cyan (l=2, m=-1)
+  0xff3366, // Red-pink (l=2, m=0)
+  0x99ff00, // Lime (l=2, m=1)
+  0xff00cc, // Magenta (l=2, m=2)
+  0x00ffff, // Aqua (l=3, m=-3)
+  0xffcc00, // Gold (l=3, m=-2)
+  0x0066ff, // Blue (l=3, m=-1)
+  0xff6600, // Orange-red (l=3, m=0)
+  0x00ff00, // Green (l=3, m=1)
+  0xcc00ff, // Violet (l=3, m=2)
+  0xffff00  // Yellow (l=3, m=3)
+];
+
+// Create individual harmonic layer meshes
+const harmonicLayers = [];
+const layerOpacity = 0.4;
+const layerSpacing = 0.15; // Radial spacing between layers
+
+activeIndices.forEach((idx, i) => {
+  const layerGeometry = new THREE.IcosahedronGeometry(1, 64);
+
+  const layerMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+      coefficients: { value: coefficients },
+      harmonicIndex: { value: idx },
+      displacementScale: { value: 1.5 },
+      layerOffset: { value: i * layerSpacing },
+      layerColor: { value: new THREE.Color(harmonicColors[i % harmonicColors.length]) },
+      lightDirection: { value: new THREE.Vector3(1, 1, 1).normalize() },
+      lightDirection2: { value: new THREE.Vector3(-1, -0.5, 0.5).normalize() },
+      opacity: { value: layerOpacity }
+    },
+    vertexShader: layerVertexShader,
+    fragmentShader: layerFragmentShader,
+    transparent: true,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+
+  const layerMesh = new THREE.Mesh(layerGeometry, layerMaterial);
+  layerMesh.visible = false; // Start with layers hidden
+  scene.add(layerMesh);
+
+  harmonicLayers.push({
+    mesh: layerMesh,
+    index: idx,
+    material: layerMaterial
+  });
+});
 
 // OU process parameters
 const ouParams = {
@@ -230,6 +291,37 @@ backBtn.addEventListener('click', () => {
   frequencyList.classList.add('show');
 });
 
+// Mountain plot toggle
+const mountainPlotToggle = document.getElementById('mountain-plot-toggle');
+const mountainStatus = document.getElementById('mountain-status');
+let mountainPlotEnabled = false;
+
+mountainPlotToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
+
+  mountainPlotEnabled = !mountainPlotEnabled;
+
+  // Toggle visibility of all harmonic layers
+  harmonicLayers.forEach(layer => {
+    layer.mesh.visible = mountainPlotEnabled;
+  });
+
+  mountainStatus.textContent = mountainPlotEnabled ? 'ON' : 'OFF';
+});
+
+// Main surface toggle
+const mainSurfaceToggle = document.getElementById('main-surface-toggle');
+const surfaceStatus = document.getElementById('surface-status');
+let mainSurfaceEnabled = true;
+
+mainSurfaceToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
+
+  mainSurfaceEnabled = !mainSurfaceEnabled;
+  mesh.visible = mainSurfaceEnabled;
+  surfaceStatus.textContent = mainSurfaceEnabled ? 'ON' : 'OFF';
+});
+
 // Wireframe toggle
 const wireframeToggle = document.getElementById('wireframe-toggle');
 const wireframeStatus = document.getElementById('wireframe-status');
@@ -241,6 +333,12 @@ wireframeToggle.addEventListener('click', (e) => {
 
   wireframeEnabled = !wireframeEnabled;
   material.wireframe = wireframeEnabled;
+
+  // Apply wireframe to harmonic layers as well
+  harmonicLayers.forEach(layer => {
+    layer.material.wireframe = wireframeEnabled;
+  });
+
   wireframeStatus.textContent = wireframeEnabled ? 'ON' : 'OFF';
 });
 
