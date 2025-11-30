@@ -11,6 +11,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
+        shflow: resolve(__dirname, 'shflow.html'),
         earth: resolve(__dirname, 'earth.html')
       },
       output: {
