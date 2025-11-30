@@ -212,6 +212,15 @@ function updateLighting() {
   if (material) {
     const sunDir = getSunDirection(currentHour);
     material.uniforms.lightDirection.value.copy(sunDir);
+    
+    // Update fill light to come from opposite side in the XZ plane, with slight upward angle
+    // This illuminates the shadow side while maintaining equinox behavior
+    const fillDir = new THREE.Vector3(
+      -sunDir.x,
+      0.5,  // Fill light comes from above for soft shadows
+      -sunDir.z
+    ).normalize();
+    material.uniforms.lightDirection2.value.copy(fillDir);
   }
   if (timeDisplay) {
     timeDisplay.textContent = formatTime(currentHour);
