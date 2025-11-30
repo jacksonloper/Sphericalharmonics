@@ -76,38 +76,73 @@ let isLoading = false;
 let wireframeToggle = null;
 let timeSlider = null;
 let timeDisplay = null;
+let axisLines = null;
+let showAxisLines = false;
 
 // User-controlled time (0-24 hours)
 let currentHour = 12; // Start at noon
 
+// Get user's timezone
+const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 // Calculate sun position based on hour (equinox - sun travels along equator)
+// After mesh rotation (x = -PI/2), the poles are along Z axis and equator is in XY plane
 function getSunDirection(hours) {
   // At equinox, sun is at zenith at noon (12:00) at longitude 0 (prime meridian)
   // Sun moves westward (east to west), 15 degrees per hour
-  // At 12:00, sun is over longitude 0 (+X direction when looking from above north pole)
-  // At 06:00, sun is over longitude 90°E
-  // At 18:00, sun is over longitude 90°W
   // hours=12 -> angle=0 -> sun at +X (noon at prime meridian)
-  // hours=6 -> angle=π/2 -> sun at +Z (sunrise in east)
-  // hours=18 -> angle=-π/2 -> sun at -Z (sunset in west)
+  // hours=6 -> angle=π/2 -> sun at -Y (sunrise in east)
+  // hours=18 -> angle=-π/2 -> sun at +Y (sunset in west)
+  // After mesh rotation, equator is in XY plane, poles along Z
   const angle = ((12 - hours) / 24) * Math.PI * 2;
   
-  // Sun direction at equinox (Y=0 plane, circling in XZ plane)
-  // Slight Y offset for better lighting aesthetics
+  // Sun direction at equinox - rotates in XY plane (equator after mesh rotation)
   return new THREE.Vector3(
     Math.cos(angle),
-    0.3,  // Slight elevation for better visibility
-    Math.sin(angle)
+    Math.sin(angle),
+    0.3  // Slight Z offset for better lighting aesthetics
   ).normalize();
 }
 
-// Format time for display
+// Format time for display with timezone
 function formatTime(hours) {
   const h = Math.floor(hours);
   const m = Math.floor((hours - h) * 60);
   const period = h >= 12 ? 'PM' : 'AM';
   const displayH = h % 12 || 12;
   return `${displayH}:${m.toString().padStart(2, '0')} ${period}`;
+}
+
+// Create axis visualization lines
+function createAxisLines() {
+  const group = new THREE.Group();
+  
+  // Pole axis (Z axis after mesh rotation) - red
+  const poleGeometry = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0, 0, -1.5),
+    new THREE.Vector3(0, 0, 1.5)
+  ]);
+  const poleMaterial = new THREE.LineBasicMaterial({ color: 0xff4444 });
+  const poleLine = new THREE.Line(poleGeometry, poleMaterial);
+  group.add(poleLine);
+  
+  // Sun path (equator ring in XY plane) - yellow
+  const equatorPoints = [];
+  for (let i = 0; i <= 64; i++) {
+    const angle = (i / 64) * Math.PI * 2;
+    equatorPoints.push(new THREE.Vector3(
+      Math.cos(angle) * 1.2,
+      Math.sin(angle) * 1.2,
+      0
+    ));
+  }
+  const equatorGeometry = new THREE.BufferGeometry().setFromPoints(equatorPoints);
+  const equatorMaterial = new THREE.LineBasicMaterial({ color: 0xffff44 });
+  const equatorLine = new THREE.Line(equatorGeometry, equatorMaterial);
+  group.add(equatorLine);
+  
+  group.visible = false;
+  return group;
 }
 
 async function loadLevel(levelIndex) {
@@ -200,7 +235,7 @@ function addControlPanel() {
   panel.style.justifyContent = 'center';
   panel.style.maxWidth = '95vw';
 
-  // Time control group
+  // Time control group with timezone
   const timeGroup = document.createElement('div');
   timeGroup.style.display = 'flex';
   timeGroup.style.alignItems = 'center';
@@ -227,6 +262,14 @@ function addControlPanel() {
   });
 
   timeGroup.appendChild(timeSlider);
+  
+  // Timezone display
+  const tzDisplay = document.createElement('span');
+  tzDisplay.style.color = '#888';
+  tzDisplay.style.fontSize = '10px';
+  tzDisplay.textContent = userTimezone.split('/').pop().replace('_', ' ');
+  timeGroup.appendChild(tzDisplay);
+  
   panel.appendChild(timeGroup);
 
   // Level selector
@@ -314,6 +357,28 @@ function addControlPanel() {
 
   panel.appendChild(wireframeToggle);
 
+  // Axis lines toggle
+  const axisToggle = document.createElement('button');
+  axisToggle.textContent = 'Axes';
+  axisToggle.style.padding = '5px 10px';
+  axisToggle.style.fontFamily = 'monospace';
+  axisToggle.style.fontSize = '12px';
+  axisToggle.style.backgroundColor = 'transparent';
+  axisToggle.style.color = 'white';
+  axisToggle.style.border = '1px solid rgba(255, 255, 255, 0.3)';
+  axisToggle.style.borderRadius = '4px';
+  axisToggle.style.cursor = 'pointer';
+
+  axisToggle.addEventListener('click', () => {
+    showAxisLines = !showAxisLines;
+    if (axisLines) {
+      axisLines.visible = showAxisLines;
+    }
+    axisToggle.style.backgroundColor = showAxisLines ? 'rgba(78, 205, 196, 0.3)' : 'transparent';
+  });
+
+  panel.appendChild(axisToggle);
+
   document.body.appendChild(panel);
 }
 
@@ -330,6 +395,10 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+// Initialize axis lines
+axisLines = createAxisLines();
+scene.add(axisLines);
 
 // Initialize UI and load default level
 addControlPanel();
