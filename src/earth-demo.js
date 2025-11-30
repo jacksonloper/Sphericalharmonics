@@ -38,7 +38,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   1000
 );
-camera.position.set(0, 0, 2.5);
+camera.position.set(0, 0.5, 2.5);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -86,21 +86,22 @@ let currentHour = 12; // Start at noon
 const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 // Calculate sun position based on hour (equinox - sun travels along equator)
-// After mesh rotation (x = -PI/2), the poles are along Z axis and equator is in XY plane
+// Native mesh: Z=poles, XY=equator, X=lon0, Y=lon90
+// After mesh rotation (x = -PI/2): Y=-poles, XZ=equator, X=lon0, Z=lon90
 function getSunDirection(hours) {
   // At equinox, sun is at zenith at noon (12:00) at longitude 0 (prime meridian)
   // Sun moves westward (east to west), 15 degrees per hour
-  // hours=12 -> angle=0 -> sun at +X (noon at prime meridian)
-  // hours=6 -> angle=π/2 -> sun at -Y (sunrise in east)
-  // hours=18 -> angle=-π/2 -> sun at +Y (sunset in west)
-  // After mesh rotation, equator is in XY plane, poles along Z
+  // hours=12 -> angle=0 -> sun at lon=0 (+X)
+  // hours=6 -> angle=90° -> sun at lon=90°E (+Z after rotation)
+  // hours=18 -> angle=-90° -> sun at lon=90°W (-Z after rotation)
   const angle = ((12 - hours) / 24) * Math.PI * 2;
   
-  // Sun direction at equinox - rotates in XY plane (equator after mesh rotation)
+  // Sun direction at equinox - rotates in XZ plane (equator after mesh rotation)
+  // Y stays near 0 (equator), slight offset for aesthetics
   return new THREE.Vector3(
     Math.cos(angle),
-    Math.sin(angle),
-    0.3  // Slight Z offset for better lighting aesthetics
+    0.1,  // Slight Y offset for better lighting aesthetics
+    Math.sin(angle)
   ).normalize();
 }
 
@@ -114,26 +115,27 @@ function formatTime(hours) {
 }
 
 // Create axis visualization lines
+// After mesh rotation: Y axis = poles, XZ plane = equator
 function createAxisLines() {
   const group = new THREE.Group();
   
-  // Pole axis (Z axis after mesh rotation) - red
+  // Pole axis (Y axis after mesh rotation) - red
   const poleGeometry = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(0, 0, -1.5),
-    new THREE.Vector3(0, 0, 1.5)
+    new THREE.Vector3(0, -1.5, 0),
+    new THREE.Vector3(0, 1.5, 0)
   ]);
   const poleMaterial = new THREE.LineBasicMaterial({ color: 0xff4444 });
   const poleLine = new THREE.Line(poleGeometry, poleMaterial);
   group.add(poleLine);
   
-  // Sun path (equator ring in XY plane) - yellow
+  // Sun path (equator ring in XZ plane after mesh rotation) - yellow
   const equatorPoints = [];
   for (let i = 0; i <= 64; i++) {
     const angle = (i / 64) * Math.PI * 2;
     equatorPoints.push(new THREE.Vector3(
       Math.cos(angle) * 1.2,
-      Math.sin(angle) * 1.2,
-      0
+      0,
+      Math.sin(angle) * 1.2
     ));
   }
   const equatorGeometry = new THREE.BufferGeometry().setFromPoints(equatorPoints);
