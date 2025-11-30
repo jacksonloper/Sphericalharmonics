@@ -8,6 +8,7 @@ Applies tapering/apodization to highest-order coefficients to avoid truncation a
 import numpy as np
 import struct
 import sys
+import os
 import pyshtools as pysh
 from scipy.interpolate import RectBivariateSpline
 
@@ -256,11 +257,14 @@ def main():
     subdivisions = int(sys.argv[1]) if len(sys.argv) > 1 else 9
     taper_start = int(sys.argv[2]) if len(sys.argv) > 2 else 50
     
-    bshc_path = 'public/earthtoposources/sur.bshc'
+    # Get script directory for relative paths
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    bshc_path = os.path.join(script_dir, 'sur.bshc')
     
     elevation = generate_elevation_from_bshc(bshc_path, subdivisions, taper_start)
     
-    output_path = f'public/earthtoposources/sur_compact{subdivisions}.bin'
+    output_path = os.path.join(script_dir, f'sur_compact{subdivisions}.bin')
     export_compact_mesh(elevation, subdivisions, output_path)
 
 

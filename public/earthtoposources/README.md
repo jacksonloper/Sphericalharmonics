@@ -1,6 +1,6 @@
 # Earth Topography Data
 
-This directory contains Earth topography data in spherical harmonic, HEALPix, and mesh formats for three.js visualization.
+This directory contains Earth topography data derived from spherical harmonic coefficients for three.js visualization.
 
 ## Source Data
 
@@ -30,105 +30,57 @@ coeffs, lmax = pysh.shio.read_bshc('sur.bshc')
 
 ---
 
-## HEALPix Files
+## Compact Mesh Files
 
-Pre-computed HEALPix grids for efficient mesh generation:
+Pre-computed icosahedral mesh elevation data for three.js visualization:
 
-- `sur_healpix_nside128.bin` - Surface elevation (meters)
-- `bed_healpix_nside128.bin` - Bedrock elevation (meters)
+| File | Subdivisions | Vertices | Triangles | File Size |
+|------|--------------|----------|-----------|-----------|
+| `sur_compact5.bin` | 5 | 10,242 | 20,480 | 40 KB |
+| `sur_compact6.bin` | 6 | 40,962 | 81,920 | 160 KB |
+| `sur_compact7.bin` | 7 | 163,842 | 327,680 | 640 KB |
+| `sur_compact8.bin` | 8 | 655,362 | 1,310,720 | 2.5 MB |
+| `sur_compact9.bin` | 9 | 2,621,442 | 5,242,880 | 10 MB |
 
-### HEALPix Format
+### Compact Mesh Format
 
-- **Type**: Raw binary, little-endian float32
-- **Pixels**: 196,608 (HEALPix nside=128)
-- **Size**: 768 KB each (196,608 × 4 bytes)
-- **Resolution**: ~51 km per pixel
-- **Ordering**: HEALPix RING ordering
+```
+Header:    'HPELEV' (6 bytes)
+Metadata:
+  - subdivisions: uint8 (1 byte)
 
-### Loading HEALPix Data
-
-**Python (numpy)**:
-```python
-import numpy as np
-data = np.fromfile('sur_healpix_nside128.bin', dtype='<f4')  # shape: (196608,)
+Data:
+  - elevation: float32[num_vertices] (elevation in meters)
 ```
 
-**Python (healpy)**:
-```python
-import numpy as np
-import healpy as hp
-data = np.fromfile('sur_healpix_nside128.bin', dtype='<f4')
-hp.mollview(data, title='Surface Elevation')
-```
-
-**JavaScript**:
-```javascript
-const response = await fetch('sur_healpix_nside128.bin');
-const buffer = await response.arrayBuffer();
-const data = new Float32Array(buffer);  // length: 196608
-```
-
-**C/C++**:
-```c
-float data[196608];
-FILE* f = fopen("sur_healpix_nside128.bin", "rb");
-fread(data, sizeof(float), 196608, f);
-fclose(f);
-```
-
-### HEALPix Pixel Coordinates
-
-To get the (theta, phi) spherical coordinates for pixel `i`:
-
-```python
-import healpy as hp
-nside = 128
-theta, phi = hp.pix2ang(nside, i)  # theta: colatitude [0,π], phi: longitude [0,2π]
-```
-
-Or Cartesian (x, y, z) on unit sphere:
-
-```python
-x, y, z = hp.pix2vec(nside, i)
-```
+The icosahedral mesh geometry is generated procedurally from the subdivision level, so only elevation data needs to be stored.
 
 ---
 
-## Spherical Mesh Files for three.js
+## Generating Mesh Data
 
-Pre-converted triangulated spherical meshes optimized for three.js visualization.
+Use the Python script to generate mesh data from BSHC files:
 
-### Available Meshes
+```bash
+# Install dependencies
+pip install pyshtools numpy scipy
 
-- `sur_mesh32.bin` - Surface elevation (321 KB, **recommended**)
-- `sur_mesh64.bin` - Surface elevation (1.3 MB, higher resolution)
-- `sur_mesh.bin` - Surface elevation (6.8 MB, full resolution nside=128)
+# Generate subdivision 9 mesh with tapering (default)
+python generate_compact_mesh_from_bshc.py 9
 
-### Binary Mesh Format
+# Generate different subdivision level
+python generate_compact_mesh_from_bshc.py 8
 
-```
-Header:    'HPMESH' (6 bytes)
-Metadata:
-  - num_vertices: uint32 (4 bytes)
-  - num_indices:  uint32 (4 bytes)
-  - index_type:   uint8  (1 byte) - 2 for uint16, 4 for uint32
-
-Data:
-  - positions:  float32[num_vertices * 3]  (x, y, z coordinates)
-  - indices:    uint16/32[num_indices]     (triangle indices)
-  - elevation:  float32[num_vertices]      (elevation in meters)
+# Customize taper start (default: 50 degrees from end)
+python generate_compact_mesh_from_bshc.py 9 100
 ```
 
-### Resolution Comparison
-
-| nside | Vertices | Triangles | File Size | Detail Level |
-|-------|----------|-----------|-----------|--------------|
-| 16    | 3,072    | ~5.5k     | ~80 KB    | Low          |
-| 32    | 12,288   | ~22k      | ~321 KB   | **Recommended** |
-| 64    | 49,152   | ~89k      | ~1.3 MB   | High         |
-| 128   | 196,608  | ~327k     | ~7 MB     | Very High    |
-
-**Recommended**: nside=32 provides good detail while staying well under 1 MB.
+The script:
+1. Reads BSHC spherical harmonic coefficients
+2. Applies cosine tapering to highest-order coefficients (avoids truncation artifacts)
+3. Uses fast SHT to expand to a regular grid
+4. Interpolates elevation at icosahedral mesh vertices
+5. Exports compact binary format
 
 ---
 
@@ -137,10 +89,14 @@ Data:
 ### Basic Usage
 
 ```javascript
-import { loadHealpixMesh, createElevationMaterial } from './healpixMeshLoader.js';
+import { loadCompactMesh } from './compactMeshLoader.js';
+import { createElevationMaterial } from './elevationMaterial.js';
 
 // Load mesh
-const geometry = await loadHealpixMesh('/earthtoposources/sur_mesh32.bin');
+const geometry = await loadCompactMesh('/earthtoposources/sur_compact9.bin', {
+  useWorker: true,  // Use Web Worker for better performance
+  onProgress: (progress) => console.log(progress)
+});
 
 // Create material with elevation coloring
 const material = createElevationMaterial(
@@ -151,68 +107,6 @@ const material = createElevationMaterial(
 // Create and add mesh to scene
 const earthMesh = new THREE.Mesh(geometry, material);
 scene.add(earthMesh);
-```
-
-### Custom Material
-
-You can access the elevation data as a vertex attribute:
-
-```javascript
-const geometry = await loadHealpixMesh('/earthtoposources/sur_mesh32.bin');
-
-// Elevation is available as:
-// - geometry.attributes.elevation (BufferAttribute)
-// - geometry.userData.elevationMin (minimum value)
-// - geometry.userData.elevationMax (maximum value)
-
-// Use in custom shader:
-const material = new THREE.ShaderMaterial({
-  vertexShader: `
-    attribute float elevation;
-    varying float vElevation;
-
-    void main() {
-      vElevation = elevation;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-  `,
-  fragmentShader: `
-    uniform float minElevation;
-    uniform float maxElevation;
-    varying float vElevation;
-
-    void main() {
-      float t = (vElevation - minElevation) / (maxElevation - minElevation);
-      vec3 color = mix(vec3(0.0, 0.2, 0.5), vec3(1.0), t);
-      gl_FragColor = vec4(color, 1.0);
-    }
-  `,
-  uniforms: {
-    minElevation: { value: geometry.userData.elevationMin },
-    maxElevation: { value: geometry.userData.elevationMax }
-  }
-});
-```
-
-### Apply Elevation as Displacement
-
-To apply elevation as actual vertex displacement:
-
-```javascript
-const vertices = geometry.attributes.position.array;
-const elevations = geometry.attributes.elevation.array;
-const scale = 0.001; // Scale factor (adjust for visible effect)
-
-for (let i = 0; i < elevations.length; i++) {
-  const i3 = i * 3;
-  const r = 1.0 + elevations[i] * scale;
-  vertices[i3 + 0] *= r;
-  vertices[i3 + 1] *= r;
-  vertices[i3 + 2] *= r;
-}
-
-geometry.attributes.position.needsUpdate = true;
-geometry.computeVertexNormals();
 ```
 
 ---
@@ -230,60 +124,32 @@ The demo includes:
 - Auto-rotating Earth with topography
 - Elevation-based color mapping (ocean blue → green → brown → white)
 - Interactive orbit controls
-- Smooth lighting
-
----
-
-## Performance
-
-### File Sizes (nside=32)
-- Surface mesh: 321 KB
-- Bedrock mesh: 321 KB
-- Total: ~642 KB for both datasets
-
-### Render Performance
-- 12,288 vertices
-- ~22,000 triangles
-- Runs at 60 FPS on modern hardware
-- Suitable for real-time interaction
+- Adjustable relief exponent
+- Wireframe toggle
 
 ---
 
 ## Technical Details
 
-### Mesh Features
-- ✅ Spherical quad mesh topology (native to HEALPix)
-- ✅ Float32 positions for precise geometry
-- ✅ Float32 elevation data at each vertex
-- ✅ Automatic normal computation for lighting
-- ✅ Compact binary format
-- ✅ Sub-megabyte file sizes (at nside=32)
+### Mesh Generation
+- **Base**: Icosahedron (12 vertices, 20 faces)
+- **Subdivision**: Each triangle split into 4 per level
+- **Projection**: Vertices projected to unit sphere
+- **Elevation**: Sampled from spherical harmonic expansion
+
+### Spherical Harmonic Processing
+- **Source**: Earth2014 model (lmax=2160, ~9 km resolution)
+- **Tapering**: Cosine taper on top 50 degrees to avoid Gibbs phenomenon
+- **Transform**: Fast SHT via pyshtools
+- **Interpolation**: Bivariate spline on regular lat/lon grid
 
 ### Coordinate System
 - **Unit sphere**: All vertices on sphere with radius = 1.0
-- **Elevation**: Stored separately in meters (not applied to geometry)
-- **Normals**: Computed from mesh topology (point radially outward)
-
-### HEALPix → Mesh Conversion
-1. **Load HEALPix data** in RING ordering
-2. **Downsample** if needed (averaging nearby pixels)
-3. **Generate vertices** using HEALPix pixel centers
-4. **Create triangles** by connecting neighboring pixels:
-   - North polar cap: connect to pole
-   - Equatorial belt: connect adjacent rings
-   - South polar cap: connect to pole
-5. **Export** in compact binary format
-
----
-
-## Data Generation
-
-The HEALPix files were generated from BSHC spherical harmonic coefficient files (lmax=2160) using pyshtools SHT expansion and scipy interpolation to HEALPix grid.
-
-The mesh files were converted from HEALPix data with downsampling and triangulation.
+- **Elevation**: Stored separately in meters
+- **Orientation**: Z-up (requires rotation for Y-up renderers)
 
 ---
 
 ## License
 
-Earth topography data is from the Earth2014 model. The mesh converter and loader are provided as-is.
+Earth topography data is from the Earth2014 model. The mesh generator and loader are provided as-is.

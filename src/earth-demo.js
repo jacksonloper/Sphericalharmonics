@@ -1,12 +1,12 @@
 /**
  * Earth Topography Demo
- * Demonstrates loading and rendering HEALPix mesh data
+ * Demonstrates loading and rendering spherical mesh data from BSHC spherical harmonics
  */
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { loadCompactMesh } from './compactMeshLoader.js';
-import { createElevationMaterial } from './healpixMeshLoader.js';
+import { createElevationMaterial } from './elevationMaterial.js';
 
 // Scene setup
 const scene = new THREE.Scene();
