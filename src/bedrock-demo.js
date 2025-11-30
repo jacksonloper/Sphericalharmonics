@@ -76,50 +76,8 @@ let material = null;
 let currentLevelIndex = DEFAULT_LEVEL_INDEX;
 let isLoading = false;
 let wireframeToggle = null;
-let timeSlider = null;
-let timeDisplay = null;
 let axisLines = null;
 let showAxisLines = false;
-
-// User-controlled time (0-24 hours)
-let currentHour = 12; // Start at noon
-
-// Get user's timezone
-const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-// Calculate sun position based on hour (equinox - sun travels along equator)
-// The shader computes lighting in MODEL space where:
-//   - Z axis = poles
-//   - XY plane = equator
-// The mesh is then rotated to display correctly (Y=poles in world)
-// But the shader lighting happens BEFORE the rotation, so we work in model space.
-function getSunDirection(hours) {
-  // At equinox, sun is at zenith at noon (12:00) at longitude 0 (prime meridian)
-  // Sun moves westward (east to west), 15 degrees per hour
-  // The sun revolves AROUND the Z axis (poles in model space)
-  // In model space, +Y points toward lon=0 (prime meridian), +X toward lon=90°E
-  // hours=12 -> sun at lon=0 (+Y direction in model space)
-  // hours=6 -> sun at lon=90°E (+X in model space)
-  // hours=18 -> sun at lon=90°W (-X in model space)
-  const angle = ((12 - hours) / 24) * Math.PI * 2 - Math.PI / 2;
-  
-  // Sun direction in MODEL space - rotates in XY plane around Z axis (poles)
-  // Z=0 because at equinox, sun is exactly on the equatorial plane
-  return new THREE.Vector3(
-    Math.cos(angle),  // X in model space
-    Math.sin(angle),  // Y in model space
-    0                 // Z=0 (equinox: sun on equatorial plane)
-  ).normalize();
-}
-
-// Format time for display with timezone
-function formatTime(hours) {
-  const h = Math.floor(hours);
-  const m = Math.floor((hours - h) * 60);
-  const period = h >= 12 ? 'PM' : 'AM';
-  const displayH = h % 12 || 12;
-  return `${displayH}:${m.toString().padStart(2, '0')} ${period}`;
-}
 
 // Create axis visualization lines
 // After mesh rotation: Y axis = poles, XZ plane = equator
@@ -135,7 +93,7 @@ function createAxisLines() {
   const poleLine = new THREE.Line(poleGeometry, poleMaterial);
   group.add(poleLine);
   
-  // Sun path (equator ring in XZ plane after mesh rotation) - yellow
+  // Equator ring in XZ plane after mesh rotation - yellow
   const equatorPoints = [];
   for (let i = 0; i <= 64; i++) {
     const angle = (i / 64) * Math.PI * 2;
@@ -202,9 +160,6 @@ async function loadLevel(levelIndex) {
     currentLevelIndex = levelIndex;
     loadingDiv.style.display = 'none';
 
-    // Update lighting for current time
-    updateLighting();
-
     console.log(`Loaded: lmax=${level.lmax}, ${geometry.attributes.position.count.toLocaleString()} vertices`);
   } catch (error) {
     console.error('Failed to load:', error);
@@ -213,16 +168,6 @@ async function loadLevel(levelIndex) {
   }
   
   isLoading = false;
-}
-
-function updateLighting() {
-  if (material) {
-    const sunDir = getSunDirection(currentHour);
-    material.uniforms.lightDirection.value.copy(sunDir);
-  }
-  if (timeDisplay) {
-    timeDisplay.textContent = formatTime(currentHour);
-  }
 }
 
 function addControlPanel() {
@@ -243,43 +188,6 @@ function addControlPanel() {
   panel.style.flexWrap = 'wrap';
   panel.style.justifyContent = 'center';
   panel.style.maxWidth = '95vw';
-
-  // Time control group with timezone
-  const timeGroup = document.createElement('div');
-  timeGroup.style.display = 'flex';
-  timeGroup.style.alignItems = 'center';
-  timeGroup.style.gap = '8px';
-
-  timeDisplay = document.createElement('span');
-  timeDisplay.style.color = '#4ecdc4';
-  timeDisplay.style.minWidth = '65px';
-  timeDisplay.textContent = formatTime(currentHour);
-  timeGroup.appendChild(timeDisplay);
-
-  timeSlider = document.createElement('input');
-  timeSlider.type = 'range';
-  timeSlider.min = '0';
-  timeSlider.max = '24';
-  timeSlider.step = '0.1';
-  timeSlider.value = currentHour;
-  timeSlider.style.width = '80px';
-  timeSlider.style.cursor = 'pointer';
-
-  timeSlider.addEventListener('input', (e) => {
-    currentHour = parseFloat(e.target.value);
-    updateLighting();
-  });
-
-  timeGroup.appendChild(timeSlider);
-  
-  // Timezone display
-  const tzDisplay = document.createElement('span');
-  tzDisplay.style.color = '#888';
-  tzDisplay.style.fontSize = '10px';
-  tzDisplay.textContent = userTimezone.split('/').pop().replace('_', ' ');
-  timeGroup.appendChild(tzDisplay);
-  
-  panel.appendChild(timeGroup);
 
   // Level selector
   const levelGroup = document.createElement('div');
