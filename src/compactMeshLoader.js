@@ -1,6 +1,6 @@
 /**
  * Compact mesh loader - only stores elevation data
- * Generates icosahedral geometry procedurally
+ * Generates icosahedral geometry procedurally with Web Worker support
  */
 
 import * as THREE from 'three';
@@ -97,10 +97,64 @@ function generateIcosahedronGeometry(subdivisions) {
 }
 
 /**
+ * Generate geometry using Web Worker for better performance
+ * @param {number} subdivisions - Number of subdivisions
+ * @param {Float32Array} elevationData - Elevation data to attach
+ * @param {function} onProgress - Progress callback
+ * @returns {Promise} Resolves with { positions, indices, normals }
+ */
+function generateGeometryWithWorker(subdivisions, elevationData, onProgress) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL('./meshWorker.js', import.meta.url), { type: 'module' });
+    
+    worker.onmessage = (e) => {
+      const { type } = e.data;
+      
+      if (type === 'progress' && onProgress) {
+        onProgress({
+          type: 'subdivision',
+          current: e.data.subdivision,
+          total: e.data.totalSubdivisions,
+          vertices: e.data.vertices
+        });
+      } else if (type === 'status' && onProgress) {
+        onProgress({ type: 'status', message: e.data.message });
+      } else if (type === 'complete') {
+        const positions = new Float32Array(e.data.positions);
+        const indices = new Uint32Array(e.data.indices);
+        const normals = new Float32Array(e.data.normals);
+        worker.terminate();
+        resolve({ positions, indices, normals, numVertices: e.data.numVertices });
+      }
+    };
+    
+    worker.onerror = (err) => {
+      worker.terminate();
+      reject(err);
+    };
+    
+    // Transfer elevation data to worker
+    worker.postMessage({
+      subdivisions,
+      elevationData: elevationData.buffer
+    }, [elevationData.buffer]);
+  });
+}
+
+/**
  * Load compact elevation-only mesh file
  * Format: 'HPELEV' + subdivisions (1 byte) + elevation data (float32[])
+ * 
+ * @param {string} url - Path to the .bin mesh file
+ * @param {Object} options - Loading options
+ * @param {function} options.onProgress - Progress callback for long operations
+ * @param {boolean} options.useWorker - Use Web Worker for geometry generation (recommended for subdivision >= 8)
  */
-export async function loadCompactMesh(url) {
+export async function loadCompactMesh(url, options = {}) {
+  const { onProgress, useWorker = false } = options;
+  
+  if (onProgress) onProgress({ type: 'status', message: 'Downloading mesh data...' });
+  
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to load ${url}: ${response.statusText}`);
@@ -124,9 +178,24 @@ export async function loadCompactMesh(url) {
   offset += 1;
 
   console.log(`Loading compact mesh: subdivision ${subdivisions}`);
+  if (onProgress) onProgress({ type: 'status', message: `Generating mesh (subdivision ${subdivisions})...` });
 
-  // Generate geometry procedurally
-  const { positions, indices, numVertices } = generateIcosahedronGeometry(subdivisions);
+  let positions, indices, numVertices, normals;
+  
+  if (useWorker && typeof Worker !== 'undefined') {
+    // Use Web Worker for heavy computation
+    const result = await generateGeometryWithWorker(subdivisions, new Float32Array(0), onProgress);
+    positions = result.positions;
+    indices = result.indices;
+    normals = result.normals;
+    numVertices = result.numVertices;
+  } else {
+    // Generate geometry on main thread
+    const result = generateIcosahedronGeometry(subdivisions);
+    positions = result.positions;
+    indices = result.indices;
+    numVertices = result.numVertices;
+  }
 
   // Read elevation data
   const elevation = new Float32Array(numVertices);
@@ -145,7 +214,12 @@ export async function loadCompactMesh(url) {
   geometry.setAttribute('elevation', new THREE.BufferAttribute(elevation, 1));
   geometry.setIndex(new THREE.BufferAttribute(indices, 1));
 
-  geometry.computeVertexNormals();
+  // Use pre-computed normals from worker, or compute on main thread
+  if (normals) {
+    geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  } else {
+    geometry.computeVertexNormals();
+  }
 
   // Store elevation range (without spread operator to avoid stack overflow)
   let elevationMin = elevation[0];
@@ -156,6 +230,7 @@ export async function loadCompactMesh(url) {
   }
   geometry.userData.elevationMin = elevationMin;
   geometry.userData.elevationMax = elevationMax;
+  geometry.userData.subdivisions = subdivisions;
 
   console.log(`  Elevation range: ${elevationMin.toFixed(1)} to ${elevationMax.toFixed(1)} m`);
 

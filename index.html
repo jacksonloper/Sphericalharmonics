@@ -3,221 +3,126 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Spherical Harmonics Lava Lamp</title>
+  <title>Spherical Harmonics Demos</title>
   <style>
-    body {
+    * {
       margin: 0;
-      overflow: hidden;
-      background: #000;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
       font-family: 'Monaco', 'Courier New', monospace;
       color: #fff;
-    }
-    canvas {
-      display: block;
-    }
-
-    /* Hamburger button */
-    #hamburger {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 50px;
-      height: 50px;
-      background: rgba(0, 0, 0, 0.9);
-      border: 2px solid #4ecdc4;
-      border-radius: 50%;
-      cursor: pointer;
       display: flex;
       flex-direction: column;
+      align-items: center;
       justify-content: center;
-      align-items: center;
-      gap: 4px;
-      z-index: 1000;
-      transition: transform 0.3s;
-    }
-    #hamburger:active {
-      transform: translateX(-50%) scale(0.95);
-    }
-    #hamburger span {
-      width: 24px;
-      height: 2px;
-      background: #4ecdc4;
-      transition: all 0.3s;
-    }
-    #hamburger.open span:nth-child(1) {
-      transform: rotate(45deg) translate(5px, 5px);
-    }
-    #hamburger.open span:nth-child(2) {
-      opacity: 0;
-    }
-    #hamburger.open span:nth-child(3) {
-      transform: rotate(-45deg) translate(5px, -5px);
+      padding: 20px;
     }
 
-    /* Frequency list */
-    #frequency-list {
-      position: fixed;
-      bottom: 80px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.95);
-      border: 1px solid #4ecdc4;
-      border-radius: 12px;
-      padding: 10px;
-      display: none;
-      flex-direction: column;
-      gap: 5px;
-      min-width: 200px;
-      max-width: 280px;
-      backdrop-filter: blur(10px);
-    }
-    #frequency-list.show {
-      display: flex;
-    }
-    .freq-item {
-      padding: 12px 15px;
-      background: rgba(78, 205, 196, 0.1);
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.2s;
-      font-size: 13px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .freq-item:active {
-      background: rgba(78, 205, 196, 0.3);
-    }
-    .freq-item .freq-value {
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 10px;
       color: #4ecdc4;
-      font-size: 11px;
-    }
-
-    /* Slider panel */
-    #slider-panel {
-      position: fixed;
-      bottom: 80px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.95);
-      border: 1px solid #4ecdc4;
-      border-radius: 12px;
-      padding: 15px;
-      display: none;
-      flex-direction: column;
-      gap: 10px;
-      min-width: 250px;
-      max-width: 300px;
-      backdrop-filter: blur(10px);
-    }
-    #slider-panel.show {
-      display: flex;
-    }
-    #slider-panel .title {
-      font-size: 12px;
-      color: #aaa;
       text-align: center;
     }
-    #slider-panel input[type="range"] {
+
+    .subtitle {
+      color: #888;
+      margin-bottom: 40px;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .demo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      max-width: 800px;
       width: 100%;
     }
-    #slider-panel .value-display {
-      text-align: center;
-      font-size: 18px;
-      color: #4ecdc4;
-      font-weight: bold;
-    }
-    #slider-panel .back-btn {
-      padding: 8px;
-      background: rgba(78, 205, 196, 0.2);
-      border-radius: 6px;
-      text-align: center;
-      cursor: pointer;
-      font-size: 12px;
-      transition: all 0.2s;
-    }
-    #slider-panel .back-btn:active {
-      background: rgba(78, 205, 196, 0.4);
+
+    .demo-card {
+      background: rgba(30, 30, 50, 0.8);
+      border: 1px solid rgba(78, 205, 196, 0.3);
+      border-radius: 12px;
+      padding: 25px;
+      text-decoration: none;
+      color: inherit;
+      transition: all 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
 
-    /* Coefficient display */
-    #coeff-display {
-      position: fixed;
-      top: 20px;
-      left: 20px;
-      background: rgba(0, 0, 0, 0.7);
-      border: 1px solid rgba(78, 205, 196, 0.3);
-      border-radius: 8px;
-      padding: 10px 15px;
-      font-size: 10px;
-      color: #aaa;
-      font-family: 'Courier New', monospace;
-      max-height: 80vh;
-      overflow-y: auto;
-      min-width: 120px;
+    .demo-card:hover {
+      border-color: #4ecdc4;
+      transform: translateY(-4px);
+      box-shadow: 0 10px 30px rgba(78, 205, 196, 0.2);
     }
-    #coeff-display .coeff-label {
-      color: #666;
-      font-size: 9px;
-      margin-bottom: 8px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    #coeff-display .coeff-row {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 3px;
-      font-size: 10px;
-    }
-    #coeff-display .coeff-index {
-      color: #888;
-    }
-    #coeff-display .coeff-value {
+
+    .demo-card h2 {
+      font-size: 1.2rem;
       color: #4ecdc4;
-      font-weight: bold;
-      margin-left: 10px;
+    }
+
+    .demo-card p {
+      color: #aaa;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .demo-card .tag {
+      display: inline-block;
+      background: rgba(78, 205, 196, 0.2);
+      color: #4ecdc4;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      margin-top: auto;
+    }
+
+    footer {
+      margin-top: 40px;
+      color: #555;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    footer a {
+      color: #4ecdc4;
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
 <body>
-  <!-- Coefficient display -->
-  <div id="coeff-display">
-    <div class="coeff-label">Coefficients</div>
-    <div id="coeff-list"></div>
+  <h1>Spherical Harmonics</h1>
+  <p class="subtitle">Interactive visualizations using spherical harmonic functions</p>
+
+  <div class="demo-grid">
+    <a href="shflow.html" class="demo-card">
+      <h2>🌊 SH Flow</h2>
+      <p>A lava lamp-style visualization with stochastic coefficients evolving via Ornstein-Uhlenbeck processes. Watch the sphere morph smoothly through harmonic space.</p>
+      <span class="tag">Interactive • WebGL</span>
+    </a>
+
+    <a href="earth.html" class="demo-card">
+      <h2>🌍 Earth Topography</h2>
+      <p>Earth surface elevation rendered on an icosahedral mesh. 2.6M vertices with flat shading, generated from spherical harmonic coefficients (lmax=2160).</p>
+      <span class="tag">~10 MB • WebGL</span>
+    </a>
   </div>
 
-  <!-- Hamburger button -->
-  <div id="hamburger">
-    <span></span>
-    <span></span>
-    <span></span>
-  </div>
-
-  <!-- Parameter list menu -->
-  <div id="frequency-list">
-    <div class="freq-item" data-freq="theta">
-      <span>Mean Reversion (θ)</span>
-      <span class="freq-value" id="theta-display">0.50</span>
-    </div>
-    <div class="freq-item" data-freq="sigma">
-      <span>Volatility (σ)</span>
-      <span class="freq-value" id="sigma-display">0.30</span>
-    </div>
-    <div class="freq-item" id="wireframe-toggle">
-      <span>Wireframe</span>
-      <span class="freq-value" id="wireframe-status">OFF</span>
-    </div>
-  </div>
-
-  <!-- Slider panel -->
-  <div id="slider-panel">
-    <div class="title" id="slider-title"></div>
-    <div class="value-display" id="slider-value-display">0.0</div>
-    <input type="range" id="slider" min="0" max="2" step="0.1" value="0">
-    <div class="back-btn">← Back</div>
-  </div>
-
-  <script type="module" src="/src/main.js"></script>
+  <footer>
+    Built with <a href="https://threejs.org/" target="_blank">three.js</a> • 
+    <a href="https://github.com/jacksonloper/Sphericalharmonics" target="_blank">GitHub</a>
+  </footer>
 </body>
 </html>

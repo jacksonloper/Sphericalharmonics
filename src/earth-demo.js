@@ -1,12 +1,12 @@
 /**
  * Earth Topography Demo
- * Demonstrates loading and rendering HEALPix mesh data
+ * Demonstrates loading and rendering spherical mesh data from BSHC spherical harmonics
  */
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { loadCompactMesh } from './compactMeshLoader.js';
-import { createElevationMaterial } from './healpixMeshLoader.js';
+import { createElevationMaterial } from './elevationMaterial.js';
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -34,7 +34,7 @@ controls.maxDistance = 10;
 controls.autoRotate = true;
 controls.autoRotateSpeed = 0.5;
 
-// Loading indicator
+// Loading indicator with progress support
 const loadingDiv = document.createElement('div');
 loadingDiv.style.position = 'absolute';
 loadingDiv.style.top = '50%';
@@ -42,48 +42,55 @@ loadingDiv.style.left = '50%';
 loadingDiv.style.transform = 'translate(-50%, -50%)';
 loadingDiv.style.color = 'white';
 loadingDiv.style.fontFamily = 'monospace';
-loadingDiv.style.fontSize = '20px';
-loadingDiv.textContent = 'Loading Earth mesh...';
+loadingDiv.style.fontSize = '16px';
+loadingDiv.style.textAlign = 'center';
+loadingDiv.style.lineHeight = '1.8';
+loadingDiv.innerHTML = 'Loading Earth mesh...<br><span id="loadStatus" style="color: #4ecdc4;"></span>';
 document.body.appendChild(loadingDiv);
 
-// Load and render the mesh
+const loadStatus = loadingDiv.querySelector('#loadStatus');
+
+// Global state
 let earthMesh;
+let material;
 
 async function init() {
   try {
-    // Load compact mesh (subdivision 7: 164K vertices, only 640KB!)
-    const geometry = await loadCompactMesh('./earthtoposources/sur_compact7.bin');
+    const onProgress = (progress) => {
+      if (progress.type === 'status') {
+        loadStatus.textContent = progress.message;
+      } else if (progress.type === 'subdivision') {
+        loadStatus.textContent = `Subdivision ${progress.current}/${progress.total} (${progress.vertices.toLocaleString()} vertices)`;
+      }
+    };
 
-    // Create material
-    const material = createElevationMaterial(
+    // Load subdivision 9 mesh with flat shading
+    loadStatus.textContent = 'Loading mesh (subdivision 9)...';
+    const geometry = await loadCompactMesh('./earthtoposources/sur_compact9.bin', {
+      onProgress,
+      useWorker: true
+    });
+
+    material = createElevationMaterial(
       geometry.userData.elevationMin,
       geometry.userData.elevationMax
     );
 
     // Create mesh
     earthMesh = new THREE.Mesh(geometry, material);
-
-    // Rotate to align poles vertically (HEALPix uses z-up, Three.js uses y-up)
     earthMesh.rotation.x = -Math.PI / 2;
-
     scene.add(earthMesh);
 
-    // Remove loading indicator
     loadingDiv.remove();
 
-    // Add info panel
     addInfoPanel(geometry);
-
-    // Add wireframe toggle
     addWireframeToggle(material);
-
-    // Add alpha slider
     addAlphaSlider(material);
 
     console.log('Earth mesh loaded successfully!');
   } catch (error) {
     console.error('Failed to load Earth mesh:', error);
-    loadingDiv.textContent = 'Failed to load mesh: ' + error.message;
+    loadingDiv.innerHTML = 'Failed to load mesh: ' + error.message;
     loadingDiv.style.color = '#ff4444';
   }
 }
@@ -103,14 +110,15 @@ function addInfoPanel(geometry) {
 
   const vertices = geometry.attributes.position.count;
   const triangles = geometry.index.count / 3;
+  const subdivisions = geometry.userData.subdivisions;
 
   panel.innerHTML = `
     <strong>Earth Surface Topography</strong><br>
     <br>
-    Icosahedral mesh (7 subdivisions)<br>
+    Icosahedral mesh (${subdivisions} subdivisions)<br>
     Vertices: ${vertices.toLocaleString()}<br>
     Triangles: ${triangles.toLocaleString()}<br>
-    File: 640 KB (geometry generated procedurally)<br>
+    File: ~10 MB<br>
     <br>
     Elevation Range:<br>
     ${geometry.userData.elevationMin.toFixed(1)} to ${geometry.userData.elevationMax.toFixed(1)} m<br>
@@ -144,16 +152,6 @@ function addWireframeToggle(material) {
     wireframeEnabled = !wireframeEnabled;
     material.wireframe = wireframeEnabled;
     toggle.textContent = `Wireframe: ${wireframeEnabled ? 'ON' : 'OFF'}`;
-    toggle.style.backgroundColor = wireframeEnabled ? 'rgba(78, 205, 196, 0.3)' : 'rgba(0, 0, 0, 0.7)';
-  });
-
-  toggle.addEventListener('mouseenter', () => {
-    if (!wireframeEnabled) {
-      toggle.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
-    }
-  });
-
-  toggle.addEventListener('mouseleave', () => {
     toggle.style.backgroundColor = wireframeEnabled ? 'rgba(78, 205, 196, 0.3)' : 'rgba(0, 0, 0, 0.7)';
   });
 
