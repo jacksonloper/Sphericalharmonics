@@ -87,20 +87,21 @@ const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 // Calculate sun position based on hour (equinox - sun travels along equator)
 // Native mesh: Z=poles, XY=equator, X=lon0, Y=lon90
-// After mesh rotation (x = -PI/2): Y=-poles, XZ=equator, X=lon0, Z=lon90
+// After mesh rotation (x = -PI/2): Y=poles, XZ=equator, X=lon0, Z=lon90
 function getSunDirection(hours) {
   // At equinox, sun is at zenith at noon (12:00) at longitude 0 (prime meridian)
   // Sun moves westward (east to west), 15 degrees per hour
-  // hours=12 -> angle=0 -> sun at lon=0 (+X)
+  // The sun revolves AROUND the pole axis (Y axis / red line)
+  // hours=12 -> angle=0 -> sun at lon=0 (+X direction)
   // hours=6 -> angle=90° -> sun at lon=90°E (+Z after rotation)
   // hours=18 -> angle=-90° -> sun at lon=90°W (-Z after rotation)
   const angle = ((12 - hours) / 24) * Math.PI * 2;
   
-  // Sun direction at equinox - rotates in XZ plane (equator after mesh rotation)
-  // Y stays near 0 (equator), slight offset for aesthetics
+  // Sun direction at equinox - rotates in XZ plane around Y axis (poles)
+  // Y=0 because at equinox, sun is exactly on the equatorial plane
   return new THREE.Vector3(
     Math.cos(angle),
-    0.1,  // Slight Y offset for better lighting aesthetics
+    0,  // Equinox: sun on equatorial plane (XZ plane after mesh rotation)
     Math.sin(angle)
   ).normalize();
 }
