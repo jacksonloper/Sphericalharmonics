@@ -9,8 +9,6 @@ import { loadContourData, createContourGeometry } from './contourLoader.js';
 import { createContourMaterial } from './contourMaterial.js';
 
 // Constants
-const OCEAN_COLOR = 0x001133;
-const BASE_SPHERE_SUBDIVISIONS = 5;
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -56,9 +54,7 @@ const loadStatus = loadingDiv.querySelector('#loadStatus');
 
 // Global state
 let earthMesh;
-let baseSphere;
 let material;
-let baseMaterial;
 
 async function init() {
   try {
@@ -82,16 +78,6 @@ async function init() {
       if (level.elevation < minElev) minElev = level.elevation;
       if (level.elevation > maxElev) maxElev = level.elevation;
     }
-
-    // Create a base sphere to show ocean/land backdrop
-    const baseGeometry = new THREE.IcosahedronGeometry(1.0, BASE_SPHERE_SUBDIVISIONS);
-    baseMaterial = new THREE.MeshBasicMaterial({
-      color: OCEAN_COLOR,
-      side: THREE.FrontSide
-    });
-    baseSphere = new THREE.Mesh(baseGeometry, baseMaterial);
-    // No rotation - keep Earth right side up
-    scene.add(baseSphere);
 
     // Create geometry with extrusion
     loadStatus.textContent = 'Creating geometry...';
