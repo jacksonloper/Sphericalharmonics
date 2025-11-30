@@ -5,7 +5,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { loadContourData, createContourGeometry } from './contourLoader.js';
+import { loadContourMeshData, createContourMeshGeometry } from './contourMeshLoader.js';
 import { createContourMaterial } from './contourMaterial.js';
 
 // Constants
@@ -68,26 +68,16 @@ async function init() {
       }
     };
 
-    // Load contour data
-    loadStatus.textContent = 'Loading contour data...';
-    const levels = await loadContourData('./earthtoposources/sur_contours_30.bin', onProgress);
+    // Load contour mesh data
+    loadStatus.textContent = 'Loading contour mesh...';
+    const levels = await loadContourMeshData('./earthtoposources/sur_contours_mt.bin', onProgress);
 
-    // Find min/max elevation
-    let minElev = Infinity, maxElev = -Infinity;
-    for (const level of levels) {
-      if (level.elevation < minElev) minElev = level.elevation;
-      if (level.elevation > maxElev) maxElev = level.elevation;
-    }
-
-    // Create geometry with extrusion
+    // Create geometry from mesh data
     loadStatus.textContent = 'Creating geometry...';
-    const geometry = createContourGeometry(levels, {
-      baseRadius: 1.0,
-      reliefScale: 1.0,
-      minElevation: minElev,
-      maxElevation: maxElev,
-      onProgress
-    });
+    const geometry = createContourMeshGeometry(levels, { onProgress });
+
+    const minElev = geometry.userData.elevationMin;
+    const maxElev = geometry.userData.elevationMax;
 
     // Create material for contours (with relief exaggeration support)
     material = createContourMaterial(minElev, maxElev);
@@ -124,16 +114,14 @@ function addInfoPanel(geometry, levels) {
   panel.style.lineHeight = '1.5';
 
   const vertices = geometry.attributes.position.count;
-  const triangles = geometry.index.count / 3;
-  const polygonCount = geometry.userData.polygonCount;
-  const levelCount = levels.length;
+  const triangles = geometry.userData.triangleCount || (vertices / 3);
+  const levelCount = geometry.userData.levelCount || levels.length;
 
   panel.innerHTML = `
     <strong>Earth Surface Contours</strong><br>
     <br>
-    Extruded contour polygons<br>
+    Marching triangles contour mesh<br>
     Levels: ${levelCount}<br>
-    Polygons: ${polygonCount.toLocaleString()}<br>
     Vertices: ${vertices.toLocaleString()}<br>
     Triangles: ${triangles.toLocaleString()}<br>
     <br>
