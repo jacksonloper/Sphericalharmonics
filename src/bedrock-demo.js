@@ -27,8 +27,8 @@ const TRUNCATION_LEVELS = [
   { lmax: 2160, file: './earthtoposources/bed_compact9.bin', subdivisions: 9 }
 ];
 
-// Default to medium detail for faster initial load
-const DEFAULT_LEVEL_INDEX = 3; // lmax=32
+// Default to lmax=360 for detailed initial view
+const DEFAULT_LEVEL_INDEX = 6; // lmax=360
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -240,7 +240,7 @@ function addControlPanel() {
   slider.min = '0.001';
   slider.max = '1';
   slider.step = '0.001';
-  slider.value = '0.001';
+  slider.value = '0.75';
   slider.style.width = '80px';
   slider.style.cursor = 'pointer';
 

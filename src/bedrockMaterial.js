@@ -99,7 +99,7 @@ export function createBedrockMaterial(minElevation = -10000, maxElevation = 6000
     uniforms: {
       minElevation: { value: minElevation },
       maxElevation: { value: maxElevation },
-      alpha: { value: 0.001 }
+      alpha: { value: 0.75 }
     },
     vertexShader,
     fragmentShader,
