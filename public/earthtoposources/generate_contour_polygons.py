@@ -115,23 +115,38 @@ def extract_contours(data, lats, lons, num_levels=30, min_polygon_area=10.0, sim
         lons = lons[:-1]
         data = data[:, :-1]
     
-    # Determine contour levels with special handling for sea level:
+    # Determine contour levels with special handling for sea level and low elevations:
     # 1. One level below zero (for ocean depths)
-    # 2. One level at zero (sea level)
-    # 3. Equally spaced levels from 0 to max
+    # 2. One level at low threshold (near sea level)
+    # 3. Specific low-elevation levels (5m, 10m, 20m, 50m, 100m, 200m, 500m)
+    # 4. Equally spaced levels from 500m to max
     vmin, vmax = data.min(), data.max()
-    
-    # Create levels: one below-zero level, one near sea level (-20), then equally spaced to max
+
+    # Create levels: one below-zero level, one near sea level, specific low levels, then equally spaced
     below_zero_level = vmin / 2  # Midpoint of ocean depths
     low_threshold = -20.0  # Low threshold near sea level
-    above_zero_levels = np.linspace(0, vmax, num_levels - 1)[1:]  # Skip 0, start from first positive
-    
-    levels = np.concatenate([[below_zero_level, low_threshold], above_zero_levels])
+
+    # Important low-elevation contours
+    low_elevation_levels = np.array([5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0])
+
+    # Calculate how many equally-spaced levels we need above 500m
+    num_fixed_levels = 2 + len(low_elevation_levels)  # below_zero + low_threshold + low_elevation_levels
+    num_high_levels = num_levels - num_fixed_levels
+
+    # Equally spaced from 500m to max
+    if num_high_levels > 0 and vmax > 500.0:
+        high_elevation_levels = np.linspace(500.0, vmax, num_high_levels + 1)[1:]  # Skip 500, already included
+    else:
+        high_elevation_levels = np.array([])
+
+    levels = np.concatenate([[below_zero_level, low_threshold], low_elevation_levels, high_elevation_levels])
     
     print(f"\nExtracting {len(levels)} contour levels from {vmin:.0f}m to {vmax:.0f}m...")
     print(f"  Below zero: {below_zero_level:.0f}m")
     print(f"  Low threshold: {low_threshold:.0f}m")
-    print(f"  Above zero: {above_zero_levels[0]:.0f}m to {above_zero_levels[-1]:.0f}m ({len(above_zero_levels)} levels)")
+    print(f"  Low elevation: {', '.join(f'{v:.0f}m' for v in low_elevation_levels)}")
+    if len(high_elevation_levels) > 0:
+        print(f"  High elevation: {high_elevation_levels[0]:.0f}m to {high_elevation_levels[-1]:.0f}m ({len(high_elevation_levels)} levels)")
     
     # Create figure for contour extraction (we don't display it)
     fig, ax = plt.subplots(figsize=(10, 5))
