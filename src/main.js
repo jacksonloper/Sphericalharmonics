@@ -52,43 +52,69 @@ scene.add(mesh);
 
 // OU process parameters
 const ouParams = {
+  maxOrder: 3, // Maximum harmonic order (l)
   theta: 0.5,  // Mean reversion rate
   sigma: 0.3   // Volatility/noise level
 };
 
 const ouParamLabels = {
+  maxOrder: 'Max Harmonic Order (l)',
   theta: 'Mean Reversion (θ)',
   sigma: 'Volatility (σ)'
 };
 
-// Coefficient indices we'll evolve: all through l=3 (excluding l=0)
-// l=1: 1,2,3 | l=2: 4,5,6,7,8 | l=3: 9,10,11,12,13,14,15
-const activeIndices = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+// Function to generate active indices for a given max order
+// Spherical harmonic indexing: l=0: [0], l=1: [1,2,3], l=2: [4,5,6,7,8], etc.
+// We exclude l=0 (index 0) from evolution
+function getActiveIndices(maxOrder) {
+  const indices = [];
+  for (let l = 1; l <= maxOrder; l++) {
+    const startIndex = l * l; // Start index for order l
+    const count = 2 * l + 1;  // Number of coefficients for order l
+    for (let m = 0; m < count; m++) {
+      indices.push(startIndex + m);
+    }
+  }
+  return indices;
+}
+
+// Coefficient indices we'll evolve
+let activeIndices = getActiveIndices(ouParams.maxOrder);
 
 // Initialize position x (coefficients on n-sphere) and velocity v
-const n = activeIndices.length; // 15 dimensions
-const x = new Float32Array(n);
-const v = new Float32Array(n);
+let n = activeIndices.length;
+let x = new Float32Array(n);
+let v = new Float32Array(n);
 
-// Initialize x with random values on the sphere
-for (let i = 0; i < n; i++) {
-  x[i] = (Math.random() - 0.5) * 2;
+// Function to initialize the system
+function initializeSystem() {
+  n = activeIndices.length;
+  x = new Float32Array(n);
+  v = new Float32Array(n);
+
+  // Initialize x with random values on the sphere
+  for (let i = 0; i < n; i++) {
+    x[i] = (Math.random() - 0.5) * 2;
+  }
+
+  // Normalize to sphere
+  let norm = 0;
+  for (let i = 0; i < n; i++) {
+    norm += x[i] * x[i];
+  }
+  norm = Math.sqrt(norm);
+  for (let i = 0; i < n; i++) {
+    x[i] /= norm;
+  }
+
+  // Initialize velocity to zero
+  for (let i = 0; i < n; i++) {
+    v[i] = 0;
+  }
 }
 
-// Normalize to sphere
-let norm = 0;
-for (let i = 0; i < n; i++) {
-  norm += x[i] * x[i];
-}
-norm = Math.sqrt(norm);
-for (let i = 0; i < n; i++) {
-  x[i] /= norm;
-}
-
-// Initialize velocity to zero
-for (let i = 0; i < n; i++) {
-  v[i] = 0;
-}
+// Initialize the system
+initializeSystem();
 
 // Box-Muller transform for Gaussian noise
 function gaussianRandom() {
@@ -141,38 +167,6 @@ const sliderTitle = document.getElementById('slider-title');
 const sliderValueDisplay = document.getElementById('slider-value-display');
 const backBtn = document.querySelector('.back-btn');
 
-// Initialize coefficient display
-const coeffList = document.getElementById('coeff-list');
-const coeffDisplayElements = [];
-
-// Create display elements for all active coefficients
-for (let i = 0; i < activeIndices.length; i++) {
-  const row = document.createElement('div');
-  row.className = 'coeff-row';
-
-  const index = document.createElement('span');
-  index.className = 'coeff-index';
-  index.textContent = `[${activeIndices[i]}]`;
-
-  const value = document.createElement('span');
-  value.className = 'coeff-value';
-  value.textContent = '0.00';
-
-  row.appendChild(index);
-  row.appendChild(value);
-  coeffList.appendChild(row);
-
-  coeffDisplayElements.push(value);
-}
-
-// Function to update coefficient display
-function updateCoeffDisplay() {
-  for (let i = 0; i < activeIndices.length; i++) {
-    const val = coefficients[activeIndices[i]];
-    coeffDisplayElements[i].textContent = val.toFixed(2);
-  }
-}
-
 // Toggle hamburger menu
 hamburger.addEventListener('click', () => {
   const isOpen = frequencyList.classList.contains('show');
@@ -198,17 +192,23 @@ document.querySelectorAll('.freq-item').forEach(item => {
 
     sliderTitle.textContent = ouParamLabels[paramId];
     slider.value = ouParams[paramId];
-    sliderValueDisplay.textContent = ouParams[paramId].toFixed(2);
 
     // Update slider range based on parameter
-    if (paramId === 'theta') {
+    if (paramId === 'maxOrder') {
+      slider.min = 1;
+      slider.max = 4;
+      slider.step = 1;
+      sliderValueDisplay.textContent = Math.round(ouParams[paramId]).toString();
+    } else if (paramId === 'theta') {
       slider.min = 0;
       slider.max = 2;
       slider.step = 0.05;
+      sliderValueDisplay.textContent = ouParams[paramId].toFixed(2);
     } else if (paramId === 'sigma') {
       slider.min = 0;
       slider.max = 1;
       slider.step = 0.05;
+      sliderValueDisplay.textContent = ouParams[paramId].toFixed(2);
     }
 
     frequencyList.classList.remove('show');
@@ -219,9 +219,34 @@ document.querySelectorAll('.freq-item').forEach(item => {
 // Update parameter from slider
 slider.addEventListener('input', (e) => {
   const value = parseFloat(e.target.value);
-  sliderValueDisplay.textContent = value.toFixed(2);
-  ouParams[currentParam] = value;
-  document.getElementById(`${currentParam}-display`).textContent = value.toFixed(2);
+
+  if (currentParam === 'maxOrder') {
+    const intValue = Math.round(value);
+    sliderValueDisplay.textContent = intValue.toString();
+
+    // Only update if value actually changed
+    if (ouParams.maxOrder !== intValue) {
+      ouParams.maxOrder = intValue;
+      document.getElementById(`${currentParam}-display`).textContent = intValue.toString();
+
+      // Reinitialize system with new order
+      activeIndices = getActiveIndices(ouParams.maxOrder);
+      initializeSystem();
+
+      // Reset all coefficients to zero first
+      for (let i = 0; i < coefficients.length; i++) {
+        coefficients[i] = 0;
+      }
+      // Update active coefficients
+      for (let i = 0; i < n; i++) {
+        coefficients[activeIndices[i]] = x[i];
+      }
+    }
+  } else {
+    sliderValueDisplay.textContent = value.toFixed(2);
+    ouParams[currentParam] = value;
+    document.getElementById(`${currentParam}-display`).textContent = value.toFixed(2);
+  }
 });
 
 // Back button
@@ -260,9 +285,6 @@ function animate() {
 
   // Update coefficients using OU process
   updateOU(dt);
-
-  // Update coefficient display
-  updateCoeffDisplay();
 
   // Update orbit controls
   controls.update();
