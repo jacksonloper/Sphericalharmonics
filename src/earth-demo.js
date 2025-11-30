@@ -51,7 +51,7 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.minDistance = 1.2;
 controls.maxDistance = 10;
-controls.autoRotate = false; // Disable auto-rotate since we're rotating the light instead
+controls.autoRotate = false;
 
 // Loading indicator
 const loadingDiv = document.createElement('div');
@@ -74,40 +74,38 @@ let material = null;
 let currentLevelIndex = DEFAULT_LEVEL_INDEX;
 let isLoading = false;
 let wireframeToggle = null;
-let clockDisplay = null;
+let timeSlider = null;
+let timeDisplay = null;
 
-// Simulation start time
-const simulationStartTime = Date.now();
-const startDate = new Date();
+// User-controlled time (0-24 hours)
+let currentHour = 12; // Start at noon
 
-// Calculate simulated time (1 day per minute = 1440x speed)
-function getSimulatedTime() {
-  const elapsedMs = Date.now() - simulationStartTime;
-  const simulatedMs = elapsedMs * 1440; // 1 day per minute
-  const simulatedDate = new Date(startDate.getTime() + simulatedMs);
-  return simulatedDate;
-}
-
-// Calculate sun position based on time (equinox - sun travels along equator)
-function getSunDirection(date) {
-  const hours = date.getHours() + date.getMinutes() / 60 + date.getSeconds() / 3600;
-  // At equinox, sun is at zenith at noon (12:00) at longitude 0
-  // Convert local time to angle: 12:00 = sun at +X, 00:00 = sun at -X
-  // Sun moves 15 degrees per hour (360/24)
-  const angle = ((hours - 12) / 24) * Math.PI * 2;
+// Calculate sun position based on hour (equinox - sun travels along equator)
+function getSunDirection(hours) {
+  // At equinox, sun is at zenith at noon (12:00) at longitude 0 (prime meridian)
+  // Sun moves westward (east to west), 15 degrees per hour
+  // At 12:00, sun is over longitude 0 (+X direction when looking from above north pole)
+  // At 06:00, sun is over longitude 90°E
+  // At 18:00, sun is over longitude 90°W
+  // Angle increases clockwise when viewed from north (sun moves west)
+  const angle = ((12 - hours) / 24) * Math.PI * 2 + Math.PI; // +180° to correct longitude
   
   // Sun direction at equinox (Y=0 plane, circling in XZ plane)
   // Slight Y offset for better lighting aesthetics
   return new THREE.Vector3(
     Math.cos(angle),
     0.3,  // Slight elevation for better visibility
-    Math.sin(angle)
+    -Math.sin(angle)  // Negative to correct rotation direction (sun rises in east)
   ).normalize();
 }
 
-// Format time for display (show simulated time)
-function formatTime(date) {
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+// Format time for display
+function formatTime(hours) {
+  const h = Math.floor(hours);
+  const m = Math.floor((hours - h) * 60);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const displayH = h % 12 || 12;
+  return `${displayH}:${m.toString().padStart(2, '0')} ${period}`;
 }
 
 async function loadLevel(levelIndex) {
@@ -158,6 +156,9 @@ async function loadLevel(levelIndex) {
     currentLevelIndex = levelIndex;
     loadingDiv.style.display = 'none';
 
+    // Update lighting for current time
+    updateLighting();
+
     console.log(`Loaded: lmax=${level.lmax}, ${geometry.attributes.position.count.toLocaleString()} vertices`);
   } catch (error) {
     console.error('Failed to load:', error);
@@ -166,6 +167,16 @@ async function loadLevel(levelIndex) {
   }
   
   isLoading = false;
+}
+
+function updateLighting() {
+  if (material) {
+    const sunDir = getSunDirection(currentHour);
+    material.uniforms.lightDirection.value.copy(sunDir);
+  }
+  if (timeDisplay) {
+    timeDisplay.textContent = formatTime(currentHour);
+  }
 }
 
 function addControlPanel() {
@@ -187,12 +198,34 @@ function addControlPanel() {
   panel.style.justifyContent = 'center';
   panel.style.maxWidth = '95vw';
 
-  // Clock display
-  clockDisplay = document.createElement('span');
-  clockDisplay.style.color = '#4ecdc4';
-  clockDisplay.style.minWidth = '70px';
-  clockDisplay.textContent = formatTime(new Date());
-  panel.appendChild(clockDisplay);
+  // Time control group
+  const timeGroup = document.createElement('div');
+  timeGroup.style.display = 'flex';
+  timeGroup.style.alignItems = 'center';
+  timeGroup.style.gap = '8px';
+
+  timeDisplay = document.createElement('span');
+  timeDisplay.style.color = '#4ecdc4';
+  timeDisplay.style.minWidth = '65px';
+  timeDisplay.textContent = formatTime(currentHour);
+  timeGroup.appendChild(timeDisplay);
+
+  timeSlider = document.createElement('input');
+  timeSlider.type = 'range';
+  timeSlider.min = '0';
+  timeSlider.max = '24';
+  timeSlider.step = '0.1';
+  timeSlider.value = currentHour;
+  timeSlider.style.width = '80px';
+  timeSlider.style.cursor = 'pointer';
+
+  timeSlider.addEventListener('input', (e) => {
+    currentHour = parseFloat(e.target.value);
+    updateLighting();
+  });
+
+  timeGroup.appendChild(timeSlider);
+  panel.appendChild(timeGroup);
 
   // Level selector
   const levelGroup = document.createElement('div');
@@ -285,19 +318,6 @@ function addControlPanel() {
 // Animation loop
 function animate() {
   requestAnimationFrame(animate);
-  
-  // Update sun/light position based on simulated time (1 day per minute)
-  const simulatedTime = getSimulatedTime();
-  if (material) {
-    const sunDir = getSunDirection(simulatedTime);
-    material.uniforms.lightDirection.value.copy(sunDir);
-  }
-  
-  // Update clock display with simulated time
-  if (clockDisplay) {
-    clockDisplay.textContent = formatTime(simulatedTime);
-  }
-  
   controls.update();
   renderer.render(scene, camera);
 }
