@@ -213,42 +213,87 @@ def extract_contours_at_levels(vertices, triangles, elevation, levels):
 
 def export_contour_meshes(contour_data, output_path):
     """
-    Export contour meshes in compact binary format.
+    Export contour meshes in quantized indexed format for smaller file size.
 
     Format:
-        Header: 'CONTOUR' (7 bytes)
+        Header: 'CNTR3' (5 bytes)
         num_levels: uint16
         For each level:
             elevation: float32
+            num_vertices: uint32
             num_triangles: uint32
-            For each triangle:
-                9 float32 values (3 vertices × 3 coordinates)
+            vertices: int16[num_vertices * 3] (quantized to unit sphere)
+            indices: uint16 or uint32[num_triangles * 3] (depending on vertex count)
     """
     with open(output_path, 'wb') as f:
-        # Header
-        f.write(b'CONTOUR')
+        # Header (using CNTR3 for quantized format)
+        f.write(b'CNTR3')
 
         # Number of levels
         f.write(struct.pack('<H', len(contour_data)))
 
         total_triangles = 0
+        total_vertices = 0
+        total_bytes = 7  # Header
+
         for elevation, triangles in contour_data:
-            # Elevation value
-            f.write(struct.pack('<f', elevation))
+            # Build indexed mesh from triangle soup
+            vertex_map = {}  # Maps (x,y,z) tuple to vertex index
+            vertices = []
+            indices = []
 
-            # Number of triangles
-            f.write(struct.pack('<I', len(triangles)))
-            total_triangles += len(triangles)
-
-            # Triangle data (each triangle is 3 vertices × 3 coords = 9 floats)
             for tri in triangles:
+                tri_indices = []
                 for vertex in tri:
-                    f.write(struct.pack('<fff', float(vertex[0]), float(vertex[1]), float(vertex[2])))
+                    # Round to avoid floating point comparison issues
+                    key = (round(vertex[0], 6), round(vertex[1], 6), round(vertex[2], 6))
+
+                    if key not in vertex_map:
+                        vertex_map[key] = len(vertices)
+                        vertices.append(vertex)
+
+                    tri_indices.append(vertex_map[key])
+
+                indices.extend(tri_indices)
+
+            # Quantize vertices to int16 (-32768 to 32767)
+            # All vertices are on unit sphere, so we can quantize to that range
+            vertices_array = np.array(vertices, dtype=np.float32)
+            vertices_quantized = np.round(vertices_array * 32767.0).astype(np.int16)
+
+            # Use uint16 indices if possible, otherwise uint32
+            use_uint16 = len(vertices) < 65536
+            if use_uint16:
+                indices_array = np.array(indices, dtype=np.uint16)
+            else:
+                indices_array = np.array(indices, dtype=np.uint32)
+
+            # Write level data
+            f.write(struct.pack('<f', elevation))
+            f.write(struct.pack('<I', len(vertices)))
+            f.write(struct.pack('<I', len(triangles)))
+            f.write(struct.pack('<B', 1 if use_uint16 else 0))  # Index format flag
+
+            # Write quantized vertices
+            f.write(vertices_quantized.tobytes())
+
+            # Write indices
+            f.write(indices_array.tobytes())
+
+            total_triangles += len(triangles)
+            total_vertices += len(vertices)
+
+            # Calculate bytes
+            total_bytes += 4 + 4 + 4 + 1  # elevation + vertex_count + tri_count + flag
+            total_bytes += len(vertices) * 6  # quantized vertices (3 * int16)
+            total_bytes += len(indices) * (2 if use_uint16 else 4)
 
     size_kb = os.path.getsize(output_path) / 1024
     print(f"\nSaved to: {output_path}")
-    print(f"  File size: {size_kb:.1f} KB")
+    print(f"  File size: {size_kb:.1f} KB ({size_kb/1024:.1f} MB)")
+    print(f"  Total vertices: {total_vertices:,}")
     print(f"  Total triangles: {total_triangles:,}")
+    print(f"  Compression ratio: {total_triangles * 3 / total_vertices:.1f}x vertex reuse")
 
 
 def main():
