@@ -121,16 +121,16 @@ def extract_contours(data, lats, lons, num_levels=30, min_polygon_area=10.0, sim
     # 3. Equally spaced levels from 0 to max
     vmin, vmax = data.min(), data.max()
     
-    # Create levels: one below-zero level, zero, then (num_levels - 2) levels from 0 to max
+    # Create levels: one below-zero level, one near sea level (-20), then equally spaced to max
     below_zero_level = vmin / 2  # Midpoint of ocean depths
-    zero_level = 0.0
-    above_zero_levels = np.linspace(0, vmax, num_levels - 1)[1:]  # Skip 0, already included
+    low_threshold = -20.0  # Low threshold near sea level
+    above_zero_levels = np.linspace(0, vmax, num_levels - 1)[1:]  # Skip 0, start from first positive
     
-    levels = np.concatenate([[below_zero_level, zero_level], above_zero_levels])
+    levels = np.concatenate([[below_zero_level, low_threshold], above_zero_levels])
     
     print(f"\nExtracting {len(levels)} contour levels from {vmin:.0f}m to {vmax:.0f}m...")
     print(f"  Below zero: {below_zero_level:.0f}m")
-    print(f"  Sea level: {zero_level:.0f}m")
+    print(f"  Low threshold: {low_threshold:.0f}m")
     print(f"  Above zero: {above_zero_levels[0]:.0f}m to {above_zero_levels[-1]:.0f}m ({len(above_zero_levels)} levels)")
     
     # Create figure for contour extraction (we don't display it)

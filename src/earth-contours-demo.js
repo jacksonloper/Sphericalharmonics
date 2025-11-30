@@ -56,6 +56,7 @@ const loadStatus = loadingDiv.querySelector('#loadStatus');
 
 // Global state
 let earthMesh;
+let baseSphere;
 let material;
 let baseMaterial;
 
@@ -88,8 +89,8 @@ async function init() {
       color: OCEAN_COLOR,
       side: THREE.FrontSide
     });
-    const baseSphere = new THREE.Mesh(baseGeometry, baseMaterial);
-    baseSphere.rotation.x = -Math.PI / 2;
+    baseSphere = new THREE.Mesh(baseGeometry, baseMaterial);
+    // No rotation - keep Earth right side up
     scene.add(baseSphere);
 
     // Create geometry with extrusion
@@ -102,18 +103,18 @@ async function init() {
       onProgress
     });
 
-    // Create material for contours (no vertex displacement, just coloring)
+    // Create material for contours (with relief exaggeration support)
     material = createContourMaterial(minElev, maxElev);
 
-    // Create mesh
+    // Create mesh - no rotation, keep Earth right side up
     earthMesh = new THREE.Mesh(geometry, material);
-    earthMesh.rotation.x = -Math.PI / 2;
     scene.add(earthMesh);
 
     loadingDiv.remove();
 
     addInfoPanel(geometry, levels);
     addWireframeToggle(material);
+    addAlphaSlider(material);
 
     console.log('Contour mesh loaded successfully!');
   } catch (error) {
@@ -186,6 +187,50 @@ function addWireframeToggle(material) {
   });
 
   document.body.appendChild(toggle);
+}
+
+function addAlphaSlider(material) {
+  const container = document.createElement('div');
+  container.style.position = 'absolute';
+  container.style.bottom = '60px';
+  container.style.right = '20px';
+  container.style.color = 'white';
+  container.style.fontFamily = 'monospace';
+  container.style.fontSize = '12px';
+  container.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+  container.style.padding = '10px 15px';
+  container.style.borderRadius = '5px';
+  container.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+  container.style.minWidth = '200px';
+
+  const label = document.createElement('div');
+  label.style.marginBottom = '8px';
+  label.textContent = 'Relief Exponent (α)';
+
+  const valueDisplay = document.createElement('div');
+  valueDisplay.style.color = '#4ecdc4';
+  valueDisplay.style.fontSize = '14px';
+  valueDisplay.style.marginBottom = '8px';
+  valueDisplay.textContent = '0.001';
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = '0.001';
+  slider.max = '1';
+  slider.step = '0.001';
+  slider.value = '0.001';
+  slider.style.width = '100%';
+
+  slider.addEventListener('input', (e) => {
+    const alpha = parseFloat(e.target.value);
+    material.uniforms.alpha.value = alpha;
+    valueDisplay.textContent = alpha.toFixed(3);
+  });
+
+  container.appendChild(label);
+  container.appendChild(valueDisplay);
+  container.appendChild(slider);
+  document.body.appendChild(container);
 }
 
 // Animation loop

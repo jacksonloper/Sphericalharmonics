@@ -1,14 +1,19 @@
 /**
  * Contour Material for three.js
  * Creates shader materials for visualizing contour polygons with elevation-based coloring
- * Unlike elevationMaterial, this doesn't displace vertices (they're already positioned)
+ * Supports relief exaggeration via alpha uniform (like elevationMaterial)
  */
 
 import * as THREE from 'three';
 
+// Constants for light directions
+const KEY_LIGHT_DIRECTION = new THREE.Vector3(1, 1, 1).normalize();
+const FILL_LIGHT_DIRECTION = new THREE.Vector3(-1, -0.5, 0.5).normalize();
+
 /**
  * Create a material for visualizing contour elevation data with FLAT shading
  * Uses fragment derivatives to compute face normals
+ * Supports relief exaggeration via alpha uniform
  *
  * @param {number} minElevation - Minimum elevation value
  * @param {number} maxElevation - Maximum elevation value
@@ -17,13 +22,23 @@ import * as THREE from 'three';
 export function createContourMaterial(minElevation = 0, maxElevation = 6000) {
   const vertexShader = `
     attribute float elevation;
+    uniform float alpha;
     varying float vElevation;
     varying vec3 vPosition;
 
     void main() {
       vElevation = elevation;
-      vPosition = position;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      
+      // Apply relief exaggeration: scale position radially based on alpha
+      // alpha = 0.001 means minimal relief, alpha = 1.0 means full exaggeration
+      float e = max(0.0, elevation);
+      float normalizedE = e / 6006.0;
+      float reliefFactor = 1.0 + (alpha - 0.001) * normalizedE * 0.5;
+      
+      vec3 exaggeratedPosition = position * reliefFactor;
+      vPosition = exaggeratedPosition;
+      
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(exaggeratedPosition, 1.0);
     }
   `;
 
@@ -91,8 +106,9 @@ export function createContourMaterial(minElevation = 0, maxElevation = 6000) {
     uniforms: {
       minElevation: { value: minElevation },
       maxElevation: { value: maxElevation },
-      lightDirection: { value: new THREE.Vector3(1, 1, 1).normalize() },
-      lightDirection2: { value: new THREE.Vector3(-1, -0.5, 0.5).normalize() }
+      alpha: { value: 0.001 },
+      lightDirection: { value: KEY_LIGHT_DIRECTION },
+      lightDirection2: { value: FILL_LIGHT_DIRECTION }
     },
     vertexShader,
     fragmentShader,
