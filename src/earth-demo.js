@@ -95,10 +95,11 @@ function getSunDirection(hours) {
   // At equinox, sun is at zenith at noon (12:00) at longitude 0 (prime meridian)
   // Sun moves westward (east to west), 15 degrees per hour
   // The sun revolves AROUND the Z axis (poles in model space)
-  // hours=12 -> angle=0 -> sun at lon=0 (+X direction in model space)
-  // hours=6 -> angle=90° -> sun at lon=90°E (+Y in model space)
-  // hours=18 -> angle=-90° -> sun at lon=90°W (-Y in model space)
-  const angle = ((12 - hours) / 24) * Math.PI * 2;
+  // In model space, +Y points toward lon=0 (prime meridian), +X toward lon=90°E
+  // hours=12 -> sun at lon=0 (+Y direction in model space)
+  // hours=6 -> sun at lon=90°E (+X in model space)
+  // hours=18 -> sun at lon=90°W (-X in model space)
+  const angle = ((12 - hours) / 24) * Math.PI * 2 - Math.PI / 2;
   
   // Sun direction in MODEL space - rotates in XY plane around Z axis (poles)
   // Z=0 because at equinox, sun is exactly on the equatorial plane
