@@ -12,8 +12,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         shflow: resolve(__dirname, 'shflow.html'),
-        earth: resolve(__dirname, 'earth.html'),
-        'earth-contours': resolve(__dirname, 'earth-contours.html')
+        earth: resolve(__dirname, 'earth.html')
       },
       output: {
         manualChunks: undefined

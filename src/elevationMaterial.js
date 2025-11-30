@@ -78,16 +78,16 @@ export function createElevationMaterial(minElevation = -500, maxElevation = 9000
       vec3 normal = normalize(cross(fdx, fdy));
 
       // Two-light setup for better depth perception
-      // Main light (key light)
+      // Main light (key light) - from top-right-front
       vec3 lightDir1 = normalize(lightDirection);
-      float diffuse1 = max(dot(normal, lightDir1), 0.0) * 0.6;
+      float diffuse1 = max(dot(normal, lightDir1), 0.0) * 0.55;
 
-      // Secondary light (fill light)
+      // Secondary light (fill light) - from opposite side to illuminate shadows
       vec3 lightDir2 = normalize(lightDirection2);
-      float diffuse2 = max(dot(normal, lightDir2), 0.0) * 0.3;
+      float diffuse2 = max(dot(normal, lightDir2), 0.0) * 0.4;
 
-      // Ambient light
-      float ambient = 0.2;
+      // Ambient light for overall visibility
+      float ambient = 0.25;
 
       float lighting = diffuse1 + diffuse2 + ambient;
       vec3 finalColor = color * lighting;
@@ -101,8 +101,8 @@ export function createElevationMaterial(minElevation = -500, maxElevation = 9000
       minElevation: { value: minElevation },
       maxElevation: { value: maxElevation },
       alpha: { value: 0.001 },
-      lightDirection: { value: new THREE.Vector3(1, 1, 1).normalize() },     // Key light from top-right
-      lightDirection2: { value: new THREE.Vector3(-1, -0.5, 0.5).normalize() } // Fill light from left-bottom
+      lightDirection: { value: new THREE.Vector3(1, 1, 1).normalize() },      // Key light from top-right-front
+      lightDirection2: { value: new THREE.Vector3(-1, 0.5, -0.5).normalize() } // Fill light from opposite side
     },
     vertexShader,
     fragmentShader,
