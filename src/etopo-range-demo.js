@@ -184,8 +184,8 @@ async function loadAndVisualize() {
  * Generate HEALPix mesh using Web Worker
  */
 function generateHealpixMesh(elevationData, maxAbsElevation) {
-  // Create worker
-  meshWorker = new Worker(new URL('./healpixMeshWorker.js', import.meta.url), { type: 'module' });
+  // Create worker (not as module since it doesn't use imports)
+  meshWorker = new Worker(new URL('./healpixMeshWorker.js', import.meta.url));
   
   // Handle messages from worker
   meshWorker.onmessage = function(e) {
@@ -207,12 +207,8 @@ function generateHealpixMesh(elevationData, maxAbsElevation) {
       geometry.setAttribute('elevation', new THREE.BufferAttribute(elevations, 1));
       geometry.setIndex(new THREE.BufferAttribute(indices, 1));
       
-      // Create mesh material (reuse existing material)
-      const meshMaterial = createEtopoRangeMaterial(
-        geometryData.globalMin, 
-        geometryData.globalMax, 
-        geometryData.maxAbsElevation
-      );
+      // Create mesh material (create once, reuse existing if possible)
+      const meshMaterial = material; // Reuse the existing material
       meshMaterial.side = THREE.DoubleSide;
       
       // Create and add mesh to scene
