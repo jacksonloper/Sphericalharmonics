@@ -199,33 +199,11 @@ function addControlPanel() {
   panel.style.flexWrap = 'wrap';
   panel.style.justifyContent = 'center';
 
-  // Relief slider
-  const reliefGroup = document.createElement('div');
-  reliefGroup.style.display = 'flex';
-  reliefGroup.style.alignItems = 'center';
-  reliefGroup.style.gap = '8px';
-
-  const reliefLabel = document.createElement('span');
-  reliefLabel.textContent = 'Relief:';
-  reliefGroup.appendChild(reliefLabel);
-
-  const slider = document.createElement('input');
-  slider.type = 'range';
-  slider.min = '0.001';
-  slider.max = '1';
-  slider.step = '0.001';
-  slider.value = '0.75';
-  slider.style.width = '80px';
-  slider.style.cursor = 'pointer';
-
-  slider.addEventListener('input', (e) => {
-    if (!material) return;
-    material.uniforms.alpha.value = parseFloat(e.target.value);
-    // Would need to regenerate geometry for line segments to update properly
-  });
-
-  reliefGroup.appendChild(slider);
-  panel.appendChild(reliefGroup);
+  // Info text
+  const infoText = document.createElement('span');
+  infoText.textContent = 'Drag to rotate • Scroll to zoom';
+  infoText.style.color = '#4ecdc4';
+  panel.appendChild(infoText);
 
   document.body.appendChild(panel);
 }

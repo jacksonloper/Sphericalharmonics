@@ -13,7 +13,8 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         shflow: resolve(__dirname, 'shflow.html'),
         earth: resolve(__dirname, 'earth.html'),
-        bedrock: resolve(__dirname, 'bedrock.html')
+        bedrock: resolve(__dirname, 'bedrock.html'),
+        etopoRange: resolve(__dirname, 'etopo-range.html')
       },
       output: {
         manualChunks: undefined

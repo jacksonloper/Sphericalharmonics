@@ -10,8 +10,8 @@ import * as THREE from 'three';
  * Create a material for visualizing elevation range data with line segments
  * Each HEALPix cell is represented by a line from min to max elevation
  *
- * @param {number} minElevation - Minimum elevation value
- * @param {number} maxElevation - Maximum elevation value
+ * @param {number} minElevation - Minimum elevation value (default -11000m for ETOPO surface data)
+ * @param {number} maxElevation - Maximum elevation value (default 9000m for ETOPO surface data)
  * @returns {THREE.ShaderMaterial} Material with elevation-based coloring
  */
 export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9000) {
