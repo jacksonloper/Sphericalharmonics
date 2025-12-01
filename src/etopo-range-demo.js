@@ -73,6 +73,7 @@ let geometryData = null; // Store data for regeneration
 let alphaValue = 0.1; // Default alpha value
 let regenerateTimeout = null; // For debouncing slider updates
 let meshWorker = null; // Worker for mesh generation
+let showLines = false; // Toggle for line segments
 
 /**
  * Convert HEALPix NESTED pixel index to (theta, phi) in spherical coordinates
@@ -309,7 +310,7 @@ function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
   geometry.setAttribute('elevation', new THREE.BufferAttribute(elevations, 1));
-  geometry.setIndex(new Uint32Array(indices));
+  geometry.setIndex(indices.length > 0 ? new Uint32Array(indices) : null);
   
   // Create mesh material
   const meshMaterial = material;
@@ -319,8 +320,10 @@ function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
   healpixMesh = new THREE.Mesh(geometry, meshMaterial);
   scene.add(healpixMesh);
   
-  // Generate line segments
-  generateLineSegments();
+  // Generate line segments if enabled
+  if (showLines) {
+    generateLineSegments();
+  }
   
   console.log(`HEALPix mesh added: ${numPixels} vertices, ${indices.length / 3} triangles`);
 }
@@ -420,6 +423,38 @@ function addControlPanel() {
   panel.style.flexWrap = 'wrap';
   panel.style.justifyContent = 'center';
 
+  // Show lines checkbox
+  const linesGroup = document.createElement('div');
+  linesGroup.style.display = 'flex';
+  linesGroup.style.alignItems = 'center';
+  linesGroup.style.gap = '8px';
+
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.id = 'showLinesCheckbox';
+  checkbox.checked = showLines;
+  checkbox.style.cursor = 'pointer';
+
+  const checkboxLabel = document.createElement('label');
+  checkboxLabel.htmlFor = 'showLinesCheckbox';
+  checkboxLabel.textContent = 'Show lines';
+  checkboxLabel.style.cursor = 'pointer';
+
+  checkbox.addEventListener('change', (e) => {
+    showLines = e.target.checked;
+    if (showLines) {
+      generateLineSegments();
+    } else {
+      if (lineSegments) {
+        scene.remove(lineSegments);
+      }
+    }
+  });
+
+  linesGroup.appendChild(checkbox);
+  linesGroup.appendChild(checkboxLabel);
+  panel.appendChild(linesGroup);
+
   // Relief slider
   const reliefGroup = document.createElement('div');
   reliefGroup.style.display = 'flex';
@@ -455,13 +490,15 @@ function addControlPanel() {
       // No need to regenerate geometry
     }
     
-    // Regenerate line segments to match new alpha
-    if (regenerateTimeout) {
-      clearTimeout(regenerateTimeout);
+    // Regenerate line segments to match new alpha (if visible)
+    if (showLines) {
+      if (regenerateTimeout) {
+        clearTimeout(regenerateTimeout);
+      }
+      regenerateTimeout = setTimeout(() => {
+        generateLineSegments();
+      }, DEBOUNCE_DELAY_MS);
     }
-    regenerateTimeout = setTimeout(() => {
-      generateLineSegments();
-    }, DEBOUNCE_DELAY_MS);
   });
 
   reliefGroup.appendChild(slider);
