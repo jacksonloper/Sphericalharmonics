@@ -20,16 +20,21 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
     uniform float alpha;
     uniform float maxAbsElevation;
     varying float vElevation;
+    varying vec3 vNormal;
     varying vec3 vPosition;
 
     void main() {
       vElevation = elevation;
 
+      // Use precomputed normals from geometry (computed at alpha=0.11)
+      // Transform to view space for lighting calculations
+      vNormal = normalize(normalMatrix * normal);
+
       // Compute radial displacement: r = 1 + alpha * e / maxAbsElevation
       // Depths (negative) point inward, heights (positive) point outward
       float radius = 1.0 + alpha * elevation / maxAbsElevation;
 
-      // Displace vertex radially
+      // Displace vertex radially (positions are on unit sphere)
       vec3 displacedPosition = position * radius;
 
       vPosition = displacedPosition;
@@ -42,6 +47,7 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
     uniform float maxElevation;
 
     varying float vElevation;
+    varying vec3 vNormal;
     varying vec3 vPosition;
 
     void main() {
@@ -60,7 +66,15 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
         color = mix(vec3(0.2, 0.4, 0.8), vec3(0.0, 0.0, 0.0), t);
       }
 
-      gl_FragColor = vec4(color, 1.0);
+      // Simple lighting using precomputed normals
+      // The normals are slightly off because they were computed at alpha=0.11
+      // but vertices are displaced at current alpha, but that's okay per spec
+      vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0));
+      float diffuse = max(dot(vNormal, lightDir), 0.0);
+      float ambient = 0.3;
+      float lighting = ambient + (1.0 - ambient) * diffuse;
+
+      gl_FragColor = vec4(color * lighting, 1.0);
     }
   `;
 

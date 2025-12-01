@@ -190,15 +190,23 @@ async function loadAndVisualize() {
 
 /**
  * Generate HEALPix mesh directly in main thread using healpix library
+ * Implements the correct approach:
+ * 1. Generate positions on sphere
+ * 2. Create mesh using Three.js (watertight)
+ * 3. Displace vertices temporarily
+ * 4. Compute normals from displaced geometry
+ * 5. Undisplace vertices (back to sphere)
+ * 6. Store both sphere positions and precomputed normals
+ * 7. Vertex shader re-displaces based on alpha using precomputed normals
  */
 function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
   const numPixels = NPIX;
   
-  // Generate vertex positions on unit sphere
+  // Step 1: Generate vertex positions on unit sphere
   const positions = new Float32Array(numPixels * 3);
   const elevations = new Float32Array(numPixels);
   
-  console.log('Generating vertex positions...');
+  console.log('Step 1: Generating vertex positions on sphere...');
   
   for (let i = 0; i < numPixels; i++) {
     const { theta, phi } = pix2ang_nest(NSIDE, i);
@@ -212,9 +220,8 @@ function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
     elevations[i] = elevationData[i * 3 + 0];
   }
   
-  // Generate mesh indices using HEALPix grid structure
-  // Each base face is an nside x nside grid
-  console.log('Generating mesh connectivity...');
+  // Step 2: Generate mesh indices using HEALPix grid structure (watertight mesh)
+  console.log('Step 2: Generating watertight mesh connectivity...');
   const indices = [];
   const npface = NSIDE * NSIDE;
   
@@ -249,10 +256,10 @@ function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
     }
   }
   
-  console.log(`Generated ${indices.length / 3} triangles`);
+  console.log(`Generated ${indices.length / 3} triangles (watertight mesh)`);
   
-  // Displace vertices and compute normals
-  console.log('Displacing vertices with elevation data...');
+  // Step 3: Displace vertices temporarily based on elevation
+  console.log('Step 3: Temporarily displacing vertices with elevation data...');
   const displacedPositions = new Float32Array(positions.length);
   const alpha = MESH_GENERATION_ALPHA;
   
@@ -269,8 +276,8 @@ function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
     displacedPositions[i * 3 + 2] = z * r;
   }
   
-  // Compute normals from displaced geometry
-  console.log('Computing normals...');
+  // Step 4: Compute normals from displaced geometry
+  console.log('Step 4: Computing normals from displaced geometry...');
   const normals = new Float32Array(numPixels * 3);
   
   for (let i = 0; i < indices.length; i += 3) {
@@ -303,20 +310,28 @@ function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
     }
   }
   
-  console.log('Creating Three.js geometry...');
+  // Step 5: Vertices are already back on the sphere (we kept 'positions' unchanged)
+  // The key insight: we use 'positions' (sphere) for geometry, not 'displacedPositions'
+  console.log('Step 5: Using undisplaced sphere positions with precomputed normals...');
   
-  // Create Three.js geometry
+  // Step 6: Create Three.js geometry with sphere positions and precomputed normals
+  console.log('Step 6: Creating Three.js geometry...');
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3)); // Sphere positions
+  geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));     // Precomputed normals
   geometry.setAttribute('elevation', new THREE.BufferAttribute(elevations, 1));
-  geometry.setIndex(indices.length > 0 ? new Uint32Array(indices) : null);
+  
+  // Convert indices array to Uint32Array for Three.js
+  if (indices.length > 0) {
+    geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(indices), 1));
+  }
   
   // Create mesh material
   const meshMaterial = material;
   meshMaterial.side = THREE.DoubleSide;
   
-  // Create and add mesh to scene
+  // Step 7: Create and add mesh to scene
+  // Vertex shader will re-displace based on alpha uniform using precomputed normals
   healpixMesh = new THREE.Mesh(geometry, meshMaterial);
   scene.add(healpixMesh);
   
@@ -326,6 +341,7 @@ function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
   }
   
   console.log(`HEALPix mesh added: ${numPixels} vertices, ${indices.length / 3} triangles`);
+  console.log('Vertex shader will handle displacement based on alpha uniform');
 }
 
 /**
