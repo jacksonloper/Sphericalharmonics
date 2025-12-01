@@ -17,6 +17,9 @@ const NSIDE = 128;
 const HEALPIX_BASE_FACES = 12; // HEALPix tessellation has 12 base faces
 const NPIX = HEALPIX_BASE_FACES * NSIDE * NSIDE; // 196608
 
+// Mesh generation parameters
+const MESH_GENERATION_ALPHA = 0.11; // Alpha value used for vertex displacement during mesh generation
+
 // UI constants
 const DEBOUNCE_DELAY_MS = 100; // Delay for slider debouncing
 
@@ -215,9 +218,12 @@ function generateHealpixMesh(elevationData, maxAbsElevation) {
       healpixMesh = new THREE.Mesh(geometry, meshMaterial);
       scene.add(healpixMesh);
       
+      // Generate line segments to show max elevation (feathery extensions)
+      generateLineSegments();
+      
       loadingDiv.style.display = 'none';
       
-      console.log('HEALPix mesh added to scene');
+      console.log('HEALPix mesh and line segments added to scene');
       
       // Terminate worker
       meshWorker.terminate();
@@ -235,7 +241,8 @@ function generateHealpixMesh(elevationData, maxAbsElevation) {
   meshWorker.postMessage({
     nside: NSIDE,
     elevationData: elevationData,
-    maxAbsElevation: maxAbsElevation
+    maxAbsElevation: maxAbsElevation,
+    alpha: MESH_GENERATION_ALPHA
   });
 }
 
@@ -261,34 +268,23 @@ function cleanupOldGeometry() {
 }
 
 /**
- * Generate or regenerate line segment geometry based on current alpha value
+ * Generate line segments from min to max elevation
+ * Shows feathery extensions from the mesh surface to max elevation
  */
-function generateGeometry() {
+function generateLineSegments() {
   if (!geometryData) return;
   
-  const { numPixels, minVals, meanVals, maxVals, maxAbsElevation } = geometryData;
+  const { numPixels, minVals, maxVals, maxAbsElevation } = geometryData;
   
   // Create geometry for line segments
   // Each HEALPix pixel becomes one line segment from min to max
   const linePositions = new Float32Array(numPixels * 2 * 3); // 2 vertices per line
   const lineElevations = new Float32Array(numPixels * 2);
   
-  // Create geometry for quads at min elevation
-  // Each HEALPix pixel becomes a small quad at its minimum elevation
-  const quadPositions = new Float32Array(numPixels * 4 * 3); // 4 vertices per quad
-  const quadElevations = new Float32Array(numPixels * 4);
-  const quadIndices = new Uint32Array(numPixels * 6); // 2 triangles per quad
-  
-  // Approximate quad size based on HEALPix resolution (moved outside loop)
-  // For HEALPix, each pixel subtends approximately sqrt(4π / npix) radians (angular diameter)
-  // Divide by 2 for half-size quads to avoid overlap between neighboring pixels
-  const quadSize = Math.sqrt(4 * Math.PI / (HEALPIX_BASE_FACES * NSIDE * NSIDE)) / 2;
-  
   for (let i = 0; i < numPixels; i++) {
     const [theta, phi] = healpixNestedToSpherical(NSIDE, i);
     
     const minElev = minVals[i];
-    const meanElev = meanVals[i];
     const maxElev = maxVals[i];
     
     // Calculate radii using formula: r = 1 + alpha * e / maxAbsElevation
@@ -309,69 +305,22 @@ function generateGeometry() {
     
     lineElevations[i * 2 + 0] = minElev;
     lineElevations[i * 2 + 1] = maxElev;
-    
-    // Create quad at min elevation (not mean)
-    // Approximate corners by offsetting theta and phi
-    const dTheta = quadSize;
-    // Prevent division by zero at poles
-    const dPhi = quadSize / Math.max(Math.sin(theta), 1e-6);
-    
-    const corners = [
-      [theta - dTheta/2, phi - dPhi/2],
-      [theta - dTheta/2, phi + dPhi/2],
-      [theta + dTheta/2, phi + dPhi/2],
-      [theta + dTheta/2, phi - dPhi/2]
-    ];
-    
-    const quadIdx = i * 12;
-    for (let j = 0; j < 4; j++) {
-      const [thetaCorner, phiCorner] = corners[j];
-      const [x, y, z] = sphericalToCartesian(thetaCorner, phiCorner, rMin);
-      const vIdx = (i * 4 + j) * 3;
-      quadPositions[vIdx + 0] = x;
-      quadPositions[vIdx + 1] = y;
-      quadPositions[vIdx + 2] = z;
-      quadElevations[i * 4 + j] = minElev;
-    }
-    
-    // Create two triangles for the quad
-    const baseIdx = i * 4;
-    const triIdx = i * 6;
-    quadIndices[triIdx + 0] = baseIdx + 0;
-    quadIndices[triIdx + 1] = baseIdx + 1;
-    quadIndices[triIdx + 2] = baseIdx + 2;
-    quadIndices[triIdx + 3] = baseIdx + 0;
-    quadIndices[triIdx + 4] = baseIdx + 2;
-    quadIndices[triIdx + 5] = baseIdx + 3;
   }
   
-  // Create line segments geometry
   const lineGeometry = new THREE.BufferGeometry();
   lineGeometry.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
   lineGeometry.setAttribute('elevation', new THREE.BufferAttribute(lineElevations, 1));
   
-  // Create quad mesh geometry
-  const quadGeometry = new THREE.BufferGeometry();
-  quadGeometry.setAttribute('position', new THREE.BufferAttribute(quadPositions, 3));
-  quadGeometry.setAttribute('elevation', new THREE.BufferAttribute(quadElevations, 1));
-  quadGeometry.setIndex(new THREE.BufferAttribute(quadIndices, 1));
-  
-  // Clean up old geometry before creating new one
-  cleanupOldGeometry();
+  // Clean up old line segments if they exist
+  if (lineSegments) {
+    scene.remove(lineSegments);
+    lineSegments.geometry.dispose();
+    // Material is reused, so don't dispose it
+  }
   
   // Create line segments (NO rotation - Earth should be upright)
   lineSegments = new THREE.LineSegments(lineGeometry, material);
   scene.add(lineSegments);
-  
-  // Create semitransparent quad mesh at mean elevations
-  if (!quadMaterial) {
-    quadMaterial = createEtopoRangeMaterial(geometryData.globalMin, geometryData.globalMax, geometryData.maxAbsElevation);
-    quadMaterial.transparent = true;
-    quadMaterial.opacity = 0.3;
-    quadMaterial.side = THREE.DoubleSide;
-  }
-  quadMesh = new THREE.Mesh(quadGeometry, quadMaterial);
-  scene.add(quadMesh);
 }
 
 function addControlPanel() {
@@ -423,9 +372,17 @@ function addControlPanel() {
     
     if (material) {
       material.uniforms.alpha.value = newAlpha;
-      // Mesh is pre-generated with alpha=0.11 displacement and normals
-      // Slider only affects shader-based coloring, not geometry
+      // Vertex shader handles displacement based on alpha uniform
+      // No need to regenerate geometry
     }
+    
+    // Regenerate line segments to match new alpha
+    if (regenerateTimeout) {
+      clearTimeout(regenerateTimeout);
+    }
+    regenerateTimeout = setTimeout(() => {
+      generateLineSegments();
+    }, DEBOUNCE_DELAY_MS);
   });
 
   reliefGroup.appendChild(slider);
