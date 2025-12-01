@@ -16,6 +16,9 @@ import { pix2ang_nest } from '@hscmap/healpix';
 const NSIDE = 128;
 const NPIX = 12 * NSIDE * NSIDE; // 196608
 
+// UI constants
+const DEBOUNCE_DELAY_MS = 100; // Delay for slider debouncing
+
 // Scene setup
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
@@ -158,6 +161,17 @@ async function loadAndVisualize() {
 }
 
 /**
+ * Clean up old line segments and dispose of geometry
+ */
+function cleanupOldGeometry() {
+  if (lineSegments) {
+    scene.remove(lineSegments);
+    lineSegments.geometry.dispose();
+    // Material is reused, so don't dispose it
+  }
+}
+
+/**
  * Generate or regenerate line segment geometry based on current alpha value
  */
 function generateGeometry() {
@@ -200,12 +214,8 @@ function generateGeometry() {
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('elevation', new THREE.BufferAttribute(elevations, 1));
   
-  // Remove old line segments if they exist
-  if (lineSegments) {
-    scene.remove(lineSegments);
-    lineSegments.geometry.dispose();
-    // Material is reused, so don't dispose it
-  }
+  // Clean up old geometry before creating new one
+  cleanupOldGeometry();
   
   // Create line segments (NO rotation - Earth should be upright)
   lineSegments = new THREE.LineSegments(geometry, material);
@@ -268,7 +278,7 @@ function addControlPanel() {
       }
       regenerateTimeout = setTimeout(() => {
         generateGeometry();
-      }, 100); // Regenerate 100ms after user stops moving slider
+      }, DEBOUNCE_DELAY_MS);
     }
   });
 
