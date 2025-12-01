@@ -14,7 +14,8 @@ import { pix2ang_nest } from '@hscmap/healpix';
 
 // HEALPix parameters
 const NSIDE = 128;
-const NPIX = 12 * NSIDE * NSIDE; // 196608
+const HEALPIX_BASE_FACES = 12; // HEALPix tessellation has 12 base faces
+const NPIX = HEALPIX_BASE_FACES * NSIDE * NSIDE; // 196608
 
 // UI constants
 const DEBOUNCE_DELAY_MS = 100; // Delay for slider debouncing
@@ -215,9 +216,9 @@ function generateGeometry() {
   const quadIndices = new Uint32Array(numPixels * 6); // 2 triangles per quad
   
   // Approximate quad size based on HEALPix resolution (moved outside loop)
-  // For HEALPix, each pixel subtends approximately sqrt(4π / npix) radians
-  // But we want a smaller quad, so divide by 2 for half-size quads
-  const quadSize = Math.sqrt(4 * Math.PI / (12 * NSIDE * NSIDE)) / 2;
+  // For HEALPix, each pixel subtends approximately sqrt(4π / npix) radians (angular diameter)
+  // Divide by 2 for half-size quads to avoid overlap between neighboring pixels
+  const quadSize = Math.sqrt(4 * Math.PI / (HEALPIX_BASE_FACES * NSIDE * NSIDE)) / 2;
   
   for (let i = 0; i < numPixels; i++) {
     const [theta, phi] = healpixNestedToSpherical(NSIDE, i);
