@@ -221,8 +221,9 @@ function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
     // Convert to longitude/latitude for geoDelaunay
     // theta is colatitude [0, π], phi is longitude [0, 2π]
     // latitude = 90° - theta (in degrees)
-    // longitude = phi (in degrees)
-    const longitude = (phi * 180 / Math.PI) - 180; // Convert to [-180, 180]
+    // longitude = phi (in degrees), then convert to [-180, 180]
+    let longitude = phi * 180 / Math.PI; // Convert to [0, 360]
+    if (longitude > 180) longitude -= 360; // Convert to [-180, 180]
     const latitude = 90 - (theta * 180 / Math.PI);  // Convert to [-90, 90]
     lonLatPoints.push([longitude, latitude]);
     
