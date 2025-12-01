@@ -1,12 +1,14 @@
-# Spherical Harmonics Lava Lamp
+# Spherical Harmonics Visualizations
 
-An interactive 3D visualization of spherical harmonics evolving on a sphere via an Ornstein-Uhlenbeck process, creating organic, lava lamp-like morphing shapes.
+Interactive 3D visualizations demonstrating spherical harmonic functions through WebGL and custom shaders.
 
 **[View Live Demo](https://comfy-quokka-337655.netlify.app)**
 
-## What It Does
+## Demos
 
-This project renders a real-time 3D shape defined by spherical harmonic basis functions. The shape continuously morphs using physics-based motion:
+### 🌊 SH Flow (Lava Lamp)
+
+A real-time 3D shape with coefficients evolving via an Ornstein-Uhlenbeck process, creating organic, lava lamp-like morphing.
 
 - **Position** `x ∈ R¹⁵` represents 15 spherical harmonic coefficients (l=1 through l=3)
 - **Velocity** `v ∈ R¹⁵` evolves via Ornstein-Uhlenbeck process: `dv = -θv dt + σ√dt dW`
@@ -14,71 +16,121 @@ This project renders a real-time 3D shape defined by spherical harmonic basis fu
 - The shape's radius at each direction is `r = |f(θ,φ)|` where f is the spherical harmonic function
 - Colors indicate sign: red/orange for positive values, teal/blue for negative
 
+### 🌍 Earth Topography
+
+Earth surface elevation rendered using spherical harmonic decomposition on a subdivided icosahedron.
+
+- Select different harmonic truncation levels (lmax: 4 to 2160) to see approximation quality
+- Higher lmax values include more coefficients for finer detail
+- Visualizes how spherical harmonics can represent real-world geographic data
+- Interactive time-of-day lighting based on your timezone
+- Relief slider to adjust topographic exaggeration
+
+### 🪨 Bedrock Elevation
+
+Earth's bedrock topography including ocean bathymetry and sub-ice terrain, visualized with spherical harmonics.
+
+- Green indicates elevation above sea level
+- Blue shows areas below sea level (ocean floors, sub-ice topography)
+- Reveals the true shape of Earth's crust beneath water and ice
+- Adjustable relief to emphasize topographic features
+
 ## Features
 
-### Visualization
-- Real-time morphing 3D shape with dual-light setup
-- Color-coded surface (positive/negative values)
+### Common Features (All Demos)
+- Real-time WebGL rendering with Three.js
+- Custom GLSL shaders for spherical harmonic evaluation
 - Smooth camera controls (orbit, zoom, pan)
+- Mobile-friendly touch controls
+- Responsive design
+
+### SH Flow Specific
+- **Physics Controls**
+  - **θ (theta)**: Mean reversion rate (0-2) - controls damping/smoothness
+  - **σ (sigma)**: Volatility/noise (0-1) - controls chaos/energy
+- Hamburger menu for parameter adjustment
 - Optional wireframe mode
 - Live coefficient display (all 15 values)
+- Dual-light setup with ambient lighting
 
-### Physics Controls
-- **θ (theta)**: Mean reversion rate (0-2)
-  - Higher = faster damping, smoother motion
-  - Lower = more persistent momentum
-- **σ (sigma)**: Volatility/noise (0-1)
-  - Higher = more chaotic, energetic motion
-  - Lower = calmer evolution
-
-### Mobile-Friendly UI
-- Hamburger menu at bottom center
-- Touch-optimized controls
-- Adjustable OU process parameters
-- Wireframe toggle
+### Earth & Bedrock Specific
+- Icosahedral mesh with adaptive subdivision levels
+- Spherical harmonic coefficient-based topography (BSHC format)
+- Real geographic data visualization
+- Color-coded elevation mapping
+- Relief control for topographic exaggeration
+- Selectable truncation levels (lmax) to compare approximations
 
 ## Technical Details
 
 ### Spherical Harmonics
-The shape uses real spherical harmonics up to l=3 (f orbitals):
+
+**SH Flow Demo:**
+- Uses real spherical harmonics up to l=3 (f orbitals)
 - l=1 (p orbitals): 3 coefficients
 - l=2 (d orbitals): 5 coefficients
 - l=3 (f orbitals): 7 coefficients
 - Total: 15 active coefficients evolving on the 14-sphere
+- l=0 term (Y₀⁰) fixed at 0 for balanced red/blue coloring
 
-The l=0 term (Y₀⁰) is fixed at 0 for balanced red/blue coloring.
+**Earth & Bedrock Demos:**
+- Variable truncation levels from lmax=4 to lmax=2160
+- Higher lmax provides more detail: lmax=2160 uses over 4.5 million coefficients
+- Data stored in BSHC (spherical harmonic coefficient) format
+- Demonstrates approximation quality at different resolutions
 
-### Physics Simulation
-The evolution uses an Ornstein-Uhlenbeck process with:
+### Physics Simulation (SH Flow)
+Ornstein-Uhlenbeck process for smooth, organic motion:
 - Gaussian noise generation (Box-Muller transform)
 - Frame-rate independent timestep (capped at 100ms)
 - Sphere constraint via normalization after each update
 - Proper Wiener process scaling: `σ√dt`
 
 ### Rendering
+
+**All Demos:**
 - WebGL with Three.js
 - Custom GLSL shaders for spherical harmonic evaluation
-- Vertex displacement: `r = |f(θ,φ)| × scale`
-- Two-point lighting (key + fill) with ambient
+- Vertex displacement based on harmonic functions
+
+**SH Flow:**
 - Base geometry: Icosahedron with 64 subdivisions
+- Two-point lighting (key + fill) with ambient
+- Vertex displacement: `r = |f(θ,φ)| × scale`
+
+**Earth & Bedrock:**
+- Procedurally generated icosahedral mesh (2-9 subdivision levels)
+- Adaptive subdivision based on Nyquist frequency: `sqrt(vertices)/2 >= lmax`
+- Web Worker support for large meshes (subdivision >= 7)
+- Dynamic time-of-day lighting (Earth only)
 
 ## Controls
 
-### Desktop
+### Camera (All Demos)
+
+**Desktop:**
 - **Left-click + drag**: Rotate view
 - **Scroll**: Zoom in/out
 - **Right-click + drag**: Pan camera
 
-### Mobile
+**Mobile:**
 - **One finger drag**: Rotate view
 - **Pinch**: Zoom in/out
 - **Two finger drag**: Pan camera
 
-### Settings Menu
-1. Tap hamburger button (⋮) at bottom
-2. Select parameter to adjust or toggle wireframe
-3. For θ/σ: Use slider to change value
-4. Tap "← Back" to return to menu
+### SH Flow Settings
+- **Hamburger button (⋮)**: Opens settings menu
+- **θ (theta)**: Mean reversion rate slider
+- **σ (sigma)**: Volatility slider
+- **Wireframe**: Toggle wireframe rendering
+- **Max Harmonic Order**: Adjust active spherical harmonic levels
+
+### Earth & Bedrock Settings
+- **lmax**: Select truncation level (4, 8, 16, 32, 64, 128, 360, 2160)
+- **Relief**: Adjust topographic exaggeration
+- **Wireframe**: Toggle wireframe rendering
+- **Axes**: Show/hide polar axis and equator ring
+- **Time slider** (Earth only): Adjust sun position (0-24 hours)
 
 ## Local Development
 
