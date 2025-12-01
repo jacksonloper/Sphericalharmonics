@@ -59,6 +59,7 @@ let lineSegments = null;
 let material = null;
 let geometryData = null; // Store data for regeneration
 let alphaValue = 0.1; // Default alpha value
+let regenerateTimeout = null; // For debouncing slider updates
 
 /**
  * Convert HEALPix NESTED pixel index to (theta, phi) in spherical coordinates
@@ -203,6 +204,7 @@ function generateGeometry() {
   if (lineSegments) {
     scene.remove(lineSegments);
     lineSegments.geometry.dispose();
+    // Material is reused, so don't dispose it
   }
   
   // Create line segments (NO rotation - Earth should be upright)
@@ -259,8 +261,14 @@ function addControlPanel() {
     
     if (material) {
       material.uniforms.alpha.value = newAlpha;
-      // Regenerate geometry with new alpha value
-      generateGeometry();
+      
+      // Debounce geometry regeneration to avoid excessive computation
+      if (regenerateTimeout) {
+        clearTimeout(regenerateTimeout);
+      }
+      regenerateTimeout = setTimeout(() => {
+        generateGeometry();
+      }, 100); // Regenerate 100ms after user stops moving slider
     }
   });
 
