@@ -59,7 +59,10 @@ document.body.appendChild(loadingDiv);
 
 // Global state
 let lineSegments = null;
+let quadMesh = null;
+let innerSphere = null;
 let material = null;
+let quadMaterial = null;
 let geometryData = null; // Store data for regeneration
 let alphaValue = 0.1; // Default alpha value
 let regenerateTimeout = null; // For debouncing slider updates
@@ -92,10 +95,11 @@ function sphericalToCartesian(theta, phi, r = 1.0) {
   const sinPhi = Math.sin(phi);
   const cosPhi = Math.cos(phi);
   
+  // Standard right-handed spherical coordinates
   return [
     r * sinTheta * cosPhi,
-    r * cosTheta,
-    r * sinTheta * sinPhi
+    r * sinTheta * sinPhi,
+    r * cosTheta
   ];
 }
 
@@ -113,6 +117,7 @@ async function loadAndVisualize() {
     // Extract min, mean, max arrays
     const numPixels = data.shape[0];
     const minVals = new Float32Array(numPixels);
+    const meanVals = new Float32Array(numPixels);
     const maxVals = new Float32Array(numPixels);
     
     let globalMin = Infinity;
@@ -120,8 +125,10 @@ async function loadAndVisualize() {
     
     for (let i = 0; i < numPixels; i++) {
       const minVal = data.data[i * 3 + 0];
-      const maxVal = data.data[i * 3 + 2]; // Skip mean for now
+      const meanVal = data.data[i * 3 + 1];
+      const maxVal = data.data[i * 3 + 2];
       minVals[i] = minVal;
+      meanVals[i] = meanVal;
       maxVals[i] = maxVal;
       
       if (minVal < globalMin) globalMin = minVal;
@@ -138,21 +145,31 @@ async function loadAndVisualize() {
     geometryData = {
       numPixels,
       minVals,
+      meanVals,
       maxVals,
       globalMin,
       globalMax,
       maxAbsElevation
     };
     
-    // Create material
+    // Create material for line segments
     material = createEtopoRangeMaterial(globalMin, globalMax, maxAbsElevation);
+    
+    // Create inner non-transparent sphere at radius 0.4
+    const innerSphereGeometry = new THREE.SphereGeometry(0.4, 64, 64);
+    const innerSphereMaterial = new THREE.MeshBasicMaterial({
+      color: 0x1a1a1a,
+      side: THREE.BackSide
+    });
+    innerSphere = new THREE.Mesh(innerSphereGeometry, innerSphereMaterial);
+    scene.add(innerSphere);
     
     // Generate initial geometry
     generateGeometry();
     
     loadingDiv.style.display = 'none';
     
-    console.log(`Rendered ${numPixels.toLocaleString()} line segments`);
+    console.log(`Rendered ${numPixels.toLocaleString()} line segments and quads`);
   } catch (error) {
     console.error('Failed to load data:', error);
     loadingDiv.innerHTML = 'Failed: ' + error.message;
@@ -169,6 +186,11 @@ function cleanupOldGeometry() {
     lineSegments.geometry.dispose();
     // Material is reused, so don't dispose it
   }
+  if (quadMesh) {
+    scene.remove(quadMesh);
+    quadMesh.geometry.dispose();
+    // Quad material is reused, so don't dispose it
+  }
 }
 
 /**
@@ -177,49 +199,110 @@ function cleanupOldGeometry() {
 function generateGeometry() {
   if (!geometryData) return;
   
-  const { numPixels, minVals, maxVals, maxAbsElevation } = geometryData;
+  const { numPixels, minVals, meanVals, maxVals, maxAbsElevation } = geometryData;
   
   // Create geometry for line segments
   // Each HEALPix pixel becomes one line segment from min to max
-  const positions = new Float32Array(numPixels * 2 * 3); // 2 vertices per line
-  const elevations = new Float32Array(numPixels * 2);
+  const linePositions = new Float32Array(numPixels * 2 * 3); // 2 vertices per line
+  const lineElevations = new Float32Array(numPixels * 2);
+  
+  // Create geometry for quads at mean elevation
+  // Each HEALPix pixel becomes a small quad
+  const quadPositions = new Float32Array(numPixels * 4 * 3); // 4 vertices per quad
+  const quadElevations = new Float32Array(numPixels * 4);
+  const quadIndices = new Uint32Array(numPixels * 6); // 2 triangles per quad
+  
+  // Approximate quad size based on HEALPix resolution
+  const quadSize = Math.PI / (2 * NSIDE); // Angular size approximation
   
   for (let i = 0; i < numPixels; i++) {
     const [theta, phi] = healpixNestedToSpherical(NSIDE, i);
     
     const minElev = minVals[i];
+    const meanElev = meanVals[i];
     const maxElev = maxVals[i];
     
-    // Calculate radii using new formula: r = 1 + alpha * e / maxAbsElevation
+    // Calculate radii using formula: r = 1 + alpha * e / maxAbsElevation
     const rMin = 1.0 + alphaValue * minElev / maxAbsElevation;
+    const rMean = 1.0 + alphaValue * meanElev / maxAbsElevation;
     const rMax = 1.0 + alphaValue * maxElev / maxAbsElevation;
     
     // Create line segment from min to max
     const [x1, y1, z1] = sphericalToCartesian(theta, phi, rMin);
     const [x2, y2, z2] = sphericalToCartesian(theta, phi, rMax);
     
-    const idx = i * 6;
-    positions[idx + 0] = x1;
-    positions[idx + 1] = y1;
-    positions[idx + 2] = z1;
-    positions[idx + 3] = x2;
-    positions[idx + 4] = y2;
-    positions[idx + 5] = z2;
+    const lineIdx = i * 6;
+    linePositions[lineIdx + 0] = x1;
+    linePositions[lineIdx + 1] = y1;
+    linePositions[lineIdx + 2] = z1;
+    linePositions[lineIdx + 3] = x2;
+    linePositions[lineIdx + 4] = y2;
+    linePositions[lineIdx + 5] = z2;
     
-    elevations[i * 2 + 0] = minElev;
-    elevations[i * 2 + 1] = maxElev;
+    lineElevations[i * 2 + 0] = minElev;
+    lineElevations[i * 2 + 1] = maxElev;
+    
+    // Create quad at mean elevation
+    // Approximate corners by offsetting theta and phi
+    const dTheta = quadSize;
+    const dPhi = quadSize / Math.sin(theta); // Adjust for latitude
+    
+    const corners = [
+      [theta - dTheta/2, phi - dPhi/2],
+      [theta - dTheta/2, phi + dPhi/2],
+      [theta + dTheta/2, phi + dPhi/2],
+      [theta + dTheta/2, phi - dPhi/2]
+    ];
+    
+    const quadIdx = i * 12;
+    for (let j = 0; j < 4; j++) {
+      const [thetaCorner, phiCorner] = corners[j];
+      const [x, y, z] = sphericalToCartesian(thetaCorner, phiCorner, rMean);
+      const vIdx = (i * 4 + j) * 3;
+      quadPositions[vIdx + 0] = x;
+      quadPositions[vIdx + 1] = y;
+      quadPositions[vIdx + 2] = z;
+      quadElevations[i * 4 + j] = meanElev;
+    }
+    
+    // Create two triangles for the quad
+    const baseIdx = i * 4;
+    const triIdx = i * 6;
+    quadIndices[triIdx + 0] = baseIdx + 0;
+    quadIndices[triIdx + 1] = baseIdx + 1;
+    quadIndices[triIdx + 2] = baseIdx + 2;
+    quadIndices[triIdx + 3] = baseIdx + 0;
+    quadIndices[triIdx + 4] = baseIdx + 2;
+    quadIndices[triIdx + 5] = baseIdx + 3;
   }
   
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute('elevation', new THREE.BufferAttribute(elevations, 1));
+  // Create line segments geometry
+  const lineGeometry = new THREE.BufferGeometry();
+  lineGeometry.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
+  lineGeometry.setAttribute('elevation', new THREE.BufferAttribute(lineElevations, 1));
+  
+  // Create quad mesh geometry
+  const quadGeometry = new THREE.BufferGeometry();
+  quadGeometry.setAttribute('position', new THREE.BufferAttribute(quadPositions, 3));
+  quadGeometry.setAttribute('elevation', new THREE.BufferAttribute(quadElevations, 1));
+  quadGeometry.setIndex(new THREE.BufferAttribute(quadIndices, 1));
   
   // Clean up old geometry before creating new one
   cleanupOldGeometry();
   
   // Create line segments (NO rotation - Earth should be upright)
-  lineSegments = new THREE.LineSegments(geometry, material);
+  lineSegments = new THREE.LineSegments(lineGeometry, material);
   scene.add(lineSegments);
+  
+  // Create semitransparent quad mesh at mean elevations
+  if (!quadMaterial) {
+    quadMaterial = createEtopoRangeMaterial(geometryData.globalMin, geometryData.globalMax, geometryData.maxAbsElevation);
+    quadMaterial.transparent = true;
+    quadMaterial.opacity = 0.3;
+    quadMaterial.side = THREE.DoubleSide;
+  }
+  quadMesh = new THREE.Mesh(quadGeometry, quadMaterial);
+  scene.add(quadMesh);
 }
 
 function addControlPanel() {
