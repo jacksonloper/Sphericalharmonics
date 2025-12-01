@@ -321,7 +321,7 @@ function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
   geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));     // Precomputed normals
   geometry.setAttribute('elevation', new THREE.BufferAttribute(elevations, 1));
   
-  // Convert indices array to Uint32Array for Three.js
+  // Set indices for mesh connectivity
   if (indices.length > 0) {
     geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(indices), 1));
   }

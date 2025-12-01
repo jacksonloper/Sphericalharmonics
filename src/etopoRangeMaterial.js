@@ -67,7 +67,7 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
       }
 
       // Simple lighting using precomputed normals
-      // The normals are slightly off because they were computed at alpha=0.11
+      // The normals are slightly off because they were computed at MESH_GENERATION_ALPHA (0.11)
       // but vertices are displaced at current alpha, but that's okay per spec
       vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0));
       float diffuse = max(dot(vNormal, lightDir), 0.0);
