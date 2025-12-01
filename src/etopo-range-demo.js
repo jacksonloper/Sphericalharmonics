@@ -207,8 +207,8 @@ function generateGeometry() {
   const linePositions = new Float32Array(numPixels * 2 * 3); // 2 vertices per line
   const lineElevations = new Float32Array(numPixels * 2);
   
-  // Create geometry for quads at mean elevation
-  // Each HEALPix pixel becomes a small quad
+  // Create geometry for quads at min elevation
+  // Each HEALPix pixel becomes a small quad at its minimum elevation
   const quadPositions = new Float32Array(numPixels * 4 * 3); // 4 vertices per quad
   const quadElevations = new Float32Array(numPixels * 4);
   const quadIndices = new Uint32Array(numPixels * 6); // 2 triangles per quad
