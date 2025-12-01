@@ -8,6 +8,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
 import { createEtopoRangeMaterial } from './etopoRangeMaterial.js';
 import { load } from 'npyjs';
 import { pix2ang_nest } from '@hscmap/healpix';
@@ -192,7 +193,7 @@ async function loadAndVisualize() {
  * Generate HEALPix mesh directly in main thread using healpix library
  * Implements the correct approach:
  * 1. Generate positions on sphere
- * 2. Create mesh using Three.js (watertight)
+ * 2. Create mesh using Three.js ConvexGeometry (watertight, handles tricky boundaries)
  * 3. Displace vertices temporarily
  * 4. Compute normals from displaced geometry
  * 5. Undisplace vertices (back to sphere)
@@ -202,86 +203,68 @@ async function loadAndVisualize() {
 function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
   const numPixels = NPIX;
   
-  // Step 1: Generate vertex positions on unit sphere
-  const positions = new Float32Array(numPixels * 3);
-  const elevations = new Float32Array(numPixels);
-  
+  // Step 1: Generate vertex positions on unit sphere as THREE.Vector3 array
   console.log('Step 1: Generating vertex positions on sphere...');
+  
+  const points = [];
+  const elevations = new Float32Array(numPixels);
   
   for (let i = 0; i < numPixels; i++) {
     const { theta, phi } = pix2ang_nest(NSIDE, i);
     const [x, y, z] = sphericalToCartesian(theta, phi, 1.0);
     
-    positions[i * 3] = x;
-    positions[i * 3 + 1] = y;
-    positions[i * 3 + 2] = z;
+    points.push(new THREE.Vector3(x, y, z));
     
     // Store min elevation for this pixel
     elevations[i] = elevationData[i * 3 + 0];
   }
   
-  // Step 2: Generate mesh indices using HEALPix grid structure (watertight mesh)
-  console.log('Step 2: Generating watertight mesh connectivity...');
-  const indices = [];
-  const npface = NSIDE * NSIDE;
+  // Step 2: Use ConvexGeometry to create watertight mesh (handles boundaries correctly)
+  console.log('Step 2: Creating watertight convex hull mesh...');
+  const convexGeometry = new ConvexGeometry(points);
   
-  // For each of the 12 base faces
-  for (let face = 0; face < 12; face++) {
-    // Create quads within each face
-    for (let iy = 0; iy < NSIDE - 1; iy++) {
-      for (let ix = 0; ix < NSIDE - 1; ix++) {
-        // Get the 4 corners of the quad in NESTED ordering
-        // This needs to respect the NESTED bit-interleaved structure
-        const getNestedIndex = (face, ix, iy) => {
-          // Convert (ix, iy) to NESTED index within face
-          let ipf = 0;
-          for (let bit = 0; bit < 16; bit++) {
-            ipf |= ((ix >> bit) & 1) << (2 * bit);
-            ipf |= ((iy >> bit) & 1) << (2 * bit + 1);
-          }
-          return face * npface + ipf;
-        };
-        
-        const i1 = getNestedIndex(face, ix, iy);
-        const i2 = getNestedIndex(face, ix + 1, iy);
-        const i3 = getNestedIndex(face, ix + 1, iy + 1);
-        const i4 = getNestedIndex(face, ix, iy + 1);
-        
-        // Create two triangles for the quad
-        if (i1 < numPixels && i2 < numPixels && i3 < numPixels && i4 < numPixels) {
-          indices.push(i1, i2, i3);
-          indices.push(i1, i3, i4);
-        }
-      }
-    }
-  }
+  // ConvexGeometry uses non-indexed geometry, so we need to handle it differently
+  const positions = convexGeometry.attributes.position.array;
+  const numVertices = positions.length / 3;
   
-  console.log(`Generated ${indices.length / 3} triangles (watertight mesh)`);
+  console.log(`Generated ${numVertices} vertices, ${numVertices / 3} triangles (watertight convex hull)`);
   
   // Step 3: Displace vertices temporarily based on elevation
   console.log('Step 3: Temporarily displacing vertices with elevation data...');
   const displacedPositions = new Float32Array(positions.length);
   const alpha = MESH_GENERATION_ALPHA;
   
+  // Create mapping from positions to original HEALPix indices for elevation lookup
+  const positionToElevation = new Map();
   for (let i = 0; i < numPixels; i++) {
+    const key = `${points[i].x.toFixed(8)},${points[i].y.toFixed(8)},${points[i].z.toFixed(8)}`;
+    positionToElevation.set(key, elevations[i]);
+  }
+  
+  // Create elevation array matching convex geometry vertices
+  const vertexElevations = new Float32Array(numVertices);
+  for (let i = 0; i < numVertices; i++) {
     const x = positions[i * 3];
     const y = positions[i * 3 + 1];
     const z = positions[i * 3 + 2];
     
-    const elevation = elevations[i];
-    const r = 1.0 + alpha * elevation / maxAbsElevation;
+    const key = `${x.toFixed(8)},${y.toFixed(8)},${z.toFixed(8)}`;
+    const elevation = positionToElevation.get(key) || 0;
+    vertexElevations[i] = elevation;
     
+    const r = 1.0 + alpha * elevation / maxAbsElevation;
     displacedPositions[i * 3] = x * r;
     displacedPositions[i * 3 + 1] = y * r;
     displacedPositions[i * 3 + 2] = z * r;
   }
   
-  // Step 4: Compute normals from displaced geometry
+  // Step 4: Compute normals from displaced geometry (non-indexed)
   console.log('Step 4: Computing normals from displaced geometry...');
-  const normals = new Float32Array(numPixels * 3);
+  const normals = new Float32Array(numVertices * 3);
   
-  for (let i = 0; i < indices.length; i += 3) {
-    const i1 = indices[i], i2 = indices[i + 1], i3 = indices[i + 2];
+  // For non-indexed geometry, every 3 vertices form a triangle
+  for (let i = 0; i < numVertices; i += 3) {
+    const i1 = i, i2 = i + 1, i3 = i + 2;
     
     const ax = displacedPositions[i1 * 3], ay = displacedPositions[i1 * 3 + 1], az = displacedPositions[i1 * 3 + 2];
     const bx = displacedPositions[i2 * 3], by = displacedPositions[i2 * 3 + 1], bz = displacedPositions[i2 * 3 + 2];
@@ -294,24 +277,19 @@ function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
     const ny = e1z * e2x - e1x * e2z;
     const nz = e1x * e2y - e1y * e2x;
     
-    normals[i1 * 3] += nx; normals[i1 * 3 + 1] += ny; normals[i1 * 3 + 2] += nz;
-    normals[i2 * 3] += nx; normals[i2 * 3 + 1] += ny; normals[i2 * 3 + 2] += nz;
-    normals[i3 * 3] += nx; normals[i3 * 3 + 1] += ny; normals[i3 * 3 + 2] += nz;
+    // Normalize the face normal
+    const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    const fnx = len > 0 ? nx / len : 0;
+    const fny = len > 0 ? ny / len : 0;
+    const fnz = len > 0 ? nz / len : 0;
+    
+    // Assign the same normal to all three vertices of the triangle
+    normals[i1 * 3] = fnx; normals[i1 * 3 + 1] = fny; normals[i1 * 3 + 2] = fnz;
+    normals[i2 * 3] = fnx; normals[i2 * 3 + 1] = fny; normals[i2 * 3 + 2] = fnz;
+    normals[i3 * 3] = fnx; normals[i3 * 3 + 1] = fny; normals[i3 * 3 + 2] = fnz;
   }
   
-  // Normalize normals
-  for (let i = 0; i < numPixels; i++) {
-    const x = normals[i * 3], y = normals[i * 3 + 1], z = normals[i * 3 + 2];
-    const len = Math.sqrt(x * x + y * y + z * z);
-    if (len > 0) {
-      normals[i * 3] /= len;
-      normals[i * 3 + 1] /= len;
-      normals[i * 3 + 2] /= len;
-    }
-  }
-  
-  // Step 5: Vertices are already back on the sphere (we kept 'positions' unchanged)
-  // The key insight: we use 'positions' (sphere) for geometry, not 'displacedPositions'
+  // Step 5: Vertices are already back on the sphere (positions from convex hull)
   console.log('Step 5: Using undisplaced sphere positions with precomputed normals...');
   
   // Step 6: Create Three.js geometry with sphere positions and precomputed normals
@@ -319,12 +297,9 @@ function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3)); // Sphere positions
   geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));     // Precomputed normals
-  geometry.setAttribute('elevation', new THREE.BufferAttribute(elevations, 1));
+  geometry.setAttribute('elevation', new THREE.BufferAttribute(vertexElevations, 1));
   
-  // Set indices for mesh connectivity
-  if (indices.length > 0) {
-    geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(indices), 1));
-  }
+  // ConvexGeometry produces non-indexed triangles, so no index buffer needed
   
   // Create mesh material
   const meshMaterial = material;
@@ -340,7 +315,7 @@ function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
     generateLineSegments();
   }
   
-  console.log(`HEALPix mesh added: ${numPixels} vertices, ${indices.length / 3} triangles`);
+  console.log(`HEALPix mesh added: ${numVertices} vertices, ${numVertices / 3} triangles`);
   console.log('Vertex shader will handle displacement based on alpha uniform');
 }
 
