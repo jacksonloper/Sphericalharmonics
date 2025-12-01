@@ -57,6 +57,8 @@ document.body.appendChild(loadingDiv);
 // Global state
 let lineSegments = null;
 let material = null;
+let geometryData = null; // Store data for regeneration
+let alphaValue = 0.1; // Default alpha value
 
 /**
  * Convert HEALPix NESTED pixel index to (theta, phi) in spherical coordinates
@@ -122,54 +124,27 @@ async function loadAndVisualize() {
       if (maxVal > globalMax) globalMax = maxVal;
     }
     
+    // Calculate max absolute elevation
+    const maxAbsElevation = Math.max(Math.abs(globalMin), Math.abs(globalMax));
+    
     console.log(`Elevation range: ${globalMin.toFixed(2)}m to ${globalMax.toFixed(2)}m`);
+    console.log(`Max absolute elevation: ${maxAbsElevation.toFixed(2)}m`);
     
-    // Create geometry for line segments
-    // Each HEALPix pixel becomes one line segment from min to max
-    const positions = new Float32Array(numPixels * 2 * 3); // 2 vertices per line
-    const elevations = new Float32Array(numPixels * 2);
-    
-    const alpha = 0.75;
-    
-    for (let i = 0; i < numPixels; i++) {
-      const [theta, phi] = healpixNestedToSpherical(NSIDE, i);
-      
-      const minElev = minVals[i];
-      const maxElev = maxVals[i];
-      
-      // Calculate radii for min and max elevations
-      const absMin = Math.abs(minElev);
-      const absMax = Math.abs(maxElev);
-      const rMin = alpha + (1.0 - alpha) * absMin / 6000.0;
-      const rMax = alpha + (1.0 - alpha) * absMax / 6000.0;
-      
-      // Create line segment from min to max
-      const [x1, y1, z1] = sphericalToCartesian(theta, phi, rMin);
-      const [x2, y2, z2] = sphericalToCartesian(theta, phi, rMax);
-      
-      const idx = i * 6;
-      positions[idx + 0] = x1;
-      positions[idx + 1] = y1;
-      positions[idx + 2] = z1;
-      positions[idx + 3] = x2;
-      positions[idx + 4] = y2;
-      positions[idx + 5] = z2;
-      
-      elevations[i * 2 + 0] = minElev;
-      elevations[i * 2 + 1] = maxElev;
-    }
-    
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('elevation', new THREE.BufferAttribute(elevations, 1));
+    // Store data for regeneration when slider changes
+    geometryData = {
+      numPixels,
+      minVals,
+      maxVals,
+      globalMin,
+      globalMax,
+      maxAbsElevation
+    };
     
     // Create material
-    material = createEtopoRangeMaterial(globalMin, globalMax);
+    material = createEtopoRangeMaterial(globalMin, globalMax, maxAbsElevation);
     
-    // Create line segments
-    lineSegments = new THREE.LineSegments(geometry, material);
-    lineSegments.rotation.x = -Math.PI / 2; // Align poles with Y axis
-    scene.add(lineSegments);
+    // Generate initial geometry
+    generateGeometry();
     
     loadingDiv.style.display = 'none';
     
@@ -179,6 +154,60 @@ async function loadAndVisualize() {
     loadingDiv.innerHTML = 'Failed: ' + error.message;
     loadingDiv.style.color = '#ff4444';
   }
+}
+
+/**
+ * Generate or regenerate line segment geometry based on current alpha value
+ */
+function generateGeometry() {
+  if (!geometryData) return;
+  
+  const { numPixels, minVals, maxVals, maxAbsElevation } = geometryData;
+  
+  // Create geometry for line segments
+  // Each HEALPix pixel becomes one line segment from min to max
+  const positions = new Float32Array(numPixels * 2 * 3); // 2 vertices per line
+  const elevations = new Float32Array(numPixels * 2);
+  
+  for (let i = 0; i < numPixels; i++) {
+    const [theta, phi] = healpixNestedToSpherical(NSIDE, i);
+    
+    const minElev = minVals[i];
+    const maxElev = maxVals[i];
+    
+    // Calculate radii using new formula: r = 1 + alpha * e / maxAbsElevation
+    const rMin = 1.0 + alphaValue * minElev / maxAbsElevation;
+    const rMax = 1.0 + alphaValue * maxElev / maxAbsElevation;
+    
+    // Create line segment from min to max
+    const [x1, y1, z1] = sphericalToCartesian(theta, phi, rMin);
+    const [x2, y2, z2] = sphericalToCartesian(theta, phi, rMax);
+    
+    const idx = i * 6;
+    positions[idx + 0] = x1;
+    positions[idx + 1] = y1;
+    positions[idx + 2] = z1;
+    positions[idx + 3] = x2;
+    positions[idx + 4] = y2;
+    positions[idx + 5] = z2;
+    
+    elevations[i * 2 + 0] = minElev;
+    elevations[i * 2 + 1] = maxElev;
+  }
+  
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('elevation', new THREE.BufferAttribute(elevations, 1));
+  
+  // Remove old line segments if they exist
+  if (lineSegments) {
+    scene.remove(lineSegments);
+    lineSegments.geometry.dispose();
+  }
+  
+  // Create line segments (NO rotation - Earth should be upright)
+  lineSegments = new THREE.LineSegments(geometry, material);
+  scene.add(lineSegments);
 }
 
 function addControlPanel() {
@@ -199,11 +228,45 @@ function addControlPanel() {
   panel.style.flexWrap = 'wrap';
   panel.style.justifyContent = 'center';
 
-  // Info text
-  const infoText = document.createElement('span');
-  infoText.textContent = 'Drag to rotate • Scroll to zoom';
-  infoText.style.color = '#4ecdc4';
-  panel.appendChild(infoText);
+  // Relief slider
+  const reliefGroup = document.createElement('div');
+  reliefGroup.style.display = 'flex';
+  reliefGroup.style.alignItems = 'center';
+  reliefGroup.style.gap = '8px';
+
+  const reliefLabel = document.createElement('span');
+  reliefLabel.textContent = 'Relief:';
+  reliefGroup.appendChild(reliefLabel);
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = '0.01';
+  slider.max = '0.5';
+  slider.step = '0.01';
+  slider.value = '0.1';
+  slider.style.width = '120px';
+  slider.style.cursor = 'pointer';
+
+  const valueDisplay = document.createElement('span');
+  valueDisplay.textContent = slider.value;
+  valueDisplay.style.minWidth = '35px';
+  valueDisplay.style.color = '#4ecdc4';
+
+  slider.addEventListener('input', (e) => {
+    const newAlpha = parseFloat(e.target.value);
+    valueDisplay.textContent = newAlpha.toFixed(2);
+    alphaValue = newAlpha;
+    
+    if (material) {
+      material.uniforms.alpha.value = newAlpha;
+      // Regenerate geometry with new alpha value
+      generateGeometry();
+    }
+  });
+
+  reliefGroup.appendChild(slider);
+  reliefGroup.appendChild(valueDisplay);
+  panel.appendChild(reliefGroup);
 
   document.body.appendChild(panel);
 }

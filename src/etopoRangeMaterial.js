@@ -14,19 +14,20 @@ import * as THREE from 'three';
  * @param {number} maxElevation - Maximum elevation value (default 9000m for ETOPO surface data)
  * @returns {THREE.ShaderMaterial} Material with elevation-based coloring
  */
-export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9000) {
+export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9000, maxAbsElevation = 11000) {
   const vertexShader = `
     attribute float elevation;
     uniform float alpha;
+    uniform float maxAbsElevation;
     varying float vElevation;
     varying vec3 vPosition;
 
     void main() {
       vElevation = elevation;
 
-      // Compute radial displacement: r = alpha + (1-alpha)|e|/6000
-      float absE = abs(elevation);
-      float radius = alpha + (1.0 - alpha) * absE / 6000.0;
+      // Compute radial displacement: r = 1 + alpha * e / maxAbsElevation
+      // Depths (negative) point inward, heights (positive) point outward
+      float radius = 1.0 + alpha * elevation / maxAbsElevation;
 
       // Displace vertex radially
       vec3 displacedPosition = position * radius;
@@ -67,7 +68,8 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
     uniforms: {
       minElevation: { value: minElevation },
       maxElevation: { value: maxElevation },
-      alpha: { value: 0.75 }
+      maxAbsElevation: { value: maxAbsElevation },
+      alpha: { value: 0.1 }
     },
     vertexShader,
     fragmentShader,
