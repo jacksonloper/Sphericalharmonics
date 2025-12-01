@@ -95,11 +95,12 @@ function sphericalToCartesian(theta, phi, r = 1.0) {
   const sinPhi = Math.sin(phi);
   const cosPhi = Math.cos(phi);
   
-  // Standard right-handed spherical coordinates
+  // Standard right-handed spherical coordinates with y-up convention
+  // theta=0 at north pole (positive y), phi=0 at positive x
   return [
     r * sinTheta * cosPhi,
-    r * sinTheta * sinPhi,
-    r * cosTheta
+    r * cosTheta,           // y-axis points to poles
+    r * sinTheta * sinPhi
   ];
 }
 
@@ -224,7 +225,6 @@ function generateGeometry() {
     
     // Calculate radii using formula: r = 1 + alpha * e / maxAbsElevation
     const rMin = 1.0 + alphaValue * minElev / maxAbsElevation;
-    const rMean = 1.0 + alphaValue * meanElev / maxAbsElevation;
     const rMax = 1.0 + alphaValue * maxElev / maxAbsElevation;
     
     // Create line segment from min to max
@@ -242,7 +242,7 @@ function generateGeometry() {
     lineElevations[i * 2 + 0] = minElev;
     lineElevations[i * 2 + 1] = maxElev;
     
-    // Create quad at mean elevation
+    // Create quad at min elevation (not mean)
     // Approximate corners by offsetting theta and phi
     const dTheta = quadSize;
     // Prevent division by zero at poles
@@ -258,12 +258,12 @@ function generateGeometry() {
     const quadIdx = i * 12;
     for (let j = 0; j < 4; j++) {
       const [thetaCorner, phiCorner] = corners[j];
-      const [x, y, z] = sphericalToCartesian(thetaCorner, phiCorner, rMean);
+      const [x, y, z] = sphericalToCartesian(thetaCorner, phiCorner, rMin);
       const vIdx = (i * 4 + j) * 3;
       quadPositions[vIdx + 0] = x;
       quadPositions[vIdx + 1] = y;
       quadPositions[vIdx + 2] = z;
-      quadElevations[i * 4 + j] = meanElev;
+      quadElevations[i * 4 + j] = minElev;
     }
     
     // Create two triangles for the quad
