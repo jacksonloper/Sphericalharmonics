@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Configure Git
         run: |
@@ -20,7 +22,7 @@ jobs:
 
       - name: Fast-forward production to main
         run: |
-          git fetch origin main production
+          git fetch --depth=1 origin main production
           git checkout production
           if ! git merge --ff-only origin/main; then
             echo "Error: Fast-forward merge failed. The production branch may have diverged from main."
