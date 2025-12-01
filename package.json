@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@hscmap/healpix": "^1.4.12",
+    "d3-geo-voronoi": "^2.1.0",
     "npyjs": "^1.0.4",
     "three": "^0.160.0"
   }
