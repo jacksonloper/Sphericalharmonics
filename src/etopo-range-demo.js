@@ -212,7 +212,7 @@ function generateGeometry() {
   const quadElevations = new Float32Array(numPixels * 4);
   const quadIndices = new Uint32Array(numPixels * 6); // 2 triangles per quad
   
-  // Approximate quad size based on HEALPix resolution
+  // Approximate quad size based on HEALPix resolution (moved outside loop)
   const quadSize = Math.PI / (2 * NSIDE); // Angular size approximation
   
   for (let i = 0; i < numPixels; i++) {
@@ -245,7 +245,8 @@ function generateGeometry() {
     // Create quad at mean elevation
     // Approximate corners by offsetting theta and phi
     const dTheta = quadSize;
-    const dPhi = quadSize / Math.sin(theta); // Adjust for latitude
+    // Prevent division by zero at poles
+    const dPhi = quadSize / Math.max(Math.sin(theta), 1e-6);
     
     const corners = [
       [theta - dTheta/2, phi - dPhi/2],
