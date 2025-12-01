@@ -11,6 +11,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createEtopoRangeMaterial } from './etopoRangeMaterial.js';
 import { load } from 'npyjs';
 import { pix2ang_nest } from '@hscmap/healpix';
+import * as healpix from '@hscmap/healpix';
 
 // HEALPix parameters
 const NSIDE = 128;
@@ -172,9 +173,12 @@ async function loadAndVisualize() {
     innerSphere = new THREE.Mesh(innerSphereGeometry, innerSphereMaterial);
     scene.add(innerSphere);
     
-    // Start worker to generate HEALPix mesh
+    // Generate HEALPix mesh directly (not in worker to avoid complexity)
     loadingDiv.innerHTML = 'Generating HEALPix mesh...';
-    generateHealpixMesh(data.data, maxAbsElevation);
+    setTimeout(() => {
+      generateHealpixMeshDirect(data.data, maxAbsElevation);
+      loadingDiv.style.display = 'none';
+    }, 100); // Small delay to allow loading message to display
     
   } catch (error) {
     console.error('Failed to load data:', error);
@@ -184,66 +188,141 @@ async function loadAndVisualize() {
 }
 
 /**
- * Generate HEALPix mesh using Web Worker
+ * Generate HEALPix mesh directly in main thread using healpix library
  */
-function generateHealpixMesh(elevationData, maxAbsElevation) {
-  // Create worker (not as module since it doesn't use imports)
-  meshWorker = new Worker(new URL('./healpixMeshWorker.js', import.meta.url));
+function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
+  const numPixels = NPIX;
   
-  // Handle messages from worker
-  meshWorker.onmessage = function(e) {
-    if (e.data.type === 'status') {
-      loadingDiv.innerHTML = e.data.message;
-    } else if (e.data.type === 'complete') {
-      // Reconstruct typed arrays from transferred buffers
-      const positions = new Float32Array(e.data.basePositions);
-      const indices = new Uint32Array(e.data.indices);
-      const normals = new Float32Array(e.data.normals);
-      const elevations = new Float32Array(e.data.elevations);
-      
-      console.log(`Mesh generated: ${e.data.numVertices} vertices, ${e.data.numTriangles} triangles`);
-      
-      // Create Three.js geometry
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
-      geometry.setAttribute('elevation', new THREE.BufferAttribute(elevations, 1));
-      geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-      
-      // Create mesh material (create once, reuse existing if possible)
-      const meshMaterial = material; // Reuse the existing material
-      meshMaterial.side = THREE.DoubleSide;
-      
-      // Create and add mesh to scene
-      healpixMesh = new THREE.Mesh(geometry, meshMaterial);
-      scene.add(healpixMesh);
-      
-      // Generate line segments to show max elevation (feathery extensions)
-      generateLineSegments();
-      
-      loadingDiv.style.display = 'none';
-      
-      console.log('HEALPix mesh and line segments added to scene');
-      
-      // Terminate worker
-      meshWorker.terminate();
-      meshWorker = null;
+  // Generate vertex positions on unit sphere
+  const positions = new Float32Array(numPixels * 3);
+  const elevations = new Float32Array(numPixels);
+  
+  console.log('Generating vertex positions...');
+  
+  for (let i = 0; i < numPixels; i++) {
+    const { theta, phi } = pix2ang_nest(NSIDE, i);
+    const [x, y, z] = sphericalToCartesian(theta, phi, 1.0);
+    
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+    
+    // Store min elevation for this pixel
+    elevations[i] = elevationData[i * 3 + 0];
+  }
+  
+  // Generate mesh indices using HEALPix grid structure
+  // Each base face is an nside x nside grid
+  console.log('Generating mesh connectivity...');
+  const indices = [];
+  const npface = NSIDE * NSIDE;
+  
+  // For each of the 12 base faces
+  for (let face = 0; face < 12; face++) {
+    // Create quads within each face
+    for (let iy = 0; iy < NSIDE - 1; iy++) {
+      for (let ix = 0; ix < NSIDE - 1; ix++) {
+        // Get the 4 corners of the quad in NESTED ordering
+        // This needs to respect the NESTED bit-interleaved structure
+        const getNestedIndex = (face, ix, iy) => {
+          // Convert (ix, iy) to NESTED index within face
+          let ipf = 0;
+          for (let bit = 0; bit < 16; bit++) {
+            ipf |= ((ix >> bit) & 1) << (2 * bit);
+            ipf |= ((iy >> bit) & 1) << (2 * bit + 1);
+          }
+          return face * npface + ipf;
+        };
+        
+        const i1 = getNestedIndex(face, ix, iy);
+        const i2 = getNestedIndex(face, ix + 1, iy);
+        const i3 = getNestedIndex(face, ix + 1, iy + 1);
+        const i4 = getNestedIndex(face, ix, iy + 1);
+        
+        // Create two triangles for the quad
+        if (i1 < numPixels && i2 < numPixels && i3 < numPixels && i4 < numPixels) {
+          indices.push(i1, i2, i3);
+          indices.push(i1, i3, i4);
+        }
+      }
     }
-  };
+  }
   
-  meshWorker.onerror = function(error) {
-    console.error('Worker error:', error);
-    loadingDiv.innerHTML = 'Worker error: ' + error.message;
-    loadingDiv.style.color = '#ff4444';
-  };
+  console.log(`Generated ${indices.length / 3} triangles`);
   
-  // Send data to worker
-  meshWorker.postMessage({
-    nside: NSIDE,
-    elevationData: elevationData,
-    maxAbsElevation: maxAbsElevation,
-    alpha: MESH_GENERATION_ALPHA
-  });
+  // Displace vertices and compute normals
+  console.log('Displacing vertices with elevation data...');
+  const displacedPositions = new Float32Array(positions.length);
+  const alpha = MESH_GENERATION_ALPHA;
+  
+  for (let i = 0; i < numPixels; i++) {
+    const x = positions[i * 3];
+    const y = positions[i * 3 + 1];
+    const z = positions[i * 3 + 2];
+    
+    const elevation = elevations[i];
+    const r = 1.0 + alpha * elevation / maxAbsElevation;
+    
+    displacedPositions[i * 3] = x * r;
+    displacedPositions[i * 3 + 1] = y * r;
+    displacedPositions[i * 3 + 2] = z * r;
+  }
+  
+  // Compute normals from displaced geometry
+  console.log('Computing normals...');
+  const normals = new Float32Array(numPixels * 3);
+  
+  for (let i = 0; i < indices.length; i += 3) {
+    const i1 = indices[i], i2 = indices[i + 1], i3 = indices[i + 2];
+    
+    const ax = displacedPositions[i1 * 3], ay = displacedPositions[i1 * 3 + 1], az = displacedPositions[i1 * 3 + 2];
+    const bx = displacedPositions[i2 * 3], by = displacedPositions[i2 * 3 + 1], bz = displacedPositions[i2 * 3 + 2];
+    const cx = displacedPositions[i3 * 3], cy = displacedPositions[i3 * 3 + 1], cz = displacedPositions[i3 * 3 + 2];
+    
+    const e1x = bx - ax, e1y = by - ay, e1z = bz - az;
+    const e2x = cx - ax, e2y = cy - ay, e2z = cz - az;
+    
+    const nx = e1y * e2z - e1z * e2y;
+    const ny = e1z * e2x - e1x * e2z;
+    const nz = e1x * e2y - e1y * e2x;
+    
+    normals[i1 * 3] += nx; normals[i1 * 3 + 1] += ny; normals[i1 * 3 + 2] += nz;
+    normals[i2 * 3] += nx; normals[i2 * 3 + 1] += ny; normals[i2 * 3 + 2] += nz;
+    normals[i3 * 3] += nx; normals[i3 * 3 + 1] += ny; normals[i3 * 3 + 2] += nz;
+  }
+  
+  // Normalize normals
+  for (let i = 0; i < numPixels; i++) {
+    const x = normals[i * 3], y = normals[i * 3 + 1], z = normals[i * 3 + 2];
+    const len = Math.sqrt(x * x + y * y + z * z);
+    if (len > 0) {
+      normals[i * 3] /= len;
+      normals[i * 3 + 1] /= len;
+      normals[i * 3 + 2] /= len;
+    }
+  }
+  
+  console.log('Creating Three.js geometry...');
+  
+  // Create Three.js geometry
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  geometry.setAttribute('elevation', new THREE.BufferAttribute(elevations, 1));
+  geometry.setIndex(new Uint32Array(indices));
+  
+  // Create mesh material
+  const meshMaterial = material;
+  meshMaterial.side = THREE.DoubleSide;
+  
+  // Create and add mesh to scene
+  healpixMesh = new THREE.Mesh(geometry, meshMaterial);
+  scene.add(healpixMesh);
+  
+  // Generate line segments
+  generateLineSegments();
+  
+  console.log(`HEALPix mesh added: ${numPixels} vertices, ${indices.length / 3} triangles`);
 }
 
 /**

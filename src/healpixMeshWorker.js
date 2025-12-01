@@ -1,38 +1,11 @@
 /**
  * Web Worker for generating HEALPix-based mesh geometry
- * Creates a convex hull mesh from HEALPix pixel centers and computes normals
+ * Creates mesh from HEALPix pixel centers and computes normals
  * based on elevation data
  */
 
-/**
- * Convert HEALPix NESTED pixel index to spherical coordinates
- * Simplified implementation for the worker
- */
-function pix2angNest(nside, ipix) {
-  // This is a basic implementation - ideally would use healpix library
-  // For now, using approximation
-  const npface = nside * nside;
-  const face = Math.floor(ipix / npface);
-  const ipf = ipix % npface;
-  
-  // Get coordinates within face using bit interleaving
-  let ix = 0, iy = 0;
-  for (let i = 0; i < 16; i++) {
-    ix |= ((ipf >> (2 * i)) & 1) << i;
-    iy |= ((ipf >> (2 * i + 1)) & 1) << i;
-  }
-  
-  // Convert to spherical coordinates (approximate)
-  const jr = (nside + 1) - iy;
-  const jp = ix;
-  
-  // Calculate theta (colatitude) and phi (longitude)
-  const z = 1.0 - (jr + 0.5) * 2.0 / nside / 4.0;
-  const theta = Math.acos(Math.max(-1, Math.min(1, z)));
-  const phi = (jp + 0.5) * Math.PI / (2 * nside) + face * Math.PI / 2;
-  
-  return { theta, phi };
-}
+// Import HEALPix library for proper neighbor finding
+importScripts('https://cdn.jsdelivr.net/npm/@hscmap/healpix@1.0.1/dist/healpix.min.js');
 
 /**
  * Convert spherical coordinates to Cartesian (x, y, z)
@@ -59,7 +32,7 @@ function generateHealpixCenters(nside) {
   const positions = new Float32Array(npix * 3);
   
   for (let i = 0; i < npix; i++) {
-    const { theta, phi } = pix2angNest(nside, i);
+    const { theta, phi } = healpix.pix2ang_nest(nside, i);
     const [x, y, z] = sphericalToCartesian(theta, phi, 1.0);
     
     positions[i * 3] = x;
@@ -71,32 +44,38 @@ function generateHealpixCenters(nside) {
 }
 
 /**
- * Generate indices for HEALPix mesh using Delaunay-like triangulation
- * For HEALPix, we can use the implicit connectivity
+ * Generate indices for HEALPix mesh using proper neighbor relationships
  */
 function generateHealpixIndices(nside) {
   const npix = 12 * nside * nside;
   const indices = [];
+  const processed = new Set();
   
-  // For each HEALPix pixel, find its neighbors and create triangles
-  // This is a simplified approach - proper implementation would use HEALPix neighbor functions
-  
-  const npface = nside * nside;
-  
-  for (let face = 0; face < 12; face++) {
-    for (let iy = 0; iy < nside - 1; iy++) {
-      for (let ix = 0; ix < nside - 1; ix++) {
-        // Create two triangles for each quad
-        const i1 = face * npface + iy * nside + ix;
-        const i2 = face * npface + iy * nside + (ix + 1);
-        const i3 = face * npface + (iy + 1) * nside + (ix + 1);
-        const i4 = face * npface + (iy + 1) * nside + ix;
+  // For each pixel, find its neighbors and create triangles
+  for (let ipix = 0; ipix < npix; ipix++) {
+    try {
+      // Get the 8 neighbors of this pixel
+      const neighbors = healpix.neighbours_nest(nside, ipix);
+      
+      // Create triangles with valid neighbors
+      // We'll create a fan of triangles around this center pixel
+      for (let i = 0; i < neighbors.length; i++) {
+        const n1 = neighbors[i];
+        const n2 = neighbors[(i + 1) % neighbors.length];
         
-        // Triangle 1
-        indices.push(i1, i2, i3);
-        // Triangle 2
-        indices.push(i1, i3, i4);
+        if (n1 >= 0 && n2 >= 0 && n1 < npix && n2 < npix) {
+          // Create triangle key to avoid duplicates
+          const triKey = [ipix, n1, n2].sort((a, b) => a - b).join(',');
+          
+          if (!processed.has(triKey)) {
+            indices.push(ipix, n1, n2);
+            processed.add(triKey);
+          }
+        }
       }
+    } catch (e) {
+      // Skip pixels where neighbor finding fails (e.g., at boundaries)
+      continue;
     }
   }
   
