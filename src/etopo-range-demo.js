@@ -217,8 +217,7 @@ function generateHealpixMesh(elevationData, maxAbsElevation) {
       
       loadingDiv.style.display = 'none';
       
-      // Also generate line segments and quads for comparison
-      generateGeometry();
+      console.log('HEALPix mesh added to scene');
       
       // Terminate worker
       meshWorker.terminate();
@@ -424,14 +423,8 @@ function addControlPanel() {
     
     if (material) {
       material.uniforms.alpha.value = newAlpha;
-      
-      // Debounce geometry regeneration to avoid excessive computation
-      if (regenerateTimeout) {
-        clearTimeout(regenerateTimeout);
-      }
-      regenerateTimeout = setTimeout(() => {
-        generateGeometry();
-      }, DEBOUNCE_DELAY_MS);
+      // Mesh is pre-generated with alpha=0.11 displacement and normals
+      // Slider only affects shader-based coloring, not geometry
     }
   });
 
