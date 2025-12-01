@@ -59,6 +59,7 @@ loadingDiv.innerHTML = 'Loading HEALPix data...';
 document.body.appendChild(loadingDiv);
 
 // Global state
+let healpixMesh = null;
 let lineSegments = null;
 let quadMesh = null;
 let innerSphere = null;
@@ -67,6 +68,7 @@ let quadMaterial = null;
 let geometryData = null; // Store data for regeneration
 let alphaValue = 0.1; // Default alpha value
 let regenerateTimeout = null; // For debouncing slider updates
+let meshWorker = null; // Worker for mesh generation
 
 /**
  * Convert HEALPix NESTED pixel index to (theta, phi) in spherical coordinates
@@ -167,17 +169,79 @@ async function loadAndVisualize() {
     innerSphere = new THREE.Mesh(innerSphereGeometry, innerSphereMaterial);
     scene.add(innerSphere);
     
-    // Generate initial geometry
-    generateGeometry();
+    // Start worker to generate HEALPix mesh
+    loadingDiv.innerHTML = 'Generating HEALPix mesh...';
+    generateHealpixMesh(data.data, maxAbsElevation);
     
-    loadingDiv.style.display = 'none';
-    
-    console.log(`Rendered ${numPixels.toLocaleString()} line segments and quads`);
   } catch (error) {
     console.error('Failed to load data:', error);
     loadingDiv.innerHTML = 'Failed: ' + error.message;
     loadingDiv.style.color = '#ff4444';
   }
+}
+
+/**
+ * Generate HEALPix mesh using Web Worker
+ */
+function generateHealpixMesh(elevationData, maxAbsElevation) {
+  // Create worker
+  meshWorker = new Worker(new URL('./healpixMeshWorker.js', import.meta.url), { type: 'module' });
+  
+  // Handle messages from worker
+  meshWorker.onmessage = function(e) {
+    if (e.data.type === 'status') {
+      loadingDiv.innerHTML = e.data.message;
+    } else if (e.data.type === 'complete') {
+      // Reconstruct typed arrays from transferred buffers
+      const positions = new Float32Array(e.data.basePositions);
+      const indices = new Uint32Array(e.data.indices);
+      const normals = new Float32Array(e.data.normals);
+      const elevations = new Float32Array(e.data.elevations);
+      
+      console.log(`Mesh generated: ${e.data.numVertices} vertices, ${e.data.numTriangles} triangles`);
+      
+      // Create Three.js geometry
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+      geometry.setAttribute('elevation', new THREE.BufferAttribute(elevations, 1));
+      geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+      
+      // Create mesh material (reuse existing material)
+      const meshMaterial = createEtopoRangeMaterial(
+        geometryData.globalMin, 
+        geometryData.globalMax, 
+        geometryData.maxAbsElevation
+      );
+      meshMaterial.side = THREE.DoubleSide;
+      
+      // Create and add mesh to scene
+      healpixMesh = new THREE.Mesh(geometry, meshMaterial);
+      scene.add(healpixMesh);
+      
+      loadingDiv.style.display = 'none';
+      
+      // Also generate line segments and quads for comparison
+      generateGeometry();
+      
+      // Terminate worker
+      meshWorker.terminate();
+      meshWorker = null;
+    }
+  };
+  
+  meshWorker.onerror = function(error) {
+    console.error('Worker error:', error);
+    loadingDiv.innerHTML = 'Worker error: ' + error.message;
+    loadingDiv.style.color = '#ff4444';
+  };
+  
+  // Send data to worker
+  meshWorker.postMessage({
+    nside: NSIDE,
+    elevationData: elevationData,
+    maxAbsElevation: maxAbsElevation
+  });
 }
 
 /**
@@ -193,6 +257,11 @@ function cleanupOldGeometry() {
     scene.remove(quadMesh);
     quadMesh.geometry.dispose();
     // Quad material is reused, so don't dispose it
+  }
+  if (healpixMesh) {
+    scene.remove(healpixMesh);
+    healpixMesh.geometry.dispose();
+    // Material is reused, so don't dispose it
   }
 }
 
