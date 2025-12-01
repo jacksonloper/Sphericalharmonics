@@ -97,10 +97,11 @@ function sphericalToCartesian(theta, phi, r = 1.0) {
   
   // Standard right-handed spherical coordinates with y-up convention
   // theta=0 at north pole (positive y), phi=0 at positive x
+  // Negate z for correct chirality (left-right orientation)
   return [
     r * sinTheta * cosPhi,
     r * cosTheta,           // y-axis points to poles
-    r * sinTheta * sinPhi
+    -r * sinTheta * sinPhi  // Negate for correct chirality
   ];
 }
 
@@ -214,7 +215,9 @@ function generateGeometry() {
   const quadIndices = new Uint32Array(numPixels * 6); // 2 triangles per quad
   
   // Approximate quad size based on HEALPix resolution (moved outside loop)
-  const quadSize = Math.PI / (2 * NSIDE); // Angular size approximation
+  // For HEALPix, each pixel subtends approximately sqrt(4π / npix) radians
+  // But we want a smaller quad, so divide by 2 for half-size quads
+  const quadSize = Math.sqrt(4 * Math.PI / (12 * NSIDE * NSIDE)) / 2;
   
   for (let i = 0; i < numPixels; i++) {
     const [theta, phi] = healpixNestedToSpherical(NSIDE, i);
