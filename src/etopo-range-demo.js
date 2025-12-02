@@ -52,18 +52,88 @@ controls.minDistance = 1.2;
 controls.maxDistance = 10;
 controls.autoRotate = false;
 
-// Loading indicator
-const loadingDiv = document.createElement('div');
-loadingDiv.style.position = 'absolute';
-loadingDiv.style.top = '50%';
-loadingDiv.style.left = '50%';
-loadingDiv.style.transform = 'translate(-50%, -50%)';
-loadingDiv.style.color = 'white';
-loadingDiv.style.fontFamily = 'monospace';
-loadingDiv.style.fontSize = '16px';
-loadingDiv.style.textAlign = 'center';
-loadingDiv.innerHTML = 'Loading HEALPix data...';
-document.body.appendChild(loadingDiv);
+// Info card for introduction and loading
+const infoCard = document.createElement('div');
+infoCard.id = 'infoCard';
+infoCard.style.position = 'absolute';
+infoCard.style.top = '50%';
+infoCard.style.left = '50%';
+infoCard.style.transform = 'translate(-50%, -50%)';
+infoCard.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
+infoCard.style.color = 'white';
+infoCard.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+infoCard.style.fontSize = '16px';
+infoCard.style.padding = '20px';
+infoCard.style.borderRadius = '12px';
+infoCard.style.width = '90%';
+infoCard.style.maxWidth = '500px';
+infoCard.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.5)';
+infoCard.style.lineHeight = '1.5';
+infoCard.style.zIndex = '1000';
+infoCard.style.boxSizing = 'border-box';
+
+const cardTitle = document.createElement('h2');
+cardTitle.textContent = 'Earth Elevation Visualization';
+cardTitle.style.marginTop = '0';
+cardTitle.style.marginBottom = '15px';
+cardTitle.style.fontSize = '22px';
+cardTitle.style.fontWeight = 'bold';
+
+const cardContent = document.createElement('div');
+cardContent.id = 'cardContent';
+cardContent.innerHTML = `
+  <p style="margin: 0 0 12px 0;">Using <strong>${NPIX.toLocaleString()} samples</strong> to map Earth's elevation—will the Great Lakes be visible? Mt. Denali?</p>
+  <p style="margin: 0 0 12px 0;">This visualization shows the <em>min</em> and <em>max</em> elevation in each region, divided equally using <a href="https://healpix.sourceforge.io/" target="_blank" style="color: #4ecdc4;">HEALPix</a>. You can also flip to view deep ocean trenches.</p>
+  <div id="loadingStatus" style="margin-top: 20px; text-align: center; color: #4ecdc4;">Loading HEALPix data...</div>
+`;
+
+infoCard.appendChild(cardTitle);
+infoCard.appendChild(cardContent);
+document.body.appendChild(infoCard);
+
+// About button (initially hidden)
+const aboutButton = document.createElement('button');
+aboutButton.id = 'aboutButton';
+aboutButton.textContent = 'About';
+aboutButton.style.position = 'absolute';
+aboutButton.style.top = '15px';
+aboutButton.style.left = '15px';
+aboutButton.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+aboutButton.style.color = 'white';
+aboutButton.style.border = 'none';
+aboutButton.style.padding = '10px 20px';
+aboutButton.style.borderRadius = '6px';
+aboutButton.style.fontSize = '14px';
+aboutButton.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+aboutButton.style.cursor = 'pointer';
+aboutButton.style.display = 'none';
+aboutButton.style.zIndex = '1000';
+aboutButton.style.transition = 'background-color 0.2s';
+
+aboutButton.addEventListener('mouseenter', () => {
+  aboutButton.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
+});
+aboutButton.addEventListener('mouseleave', () => {
+  aboutButton.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+});
+aboutButton.addEventListener('click', () => {
+  // Show the info card again
+  infoCard.style.display = 'block';
+  aboutButton.style.display = 'none';
+  // Update content to show without loading status
+  const loadingStatus = document.getElementById('loadingStatus');
+  if (loadingStatus) {
+    loadingStatus.style.display = 'none';
+  }
+  // Re-add the enter button if it's not there
+  let enterBtn = document.getElementById('enterButton');
+  if (!enterBtn) {
+    enterBtn = createEnterButton();
+    infoCard.appendChild(enterBtn);
+  }
+});
+
+document.body.appendChild(aboutButton);
 
 // Global state
 let healpixMesh = null; // MIN elevation mesh (solid)
@@ -77,7 +147,44 @@ let geometryData = null; // Store data for regeneration
 let alphaValue = 0.1; // Default alpha value
 let regenerateTimeout = null; // For debouncing slider updates
 let meshWorker = null; // Worker for mesh generation
-let showMaxMesh = true; // Toggle for max elevation mesh
+let showMaxMesh = true; // Toggle for max elevation mesh (true = show max, false = show min)
+let flipSign = false; // Toggle for flipping elevation sign
+
+/**
+ * Create the "Enter Visualization" button
+ */
+function createEnterButton() {
+  const enterButton = document.createElement('button');
+  enterButton.id = 'enterButton';
+  enterButton.textContent = 'Enter Visualization';
+  enterButton.style.marginTop = '20px';
+  enterButton.style.padding = '14px 30px';
+  enterButton.style.fontSize = '16px';
+  enterButton.style.fontWeight = 'bold';
+  enterButton.style.backgroundColor = '#4ecdc4';
+  enterButton.style.color = 'black';
+  enterButton.style.border = 'none';
+  enterButton.style.borderRadius = '6px';
+  enterButton.style.cursor = 'pointer';
+  enterButton.style.width = '100%';
+  enterButton.style.transition = 'background-color 0.2s';
+  enterButton.style.touchAction = 'manipulation';
+  
+  enterButton.addEventListener('mouseenter', () => {
+    enterButton.style.backgroundColor = '#45b8af';
+  });
+  enterButton.addEventListener('mouseleave', () => {
+    enterButton.style.backgroundColor = '#4ecdc4';
+  });
+  enterButton.addEventListener('click', () => {
+    // Hide the info card
+    infoCard.style.display = 'none';
+    // Show the about button
+    aboutButton.style.display = 'block';
+  });
+  
+  return enterButton;
+}
 
 /**
  * Convert HEALPix NESTED pixel index to (theta, phi) in spherical coordinates
@@ -182,16 +289,30 @@ async function loadAndVisualize() {
     scene.add(innerSphere);
     
     // Generate HEALPix mesh directly (not in worker to avoid complexity)
-    loadingDiv.innerHTML = 'Generating HEALPix mesh...';
+    const loadingStatus = document.getElementById('loadingStatus');
+    if (loadingStatus) {
+      loadingStatus.textContent = 'Generating HEALPix mesh...';
+    }
     setTimeout(() => {
       generateHealpixMeshDirect(data.data, maxAbsElevation);
-      loadingDiv.style.display = 'none';
+      
+      // Update loading status and add Enter button
+      if (loadingStatus) {
+        loadingStatus.style.display = 'none';
+      }
+      
+      // Add Enter Visualization button
+      const enterButton = createEnterButton();
+      infoCard.appendChild(enterButton);
     }, 100); // Small delay to allow loading message to display
     
   } catch (error) {
     console.error('Failed to load data:', error);
-    loadingDiv.innerHTML = 'Failed: ' + error.message;
-    loadingDiv.style.color = '#ff4444';
+    const loadingStatus = document.getElementById('loadingStatus');
+    if (loadingStatus) {
+      loadingStatus.innerHTML = 'Failed: ' + error.message;
+      loadingStatus.style.color = '#ff4444';
+    }
   }
 }
 
@@ -370,10 +491,12 @@ function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
   const meshMaterial = material;
   meshMaterial.side = THREE.DoubleSide;
   
-  // Step 9: Create and add MIN mesh to scene
+  // Step 9: Create and add MIN mesh to scene (initially hidden if showMaxMesh is true)
   // Vertex shader will re-displace based on alpha uniform using precomputed normals
   healpixMesh = new THREE.Mesh(minGeometry, meshMaterial);
-  scene.add(healpixMesh);
+  if (!showMaxMesh) {
+    scene.add(healpixMesh);
+  }
   
   console.log(`MIN HEALPix mesh added: ${numPixels} vertices, ${triangles.length / 3} triangles`);
   
@@ -387,9 +510,9 @@ function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
   // Set indices from Delaunay triangulation
   maxGeometry.setIndex(new THREE.BufferAttribute(new Uint32Array(triangles), 1));
   
-  // Step 11: Create and add transparent MAX mesh to scene if enabled
+  // Step 11: Create and add MAX mesh to scene (initially shown if showMaxMesh is true)
+  maxHealpixMesh = new THREE.Mesh(maxGeometry, maxMaterial);
   if (showMaxMesh) {
-    maxHealpixMesh = new THREE.Mesh(maxGeometry, maxMaterial);
     scene.add(maxHealpixMesh);
     console.log(`MAX HEALPix mesh added: ${numPixels} vertices, ${triangles.length / 3} triangles`);
   }
@@ -436,39 +559,93 @@ function addControlPanel() {
   panel.style.flexWrap = 'wrap';
   panel.style.justifyContent = 'center';
 
-  // Show max mesh checkbox
-  const maxMeshGroup = document.createElement('div');
-  maxMeshGroup.style.display = 'flex';
-  maxMeshGroup.style.alignItems = 'center';
-  maxMeshGroup.style.gap = '8px';
+  // Radio buttons for min/max mesh selection
+  const meshTypeGroup = document.createElement('div');
+  meshTypeGroup.style.display = 'flex';
+  meshTypeGroup.style.alignItems = 'center';
+  meshTypeGroup.style.gap = '12px';
 
-  const checkbox = document.createElement('input');
-  checkbox.type = 'checkbox';
-  checkbox.id = 'showMaxMeshCheckbox';
-  checkbox.checked = showMaxMesh;
-  checkbox.style.cursor = 'pointer';
+  // Min mesh radio button (min elevation)
+  const minRadio = document.createElement('input');
+  minRadio.type = 'radio';
+  minRadio.name = 'meshType';
+  minRadio.id = 'minMeshRadio';
+  minRadio.checked = !showMaxMesh;
+  minRadio.style.cursor = 'pointer';
 
-  const checkboxLabel = document.createElement('label');
-  checkboxLabel.htmlFor = 'showMaxMeshCheckbox';
-  checkboxLabel.textContent = 'Show max mesh';
-  checkboxLabel.style.cursor = 'pointer';
+  const minLabel = document.createElement('label');
+  minLabel.htmlFor = 'minMeshRadio';
+  minLabel.textContent = 'Min mesh';
+  minLabel.style.cursor = 'pointer';
 
-  checkbox.addEventListener('change', (e) => {
-    showMaxMesh = e.target.checked;
+  // Max mesh radio button (max elevation)
+  const maxRadio = document.createElement('input');
+  maxRadio.type = 'radio';
+  maxRadio.name = 'meshType';
+  maxRadio.id = 'maxMeshRadio';
+  maxRadio.checked = showMaxMesh;
+  maxRadio.style.cursor = 'pointer';
+
+  const maxLabel = document.createElement('label');
+  maxLabel.htmlFor = 'maxMeshRadio';
+  maxLabel.textContent = 'Max mesh';
+  maxLabel.style.cursor = 'pointer';
+
+  // Radio button change handlers
+  const handleMeshTypeChange = () => {
+    showMaxMesh = maxRadio.checked;
+    
     if (showMaxMesh) {
-      if (maxHealpixMesh) {
-        scene.add(maxHealpixMesh);
-      }
+      // Show max mesh (max elevation), hide min mesh
+      if (maxHealpixMesh && !maxHealpixMesh.parent) scene.add(maxHealpixMesh);
+      if (healpixMesh && healpixMesh.parent) scene.remove(healpixMesh);
     } else {
-      if (maxHealpixMesh) {
-        scene.remove(maxHealpixMesh);
-      }
+      // Show min mesh (min elevation), hide max mesh
+      if (healpixMesh && !healpixMesh.parent) scene.add(healpixMesh);
+      if (maxHealpixMesh && maxHealpixMesh.parent) scene.remove(maxHealpixMesh);
+    }
+  };
+
+  minRadio.addEventListener('change', handleMeshTypeChange);
+  maxRadio.addEventListener('change', handleMeshTypeChange);
+
+  meshTypeGroup.appendChild(minRadio);
+  meshTypeGroup.appendChild(minLabel);
+  meshTypeGroup.appendChild(maxRadio);
+  meshTypeGroup.appendChild(maxLabel);
+  panel.appendChild(meshTypeGroup);
+
+  // Flip sign checkbox
+  const flipSignGroup = document.createElement('div');
+  flipSignGroup.style.display = 'flex';
+  flipSignGroup.style.alignItems = 'center';
+  flipSignGroup.style.gap = '8px';
+
+  const flipCheckbox = document.createElement('input');
+  flipCheckbox.type = 'checkbox';
+  flipCheckbox.id = 'flipSignCheckbox';
+  flipCheckbox.checked = flipSign;
+  flipCheckbox.style.cursor = 'pointer';
+
+  const flipLabel = document.createElement('label');
+  flipLabel.htmlFor = 'flipSignCheckbox';
+  flipLabel.textContent = 'Flip sign';
+  flipLabel.style.cursor = 'pointer';
+
+  flipCheckbox.addEventListener('change', (e) => {
+    flipSign = e.target.checked;
+    // Update uniforms in materials to flip the sign
+    if (material) {
+      material.uniforms.flipSign.value = flipSign ? -1.0 : 1.0;
+    }
+    if (maxMaterial) {
+      maxMaterial.uniforms.flipSign.value = flipSign ? -1.0 : 1.0;
     }
   });
 
-  maxMeshGroup.appendChild(checkbox);
-  maxMeshGroup.appendChild(checkboxLabel);
-  panel.appendChild(maxMeshGroup);
+  flipSignGroup.appendChild(flipCheckbox);
+  flipSignGroup.appendChild(flipLabel);
+  panel.appendChild(flipSignGroup);
 
   // Relief slider
   const reliefGroup = document.createElement('div');

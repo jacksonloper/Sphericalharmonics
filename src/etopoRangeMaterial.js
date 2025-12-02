@@ -19,20 +19,28 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
     attribute float elevation;
     uniform float alpha;
     uniform float maxAbsElevation;
+    uniform float flipSign;
     varying float vElevation;
+    varying float vOriginalElevation;
     varying vec3 vNormal;
     varying vec3 vPosition;
 
     void main() {
-      vElevation = elevation;
+      // Store original elevation for color mapping (always based on original sign)
+      // This ensures land stays green and ocean stays blue regardless of flip sign
+      vOriginalElevation = elevation;
+      
+      // Apply flip sign to elevation for displacement
+      vElevation = elevation * flipSign;
 
       // Use precomputed normals from geometry (computed at alpha=0.11)
+      // When flipSign is -1, we need to invert the normals since the displacement is reversed
       // Transform to view space for lighting calculations
-      vNormal = normalize(normalMatrix * normal);
+      vNormal = normalize(normalMatrix * normal * flipSign);
 
       // Compute radial displacement: r = 1 + alpha * e / maxAbsElevation
       // Depths (negative) point inward, heights (positive) point outward
-      float radius = 1.0 + alpha * elevation / maxAbsElevation;
+      float radius = 1.0 + alpha * vElevation / maxAbsElevation;
 
       // Displace vertex radially (positions are on unit sphere)
       vec3 displacedPosition = position * radius;
@@ -47,21 +55,23 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
     uniform float maxElevation;
 
     varying float vElevation;
+    varying float vOriginalElevation;
     varying vec3 vNormal;
     varying vec3 vPosition;
 
     void main() {
       // Colormap: black at lowest depth → blue → green → white at highest peak
+      // Always use original elevation for color mapping so land stays green
       vec3 color;
 
-      if (vElevation >= 0.0) {
+      if (vOriginalElevation >= 0.0) {
         // Above sea level: green gradient toward white at highest peak
-        float t = vElevation / maxElevation;
+        float t = vOriginalElevation / maxElevation;
         t = clamp(t, 0.0, 1.0);
         color = mix(vec3(0.2, 0.7, 0.2), vec3(1.0, 1.0, 1.0), t);
       } else {
         // Below sea level: black at deepest → blue at sea level
-        float t = vElevation / minElevation;
+        float t = vOriginalElevation / minElevation;
         t = clamp(t, 0.0, 1.0);
         color = mix(vec3(0.2, 0.4, 0.8), vec3(0.0, 0.0, 0.0), t);
       }
@@ -91,7 +101,8 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
       minElevation: { value: minElevation },
       maxElevation: { value: maxElevation },
       maxAbsElevation: { value: maxAbsElevation },
-      alpha: { value: 0.1 }
+      alpha: { value: 0.1 },
+      flipSign: { value: 1.0 }
     },
     vertexShader,
     fragmentShader,
