@@ -157,12 +157,12 @@ let meshWorker = null; // Worker for mesh generation
 let showMaxMesh = true; // Toggle for max elevation mesh (true = show max, false = show min)
 let flipSign = false; // Toggle for flipping elevation sign
 
+// Available nside resolutions
+const AVAILABLE_NSIDES = [64, 128, 256];
+
 // Cache for pre-triangulated meshes
-const meshCache = {
-  64: null,
-  128: null,
-  256: null
-};
+const meshCache = {};
+AVAILABLE_NSIDES.forEach(nside => meshCache[nside] = null);
 
 /**
  * Create the "Enter Visualization" button
@@ -561,30 +561,21 @@ function createMeshesFromGeometry(meshGeometry, maxAbsElevation) {
 }
 
 /**
- * Start background triangulation for nside 128 and 256
+ * Start background triangulation for resolutions not yet loaded
  */
 async function startBackgroundTriangulation() {
-  // Triangulate nside=128 in the background
-  if (!meshCache[128]) {
+  // Get nsides that need triangulation (excluding current)
+  const nsidesToTriangulate = AVAILABLE_NSIDES.filter(n => n !== currentNside && !meshCache[n]);
+  
+  // Triangulate each in sequence
+  for (const nside of nsidesToTriangulate) {
     try {
-      const data128 = await loadHealpixData(128);
-      const meshGeometry128 = generateMeshGeometry(128, data128.data, data128.minVals, data128.maxVals, data128.maxAbsElevation);
-      meshCache[128] = { geometry: meshGeometry128, data: data128 };
-      console.log(`[nside=128] Pre-triangulation complete and cached`);
-      
-      // Now start triangulating 256
-      if (!meshCache[256]) {
-        try {
-          const data256 = await loadHealpixData(256);
-          const meshGeometry256 = generateMeshGeometry(256, data256.data, data256.minVals, data256.maxVals, data256.maxAbsElevation);
-          meshCache[256] = { geometry: meshGeometry256, data: data256 };
-          console.log(`[nside=256] Pre-triangulation complete and cached`);
-        } catch (error) {
-          console.error('[nside=256] Failed to pre-triangulate:', error);
-        }
-      }
+      const data = await loadHealpixData(nside);
+      const meshGeometry = generateMeshGeometry(nside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
+      meshCache[nside] = { geometry: meshGeometry, data: data };
+      console.log(`[nside=${nside}] Pre-triangulation complete and cached`);
     } catch (error) {
-      console.error('[nside=128] Failed to pre-triangulate:', error);
+      console.error(`[nside=${nside}] Failed to pre-triangulate:`, error);
     }
   }
 }
@@ -822,18 +813,12 @@ function addControlPanel() {
   nsideSelect.style.fontFamily = 'monospace';
   nsideSelect.style.fontSize = '12px';
 
-  // Add options: named by number of vertices
-  const nsideOptions = [
-    { nside: 64, vertices: 49152 },
-    { nside: 128, vertices: 196608 },
-    { nside: 256, vertices: 786432 }
-  ];
-
-  nsideOptions.forEach(option => {
+  // Add options: named by number of vertices (computed dynamically)
+  AVAILABLE_NSIDES.forEach(nside => {
     const optionEl = document.createElement('option');
-    optionEl.value = option.nside;
-    optionEl.textContent = `${option.vertices.toLocaleString()} vertices`;
-    if (option.nside === currentNside) {
+    optionEl.value = nside;
+    optionEl.textContent = `${getNpix(nside).toLocaleString()} vertices`;
+    if (nside === currentNside) {
       optionEl.selected = true;
     }
     nsideSelect.appendChild(optionEl);
