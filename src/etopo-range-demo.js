@@ -149,6 +149,8 @@ let regenerateTimeout = null; // For debouncing slider updates
 let showMaxMesh = true; // Toggle for max elevation mesh (true = show max, false = show min)
 let flipSign = false; // Toggle for flipping elevation sign
 let loadingOverlay = null; // Loading overlay for resolution switching
+let healpixDotsPoints = null; // Points mesh for HEALPix location dots
+let showHealpixDots = false; // Toggle for showing HEALPix location dots
 
 // Cache for pre-triangulated meshes
 const meshCache = {};
@@ -466,6 +468,41 @@ function createMeshesFromGeometry(meshGeometry, maxAbsElevation) {
   }
   
   console.log(`MAX HEALPix mesh added: ${meshGeometry.numPixels} vertices, ${meshGeometry.triangles.length / 3} triangles`);
+  
+  // Create HEALPix location dots
+  createHealpixDots(meshGeometry);
+}
+
+/**
+ * Create points at each HEALPix pixel location (at elevation 0)
+ */
+function createHealpixDots(meshGeometry) {
+  // Clean up old dots if they exist
+  if (healpixDotsPoints) {
+    scene.remove(healpixDotsPoints);
+    healpixDotsPoints.geometry.dispose();
+    healpixDotsPoints.material.dispose();
+  }
+  
+  // Create geometry for points at elevation 0 (unit sphere)
+  const dotsGeometry = new THREE.BufferGeometry();
+  dotsGeometry.setAttribute('position', new THREE.BufferAttribute(meshGeometry.positions, 3));
+  
+  // Create material for the points
+  const dotsMaterial = new THREE.PointsMaterial({
+    color: 0xffffff,
+    size: 0.01,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity: 0.6
+  });
+  
+  healpixDotsPoints = new THREE.Points(dotsGeometry, dotsMaterial);
+  if (showHealpixDots) {
+    scene.add(healpixDotsPoints);
+  }
+  
+  console.log(`HEALPix dots created: ${meshGeometry.numPixels} points`);
 }
 
 /**
@@ -541,6 +578,11 @@ function cleanupOldGeometry() {
     scene.remove(maxHealpixMesh);
     maxHealpixMesh.geometry.dispose();
     // Material is reused, so don't dispose it
+  }
+  if (healpixDotsPoints) {
+    scene.remove(healpixDotsPoints);
+    healpixDotsPoints.geometry.dispose();
+    healpixDotsPoints.material.dispose();
   }
 }
 
@@ -649,6 +691,38 @@ function addControlPanel() {
   flipSignGroup.appendChild(flipCheckbox);
   flipSignGroup.appendChild(flipLabel);
   panel.appendChild(flipSignGroup);
+
+  // Show HEALPix dots checkbox
+  const dotsGroup = document.createElement('div');
+  dotsGroup.style.display = 'flex';
+  dotsGroup.style.alignItems = 'center';
+  dotsGroup.style.gap = '8px';
+
+  const dotsCheckbox = document.createElement('input');
+  dotsCheckbox.type = 'checkbox';
+  dotsCheckbox.id = 'dotsCheckbox';
+  dotsCheckbox.checked = showHealpixDots;
+  dotsCheckbox.style.cursor = 'pointer';
+
+  const dotsLabel = document.createElement('label');
+  dotsLabel.htmlFor = 'dotsCheckbox';
+  dotsLabel.textContent = 'Show HEALPix dots';
+  dotsLabel.style.cursor = 'pointer';
+
+  dotsCheckbox.addEventListener('change', (e) => {
+    showHealpixDots = e.target.checked;
+    if (healpixDotsPoints) {
+      if (showHealpixDots) {
+        scene.add(healpixDotsPoints);
+      } else {
+        scene.remove(healpixDotsPoints);
+      }
+    }
+  });
+
+  dotsGroup.appendChild(dotsCheckbox);
+  dotsGroup.appendChild(dotsLabel);
+  panel.appendChild(dotsGroup);
 
   // Nside selector dropdown
   const nsideGroup = document.createElement('div');
