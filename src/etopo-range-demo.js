@@ -146,7 +146,8 @@ let meshWorker = null; // Worker for mesh generation
 let showMaxMesh = true; // Toggle for max elevation mesh (true = show max, false = show min)
 let flipSign = false; // Toggle for flipping elevation sign
 let loadingOverlay = null; // Loading overlay for resolution switching
-let activeTriangulations = new Set(); // Track which nsides are currently being triangulated
+// Track which nsides are currently being triangulated to prevent race conditions
+let activeTriangulations = new Set();
 
 // Available nside resolutions
 const AVAILABLE_NSIDES = [64, 128, 256];
@@ -621,15 +622,35 @@ async function switchToNside(newNside) {
       console.log(`[nside=${newNside}] Triangulation in progress, waiting...`);
       showLoading(newNside);
       
-      // Poll until triangulation completes
-      const checkInterval = setInterval(() => {
-        if (meshCache[newNside]) {
+      // Wait for triangulation to complete using a promise
+      await new Promise((resolve) => {
+        const checkInterval = setInterval(() => {
+          if (meshCache[newNside] || !activeTriangulations.has(newNside)) {
+            clearInterval(checkInterval);
+            resolve();
+          }
+        }, 200); // Check every 200ms
+        
+        // Safety timeout - clear after 2 minutes
+        setTimeout(() => {
           clearInterval(checkInterval);
-          hideLoading();
-          // Recursively call to use the cached geometry
-          switchToNside(newNside);
-        }
-      }, 100);
+          resolve();
+        }, 120000);
+      });
+      
+      hideLoading();
+      
+      // Check if triangulation succeeded
+      if (meshCache[newNside]) {
+        // Recursively call to use the cached geometry
+        return switchToNside(newNside);
+      } else {
+        console.error(`[nside=${newNside}] Triangulation did not complete successfully`);
+        // Revert to a working resolution
+        currentNside = AVAILABLE_NSIDES.find(n => meshCache[n]) || INITIAL_NSIDE;
+        updateVertexCount();
+        return;
+      }
     } else {
       console.log(`Loading and triangulating nside=${newNside}...`);
       
