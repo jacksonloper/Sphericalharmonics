@@ -219,42 +219,7 @@ worker.onmessage = (e) => {
     // If user selected this nside and it's not currently displayed, switch to it automatically
     if (nside === currentNside && isInitialized && nside !== displayedNside) {
       console.log(`Auto-switching to nside=${nside} now that it's loaded`);
-      const cached = meshCache[nside];
-      
-      // Update global geometry data
-      geometryData = {
-        numPixels: cached.data.numPixels,
-        minVals: cached.data.minVals,
-        meanVals: cached.data.meanVals,
-        maxVals: cached.data.maxVals,
-        globalMin: cached.data.globalMin,
-        globalMax: cached.data.globalMax,
-        maxAbsElevation: cached.data.maxAbsElevation
-      };
-      
-      // Clean up old meshes
-      cleanupOldGeometry();
-      
-      // Update materials (if they exist and have uniforms)
-      if (material && material.uniforms) {
-        if (material.uniforms.globalMin) material.uniforms.globalMin.value = cached.data.globalMin;
-        if (material.uniforms.globalMax) material.uniforms.globalMax.value = cached.data.globalMax;
-        if (material.uniforms.maxAbsElevation) material.uniforms.maxAbsElevation.value = cached.data.maxAbsElevation;
-      }
-      if (maxMaterial && maxMaterial.uniforms) {
-        if (maxMaterial.uniforms.globalMin) maxMaterial.uniforms.globalMin.value = cached.data.globalMin;
-        if (maxMaterial.uniforms.globalMax) maxMaterial.uniforms.globalMax.value = cached.data.globalMax;
-        if (maxMaterial.uniforms.maxAbsElevation) maxMaterial.uniforms.maxAbsElevation.value = cached.data.maxAbsElevation;
-      }
-      
-      // Create new meshes from cached geometry
-      createMeshesFromGeometry(cached.geometry, cached.data.maxAbsElevation);
-      
-      // Update displayed nside
-      displayedNside = nside;
-      
-      // Hide loading overlay
-      hideLoading();
+      performNsideSwitch(nside);
     } else if (nside === 128 || nside === 256) {
       // Hide loading indicator for background loads
       hideLoading();
@@ -616,6 +581,49 @@ function createHealpixDots(meshGeometry) {
 }
 
 /**
+ * Perform the actual switch to a new nside resolution (internal helper)
+ * Assumes the geometry is already cached in meshCache[nside]
+ */
+function performNsideSwitch(nside) {
+  console.log(`Using cached geometry for nside=${nside}`);
+  const cached = meshCache[nside];
+  
+  // Update global geometry data
+  geometryData = {
+    numPixels: cached.data.numPixels,
+    minVals: cached.data.minVals,
+    meanVals: cached.data.meanVals,
+    maxVals: cached.data.maxVals,
+    globalMin: cached.data.globalMin,
+    globalMax: cached.data.globalMax,
+    maxAbsElevation: cached.data.maxAbsElevation
+  };
+  
+  // Clean up old meshes
+  cleanupOldGeometry();
+  
+  // Update materials (if they exist and have uniforms)
+  if (material && material.uniforms) {
+    if (material.uniforms.globalMin) material.uniforms.globalMin.value = cached.data.globalMin;
+    if (material.uniforms.globalMax) material.uniforms.globalMax.value = cached.data.globalMax;
+    if (material.uniforms.maxAbsElevation) material.uniforms.maxAbsElevation.value = cached.data.maxAbsElevation;
+  }
+  if (maxMaterial && maxMaterial.uniforms) {
+    if (maxMaterial.uniforms.globalMin) maxMaterial.uniforms.globalMin.value = cached.data.globalMin;
+    if (maxMaterial.uniforms.globalMax) maxMaterial.uniforms.globalMax.value = cached.data.globalMax;
+    if (maxMaterial.uniforms.maxAbsElevation) maxMaterial.uniforms.maxAbsElevation.value = cached.data.maxAbsElevation;
+  }
+  
+  // Create new meshes from cached geometry
+  createMeshesFromGeometry(cached.geometry, cached.data.maxAbsElevation);
+  
+  // Update displayed nside to reflect what's actually shown
+  displayedNside = nside;
+  
+  hideLoading();
+}
+
+/**
  * Switch to a different nside resolution
  */
 function switchToNside(newNside) {
@@ -631,42 +639,7 @@ function switchToNside(newNside) {
   
   // Check if we have cached geometry
   if (meshCache[newNside]) {
-    console.log(`Using cached geometry for nside=${newNside}`);
-    const cached = meshCache[newNside];
-    
-    // Update global geometry data
-    geometryData = {
-      numPixels: cached.data.numPixels,
-      minVals: cached.data.minVals,
-      meanVals: cached.data.meanVals,
-      maxVals: cached.data.maxVals,
-      globalMin: cached.data.globalMin,
-      globalMax: cached.data.globalMax,
-      maxAbsElevation: cached.data.maxAbsElevation
-    };
-    
-    // Clean up old meshes
-    cleanupOldGeometry();
-    
-    // Update materials (if they exist and have uniforms)
-    if (material && material.uniforms) {
-      if (material.uniforms.globalMin) material.uniforms.globalMin.value = cached.data.globalMin;
-      if (material.uniforms.globalMax) material.uniforms.globalMax.value = cached.data.globalMax;
-      if (material.uniforms.maxAbsElevation) material.uniforms.maxAbsElevation.value = cached.data.maxAbsElevation;
-    }
-    if (maxMaterial && maxMaterial.uniforms) {
-      if (maxMaterial.uniforms.globalMin) maxMaterial.uniforms.globalMin.value = cached.data.globalMin;
-      if (maxMaterial.uniforms.globalMax) maxMaterial.uniforms.globalMax.value = cached.data.globalMax;
-      if (maxMaterial.uniforms.maxAbsElevation) maxMaterial.uniforms.maxAbsElevation.value = cached.data.maxAbsElevation;
-    }
-    
-    // Create new meshes from cached geometry
-    createMeshesFromGeometry(cached.geometry, cached.data.maxAbsElevation);
-    
-    // Update displayed nside to reflect what's actually shown
-    displayedNside = newNside;
-    
-    hideLoading();
+    performNsideSwitch(newNside);
   } else {
     // Not yet cached, show loading indicator with current viewing resolution
     console.log(`[nside=${newNside}] Waiting for triangulation to complete...`);
