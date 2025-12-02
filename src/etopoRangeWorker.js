@@ -193,7 +193,8 @@ async function processNside(nside) {
     self.postMessage({ type: 'status', nside, message: `Loading data for nside=${nside}...` });
     
     // Load data using npyjs
-    const filename = `./earthtoposources/etopo2022_surface_min_mean_max_healpix${nside}_NESTED.npy`;
+    // In a worker, we need to use an absolute path or construct it relative to the location
+    const filename = `${self.location.origin}/earthtoposources/etopo2022_surface_min_mean_max_healpix${nside}_NESTED.npy`;
     const npyData = await load(filename);
     
     self.postMessage({ type: 'status', nside, message: `Data loaded for nside=${nside}` });
