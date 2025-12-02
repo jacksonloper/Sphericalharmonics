@@ -26,6 +26,7 @@ const worker = new EtopoRangeWorker();
 
 // UI constants
 const DEBOUNCE_DELAY_MS = 100; // Delay for slider debouncing
+const HEALPIX_DOT_BASE_SIZE = 0.01; // Base dot size for reference resolution (INITIAL_NSIDE)
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -528,10 +529,8 @@ function createHealpixDots(meshGeometry) {
   dotsGeometry.setAttribute('position', new THREE.BufferAttribute(meshGeometry.positions, 3));
   
   // Calculate dot size: scale inversely with nside so dots remain proportional to grid spacing
-  // Reference: nside=64 uses size=0.01, so size = 0.01 * (64 / currentNside)
-  const baseSize = 0.01;
-  const referenceNside = 64;
-  const dotSize = baseSize * (referenceNside / currentNside);
+  // Reference: INITIAL_NSIDE uses HEALPIX_DOT_BASE_SIZE, size scales as (INITIAL_NSIDE / currentNside)
+  const dotSize = HEALPIX_DOT_BASE_SIZE * (INITIAL_NSIDE / currentNside);
   
   // Create material for the points with circular shape
   const dotsMaterial = new THREE.PointsMaterial({
