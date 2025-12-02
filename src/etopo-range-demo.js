@@ -24,6 +24,9 @@ const AVAILABLE_NSIDES = [64, 128, 256];
 // Start the worker immediately - it will autonomously process all resolutions
 const worker = new EtopoRangeWorker();
 
+// Track the displayed nside (what's actually shown) vs selected nside (what user wants)
+let displayedNside = INITIAL_NSIDE;
+
 // UI constants
 const DEBOUNCE_DELAY_MS = 100; // Delay for slider debouncing
 const HEALPIX_DOT_BASE_SIZE = 0.01; // Base dot size for reference resolution (INITIAL_NSIDE)
@@ -207,20 +210,54 @@ worker.onmessage = (e) => {
     // Cache the result
     meshCache[nside] = { geometry: meshGeometry, data: data };
     
-    // Hide loading indicator for this nside
-    if (nside === 128 || nside === 256) {
-      hideLoading();
-    }
-    
     // If this is the initial nside, initialize the scene
     if (nside === waitingForInitialNside && !isInitialized) {
       initializeScene(nside, meshGeometry, data);
       isInitialized = true;
     }
     
-    // If user switched to this nside while it was loading, update the view
-    if (nside === currentNside && isInitialized) {
-      switchToNside(nside);
+    // If user selected this nside and it's not currently displayed, switch to it automatically
+    if (nside === currentNside && isInitialized && nside !== displayedNside) {
+      console.log(`Auto-switching to nside=${nside} now that it's loaded`);
+      const cached = meshCache[nside];
+      
+      // Update global geometry data
+      geometryData = {
+        numPixels: cached.data.numPixels,
+        minVals: cached.data.minVals,
+        meanVals: cached.data.meanVals,
+        maxVals: cached.data.maxVals,
+        globalMin: cached.data.globalMin,
+        globalMax: cached.data.globalMax,
+        maxAbsElevation: cached.data.maxAbsElevation
+      };
+      
+      // Clean up old meshes
+      cleanupOldGeometry();
+      
+      // Update materials (if they exist and have uniforms)
+      if (material && material.uniforms) {
+        if (material.uniforms.globalMin) material.uniforms.globalMin.value = cached.data.globalMin;
+        if (material.uniforms.globalMax) material.uniforms.globalMax.value = cached.data.globalMax;
+        if (material.uniforms.maxAbsElevation) material.uniforms.maxAbsElevation.value = cached.data.maxAbsElevation;
+      }
+      if (maxMaterial && maxMaterial.uniforms) {
+        if (maxMaterial.uniforms.globalMin) maxMaterial.uniforms.globalMin.value = cached.data.globalMin;
+        if (maxMaterial.uniforms.globalMax) maxMaterial.uniforms.globalMax.value = cached.data.globalMax;
+        if (maxMaterial.uniforms.maxAbsElevation) maxMaterial.uniforms.maxAbsElevation.value = cached.data.maxAbsElevation;
+      }
+      
+      // Create new meshes from cached geometry
+      createMeshesFromGeometry(cached.geometry, cached.data.maxAbsElevation);
+      
+      // Update displayed nside
+      displayedNside = nside;
+      
+      // Hide loading overlay
+      hideLoading();
+    } else if (nside === 128 || nside === 256) {
+      // Hide loading indicator for background loads
+      hideLoading();
     }
   } else if (type === 'error') {
     console.error(`[nside=${nside}] Worker error:`, e.data.message);
@@ -265,6 +302,9 @@ function initializeScene(nside, meshGeometry, data) {
   
   // Create and add meshes to scene
   createMeshesFromGeometry(meshGeometry, data.maxAbsElevation);
+  
+  // Set the initial displayed nside
+  displayedNside = nside;
   
   // Update loading status and add Enter button
   const loadingStatus = document.getElementById('loadingStatus');
@@ -344,12 +384,21 @@ function createLoadingOverlay() {
   loadingText.style.fontWeight = '500';
   loadingText.style.marginBottom = '5px';
   
+  // Add current viewing resolution text
+  const currentViewText = document.createElement('div');
+  currentViewText.id = 'currentViewText';
+  currentViewText.style.fontSize = '12px';
+  currentViewText.style.color = '#ffaa00';
+  currentViewText.style.fontWeight = '600';
+  currentViewText.style.marginBottom = '5px';
+  
   const estimateText = document.createElement('div');
   estimateText.id = 'estimateText';
   estimateText.style.fontSize = '12px';
   estimateText.style.color = '#aaa';
   
   textContainer.appendChild(loadingText);
+  textContainer.appendChild(currentViewText);
   textContainer.appendChild(estimateText);
   
   content.appendChild(spinner);
@@ -361,16 +410,31 @@ function createLoadingOverlay() {
 }
 
 /**
- * Show loading overlay with estimated time
+ * Show loading overlay with estimated time and current viewing resolution
  */
-function showLoading(nside) {
+function showLoading(targetNside) {
   if (!loadingOverlay) {
     loadingOverlay = createLoadingOverlay();
   }
+  
+  const loadingText = document.getElementById('loadingText');
+  if (loadingText) {
+    loadingText.textContent = `Loading ${getNpix(targetNside).toLocaleString()} vertex resolution...`;
+  }
+  
+  const currentViewText = document.getElementById('currentViewText');
+  if (currentViewText && displayedNside !== targetNside) {
+    currentViewText.textContent = `Currently viewing: ${getNpix(displayedNside).toLocaleString()} vertices`;
+    currentViewText.style.display = 'block';
+  } else if (currentViewText) {
+    currentViewText.style.display = 'none';
+  }
+  
   const estimateText = document.getElementById('estimateText');
   if (estimateText) {
-    estimateText.textContent = getEstimatedTimeMessage(nside);
+    estimateText.textContent = getEstimatedTimeMessage(targetNside);
   }
+  
   loadingOverlay.style.display = 'block';
 }
 
@@ -559,7 +623,7 @@ function switchToNside(newNside) {
   
   console.log(`Switching from nside=${currentNside} to nside=${newNside}`);
   
-  // Update current nside
+  // Update current nside (what user wants)
   currentNside = newNside;
   
   // Update vertex count display
@@ -598,11 +662,16 @@ function switchToNside(newNside) {
     
     // Create new meshes from cached geometry
     createMeshesFromGeometry(cached.geometry, cached.data.maxAbsElevation);
+    
+    // Update displayed nside to reflect what's actually shown
+    displayedNside = newNside;
+    
     hideLoading();
   } else {
-    // Not yet cached, show loading indicator - worker will complete it eventually
+    // Not yet cached, show loading indicator with current viewing resolution
     console.log(`[nside=${newNside}] Waiting for triangulation to complete...`);
     showLoading(newNside);
+    // Note: displayedNside stays at the old value since we haven't actually switched yet
   }
 }
 
