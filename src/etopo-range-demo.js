@@ -63,29 +63,28 @@ infoCard.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
 infoCard.style.color = 'white';
 infoCard.style.fontFamily = 'system-ui, -apple-system, sans-serif';
 infoCard.style.fontSize = '16px';
-infoCard.style.padding = '30px';
+infoCard.style.padding = '20px';
 infoCard.style.borderRadius = '12px';
-infoCard.style.maxWidth = '600px';
+infoCard.style.width = '90%';
+infoCard.style.maxWidth = '500px';
 infoCard.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.5)';
-infoCard.style.lineHeight = '1.6';
+infoCard.style.lineHeight = '1.5';
 infoCard.style.zIndex = '1000';
+infoCard.style.boxSizing = 'border-box';
 
 const cardTitle = document.createElement('h2');
 cardTitle.textContent = 'Earth Elevation Visualization';
 cardTitle.style.marginTop = '0';
-cardTitle.style.marginBottom = '20px';
-cardTitle.style.fontSize = '24px';
+cardTitle.style.marginBottom = '15px';
+cardTitle.style.fontSize = '22px';
 cardTitle.style.fontWeight = 'bold';
 
 const cardContent = document.createElement('div');
 cardContent.id = 'cardContent';
 cardContent.innerHTML = `
-  <p>Using <strong>${NPIX.toLocaleString()} samples</strong> to represent Earth's elevation, how accurate do you think our picture of the world will be?</p>
-  <p><strong>Will the Great Lakes be visible? What about Mt. Denali?</strong></p>
-  <p>The following visualization allows you to see the difference between the <em>minimum</em> and <em>maximum</em> elevation in each of ${NPIX.toLocaleString()} regions, chosen to divide the Earth equally using <a href="https://healpix.sourceforge.io/" target="_blank" style="color: #4ecdc4;">HEALPix</a>.</p>
-  <p><strong>How much difference do you expect?</strong></p>
-  <p>You can also "flip" the visualization to view the deep marine trenches.</p>
-  <div id="loadingStatus" style="margin-top: 25px; text-align: center; color: #4ecdc4;">Loading HEALPix data...</div>
+  <p style="margin: 0 0 12px 0;">Using <strong>${NPIX.toLocaleString()} samples</strong> to map Earth's elevation—will the Great Lakes be visible? Mt. Denali?</p>
+  <p style="margin: 0 0 12px 0;">This visualization shows the <em>min</em> and <em>max</em> elevation in each region, divided equally using <a href="https://healpix.sourceforge.io/" target="_blank" style="color: #4ecdc4;">HEALPix</a>. You can also flip to view deep ocean trenches.</p>
+  <div id="loadingStatus" style="margin-top: 20px; text-align: center; color: #4ecdc4;">Loading HEALPix data...</div>
 `;
 
 infoCard.appendChild(cardTitle);
@@ -158,8 +157,8 @@ function createEnterButton() {
   const enterButton = document.createElement('button');
   enterButton.id = 'enterButton';
   enterButton.textContent = 'Enter Visualization';
-  enterButton.style.marginTop = '25px';
-  enterButton.style.padding = '12px 30px';
+  enterButton.style.marginTop = '20px';
+  enterButton.style.padding = '14px 30px';
   enterButton.style.fontSize = '16px';
   enterButton.style.fontWeight = 'bold';
   enterButton.style.backgroundColor = '#4ecdc4';
@@ -169,6 +168,7 @@ function createEnterButton() {
   enterButton.style.cursor = 'pointer';
   enterButton.style.width = '100%';
   enterButton.style.transition = 'background-color 0.2s';
+  enterButton.style.touchAction = 'manipulation';
   
   enterButton.addEventListener('mouseenter', () => {
     enterButton.style.backgroundColor = '#45b8af';
