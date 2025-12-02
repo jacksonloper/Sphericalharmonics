@@ -3,7 +3,9 @@
  * Demonstrates loading and rendering HEALPix elevation range data (min, mean, max)
  * from etopo2022_surface_min_mean_max_healpix128_NESTED.npy
  * 
- * Each HEALPix cell is rendered as a line segment from min to max elevation
+ * Each HEALPix cell is rendered with two meshes:
+ * - MIN mesh: solid surface at minimum elevation
+ * - MAX mesh: transparent surface at maximum elevation (shows elevation range)
  */
 
 import * as THREE from 'three';
@@ -64,13 +66,12 @@ loadingDiv.innerHTML = 'Loading HEALPix data...';
 document.body.appendChild(loadingDiv);
 
 // Global state
-let healpixMesh = null;
-let maxHealpixMesh = null; // Transparent mesh for max elevations
-let lineSegments = null;
+let healpixMesh = null; // MIN elevation mesh (solid)
+let maxHealpixMesh = null; // MAX elevation mesh (transparent)
 let quadMesh = null;
 let innerSphere = null;
-let material = null;
-let maxMaterial = null; // Transparent material for max mesh
+let material = null; // Material for MIN mesh
+let maxMaterial = null; // Transparent material for MAX mesh
 let quadMaterial = null;
 let geometryData = null; // Store data for regeneration
 let alphaValue = 0.1; // Default alpha value
@@ -403,11 +404,6 @@ function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
  * Clean up old geometry and dispose of resources
  */
 function cleanupOldGeometry() {
-  if (lineSegments) {
-    scene.remove(lineSegments);
-    lineSegments.geometry.dispose();
-    // Material is reused, so don't dispose it
-  }
   if (quadMesh) {
     scene.remove(quadMesh);
     quadMesh.geometry.dispose();
