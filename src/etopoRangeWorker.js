@@ -8,116 +8,8 @@
 import { geoDelaunay } from 'd3-geo-voronoi';
 // Import HEALPix library for proper NESTED pixel ordering
 import { pix2ang_nest } from '@hscmap/healpix';
-
-// We'll use a lightweight npyjs-like loader in the worker
-// For simplicity, we'll fetch and parse the npy format directly
-
-/**
- * Load and parse NPY file
- */
-async function loadNpy(filename) {
-  const response = await fetch(filename);
-  const arrayBuffer = await response.arrayBuffer();
-  
-  // Simple NPY parser (adapted from npyjs logic)
-  const view = new DataView(arrayBuffer);
-  
-  // NPY format:
-  // 6 bytes: magic number "\x93NUMPY"
-  // 1 byte: major version
-  // 1 byte: minor version
-  // 2 bytes (v1.0) or 4 bytes (v2.0+): header length (little-endian)
-  // N bytes: header (ASCII string, padded to 64-byte alignment)
-  // Data follows
-  
-  let offset = 0;
-  
-  // Read and validate magic number (6 bytes: \x93NUMPY)
-  const magic = new Uint8Array(arrayBuffer, offset, 6);
-  offset += 6;
-  
-  // Validate magic number
-  const expectedMagic = [0x93, 0x4E, 0x55, 0x4D, 0x50, 0x59]; // \x93NUMPY
-  for (let i = 0; i < 6; i++) {
-    if (magic[i] !== expectedMagic[i]) {
-      throw new Error('Invalid NPY file: magic number mismatch');
-    }
-  }
-  
-  // Read version (2 bytes)
-  const major = view.getUint8(offset);
-  const minor = view.getUint8(offset + 1);
-  offset += 2;
-  
-  // Read header length
-  let headerLen;
-  if (major === 1) {
-    headerLen = view.getUint16(offset, true);
-    offset += 2;
-  } else if (major === 2 || major === 3) {
-    headerLen = view.getUint32(offset, true);
-    offset += 4;
-  } else {
-    throw new Error(`Unsupported NPY version: ${major}.${minor}`);
-  }
-  
-  // Read header (Python dict as string)
-  const headerBytes = new Uint8Array(arrayBuffer, offset, headerLen);
-  const headerStr = new TextDecoder().decode(headerBytes);
-  offset += headerLen;
-  
-  // The data section starts after the header, but we need to ensure
-  // we're at the correct offset (header is already padded in the file)
-  
-  // Parse shape from header
-  const shapeMatch = headerStr.match(/'shape':\s*\((\d+),\s*(\d+)\)/);
-  if (!shapeMatch) throw new Error('Could not parse shape from NPY header');
-  const shape = [parseInt(shapeMatch[1]), parseInt(shapeMatch[2])];
-  
-  // Parse dtype
-  const dtypeMatch = headerStr.match(/'descr':\s*'([<>|])([a-z])(\d+)'/);
-  if (!dtypeMatch) throw new Error('Could not parse dtype from NPY header');
-  const dtype = dtypeMatch[2] + dtypeMatch[3];
-  
-  // Parse fortran_order (should be False for C-order)
-  const fortranMatch = headerStr.match(/'fortran_order':\s*(True|False)/);
-  const fortranOrder = fortranMatch && fortranMatch[1] === 'True';
-  
-  // Calculate data size
-  const dataLen = shape[0] * shape[1];
-  let data;
-  
-  if (dtype === 'f2') {
-    // float16 - need to convert to float32
-    const uint16Data = new Uint16Array(arrayBuffer, offset, dataLen);
-    data = new Float32Array(dataLen);
-    for (let i = 0; i < dataLen; i++) {
-      data[i] = float16ToFloat32(uint16Data[i]);
-    }
-  } else if (dtype === 'f4') {
-    data = new Float32Array(arrayBuffer, offset, dataLen);
-  } else if (dtype === 'f8') {
-    data = new Float64Array(arrayBuffer, offset, dataLen);
-  } else {
-    throw new Error(`Unsupported dtype: ${dtype}`);
-  }
-  
-  return { data, shape, dtype };
-}
-
-/**
- * Convert float16 to float32
- */
-function float16ToFloat32(binary) {
-  const exponent = (binary & 0x7C00) >> 10;
-  const fraction = binary & 0x03FF;
-  
-  return (binary >> 15 ? -1 : 1) * (
-    exponent === 0 ? Math.pow(2, -14) * (fraction / Math.pow(2, 10)) :
-    exponent === 0x1F ? fraction ? NaN : Infinity :
-    Math.pow(2, exponent - 15) * (1 + fraction / Math.pow(2, 10))
-  );
-}
+// Import npyjs for NPY file parsing
+import { load } from 'npyjs';
 
 /**
  * Convert spherical coordinates (theta, phi) to Cartesian (x, y, z)
@@ -300,9 +192,9 @@ async function processNside(nside) {
   try {
     self.postMessage({ type: 'status', nside, message: `Loading data for nside=${nside}...` });
     
-    // Load data
+    // Load data using npyjs
     const filename = `./earthtoposources/etopo2022_surface_min_mean_max_healpix${nside}_NESTED.npy`;
-    const npyData = await loadNpy(filename);
+    const npyData = await load(filename);
     
     self.postMessage({ type: 'status', nside, message: `Data loaded for nside=${nside}` });
     
