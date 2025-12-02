@@ -198,6 +198,9 @@ function generateMeshGeometry(nside, minElevations, maxElevations, maxAbsElevati
   
   self.postMessage({ type: 'progress', message: 'Triangulation complete!', step: 6, total: 6 });
   
+  // Note: We don't return minElevations and maxElevations because they are
+  // already available on the main thread. Transferring them back would cause
+  // the arrays on the main thread to become neutered/detached.
   return {
     positions,
     minNormals,
