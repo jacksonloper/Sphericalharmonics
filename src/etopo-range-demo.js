@@ -474,6 +474,30 @@ function createMeshesFromGeometry(meshGeometry, maxAbsElevation) {
 }
 
 /**
+ * Create a circular texture for point sprites
+ */
+function createCircleTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  
+  const ctx = canvas.getContext('2d');
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  const radius = canvas.width / 2;
+  
+  // Draw a circle
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+  ctx.fillStyle = 'white';
+  ctx.fill();
+  
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/**
  * Clean up HEALPix dots
  */
 function cleanupHealpixDots() {
@@ -498,13 +522,15 @@ function createHealpixDots(meshGeometry) {
   const dotsGeometry = new THREE.BufferGeometry();
   dotsGeometry.setAttribute('position', new THREE.BufferAttribute(meshGeometry.positions, 3));
   
-  // Create material for the points
+  // Create material for the points with circular shape
   const dotsMaterial = new THREE.PointsMaterial({
     color: 0xffffff,
     size: 0.01,
     sizeAttenuation: true,
     transparent: true,
-    opacity: 0.6
+    opacity: 0.6,
+    map: createCircleTexture(),
+    alphaTest: 0.5
   });
   
   healpixDotsPoints = new THREE.Points(dotsGeometry, dotsMaterial);
