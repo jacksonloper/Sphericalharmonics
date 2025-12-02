@@ -753,37 +753,37 @@ function addControlPanel() {
   meshTypeGroup.appendChild(maxLabel);
   panel.appendChild(meshTypeGroup);
 
-  // Flip sign checkbox
-  const flipSignGroup = document.createElement('div');
-  flipSignGroup.style.display = 'flex';
-  flipSignGroup.style.alignItems = 'center';
-  flipSignGroup.style.gap = '8px';
+  // Flip oceans checkbox
+  const flipOceansGroup = document.createElement('div');
+  flipOceansGroup.style.display = 'flex';
+  flipOceansGroup.style.alignItems = 'center';
+  flipOceansGroup.style.gap = '8px';
 
   const flipCheckbox = document.createElement('input');
   flipCheckbox.type = 'checkbox';
-  flipCheckbox.id = 'flipSignCheckbox';
+  flipCheckbox.id = 'flipOceansCheckbox';
   flipCheckbox.checked = flipSign;
   flipCheckbox.style.cursor = 'pointer';
 
   const flipLabel = document.createElement('label');
-  flipLabel.htmlFor = 'flipSignCheckbox';
-  flipLabel.textContent = 'Flip sign';
+  flipLabel.htmlFor = 'flipOceansCheckbox';
+  flipLabel.textContent = 'Flip oceans';
   flipLabel.style.cursor = 'pointer';
 
   flipCheckbox.addEventListener('change', (e) => {
     flipSign = e.target.checked;
-    // Update uniforms in materials to flip the sign
+    // Update uniforms in materials to use absolute elevation
     if (material) {
-      material.uniforms.flipSign.value = flipSign ? -1.0 : 1.0;
+      material.uniforms.flipOceans.value = flipSign ? 1.0 : 0.0;
     }
     if (maxMaterial) {
-      maxMaterial.uniforms.flipSign.value = flipSign ? -1.0 : 1.0;
+      maxMaterial.uniforms.flipOceans.value = flipSign ? 1.0 : 0.0;
     }
   });
 
-  flipSignGroup.appendChild(flipCheckbox);
-  flipSignGroup.appendChild(flipLabel);
-  panel.appendChild(flipSignGroup);
+  flipOceansGroup.appendChild(flipCheckbox);
+  flipOceansGroup.appendChild(flipLabel);
+  panel.appendChild(flipOceansGroup);
 
   // Show HEALPix dots checkbox
   const dotsGroup = document.createElement('div');

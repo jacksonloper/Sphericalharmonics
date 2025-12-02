@@ -230,8 +230,8 @@ async function processNside(nside) {
       
       // Extract water occurrence value
       const waterVal = waterData.data[i];
-      // Handle NaN and Inf values by treating them as water (255)
-      waterVals[i] = (isFinite(waterVal) ? waterVal : 255);
+      // Handle NaN and Inf values by marking them as -1 (no data = gray)
+      waterVals[i] = (isFinite(waterVal) ? waterVal : -1);
       
       if (minVal < globalMin) globalMin = minVal;
       if (maxVal > globalMax) globalMax = maxVal;

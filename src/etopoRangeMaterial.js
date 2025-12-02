@@ -20,7 +20,7 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
     attribute float waterOccurrence;
     uniform float alpha;
     uniform float maxAbsElevation;
-    uniform float flipSign;
+    uniform float flipOceans;
     varying float vElevation;
     varying float vOriginalElevation;
     varying float vWaterOccurrence;
@@ -28,19 +28,20 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
     varying vec3 vPosition;
 
     void main() {
-      // Store original elevation for color mapping (not affected by flip sign)
+      // Store original elevation for color mapping (not affected by flip oceans)
       vOriginalElevation = elevation;
       
       // Pass water occurrence to fragment shader
       vWaterOccurrence = waterOccurrence;
       
-      // Apply flip sign to elevation for displacement
-      vElevation = elevation * flipSign;
+      // Apply flip oceans: use absolute value of elevation for displacement
+      // When flipOceans is 1.0, oceans (negative elevation) appear as positive
+      vElevation = flipOceans > 0.5 ? abs(elevation) : elevation;
 
       // Use precomputed normals from geometry (computed at alpha=0.11)
-      // When flipSign is -1, we need to invert the normals since the displacement is reversed
-      // Transform to view space for lighting calculations
-      vNormal = normalize(normalMatrix * normal * flipSign);
+      // When flipOceans is enabled and elevation is negative, invert normals
+      float normalFlip = (flipOceans > 0.5 && elevation < 0.0) ? -1.0 : 1.0;
+      vNormal = normalize(normalMatrix * normal * normalFlip);
 
       // Compute radial displacement: r = 1 + alpha * e / maxAbsElevation
       // Depths (negative) point inward, heights (positive) point outward
@@ -82,6 +83,12 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
 
     // Water-based colormap: blue for water, green for land, black for lowest, white for highest
     vec3 water_colormap(float elevation_t, float water_t) {
+      // Check for no-data regions (NaN/Inf in original data, marked as -1)
+      if (water_t < 0.0) {
+        // Gray for no-data regions (polar areas without satellite coverage)
+        return vec3(0.5, 0.5, 0.5);
+      }
+      
       // Threshold for distinguishing water from land (values > 50 capture water bodies)
       bool isWater = water_t > (50.0 / 255.0);
       
@@ -152,7 +159,7 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
       maxElevation: { value: maxElevation },
       maxAbsElevation: { value: maxAbsElevation },
       alpha: { value: 0.1 },
-      flipSign: { value: 1.0 },
+      flipOceans: { value: 0.0 },
       useWaterColormap: { value: true }  // Default to water-based colormap
     },
     vertexShader,
