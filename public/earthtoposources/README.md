@@ -4,11 +4,21 @@ This directory contains Earth topography data derived from spherical harmonic co
 
 ## Source Data
 
+### Earth2014 Spherical Harmonics
+
 The BSHC files are from the **Earth2014** model:
 https://ddfe.curtin.edu.au/gravitymodels/Earth2014/data_5min/shcs_to2160/
 
 - `sur.bshc` - Earth surface elevation (topography)
 - `bed.bshc` - Earth bedrock elevation (bathymetry/sub-ice topography)
+
+### ETOPO Data
+
+ETOPO data is from the **ETOPO 2022 15 Arc-Second Global Relief Model**:
+https://www.ncei.noaa.gov/products/etopo-global-relief-model
+
+**Citation**:
+> NOAA National Centers for Environmental Information. 2022: ETOPO 2022 15 Arc-Second Global Relief Model. NOAA National Centers for Environmental Information. DOI: 10.25921/fd45-gt74. Accessed [date].
 
 ### BSHC File Format
 
@@ -27,6 +37,14 @@ BSHC (Binary Spherical Harmonic Coefficients) is a format used by [SHTOOLS](http
 import pyshtools as pysh
 coeffs, lmax = pysh.shio.read_bshc('sur.bshc')
 ```
+
+### Water Data
+
+The water data is from the **Global Surface Water** dataset:
+https://global-surface-water.appspot.com/download
+
+**Citation**:
+> Jean-Francois Pekel, Andrew Cottam, Noel Gorelick, Alan S. Belward, High-resolution mapping of global surface water and its long-term changes. Nature 540, 418-422 (2016).
 
 ---
 
