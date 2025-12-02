@@ -151,6 +151,7 @@ let flipSign = false; // Toggle for flipping elevation sign
 let loadingOverlay = null; // Loading overlay for resolution switching
 let healpixDotsPoints = null; // Points mesh for HEALPix location dots
 let showHealpixDots = false; // Toggle for showing HEALPix location dots
+let circleTexture = null; // Cached circular texture for point sprites
 
 // Cache for pre-triangulated meshes
 const meshCache = {};
@@ -474,27 +475,29 @@ function createMeshesFromGeometry(meshGeometry, maxAbsElevation) {
 }
 
 /**
- * Create a circular texture for point sprites
+ * Get or create a circular texture for point sprites (cached)
  */
-function createCircleTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 64;
-  canvas.height = 64;
-  
-  const ctx = canvas.getContext('2d');
-  const centerX = canvas.width / 2;
-  const centerY = canvas.height / 2;
-  const radius = canvas.width / 2;
-  
-  // Draw a circle
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-  ctx.fillStyle = 'white';
-  ctx.fill();
-  
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
+function getCircleTexture() {
+  if (!circleTexture) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    
+    const ctx = canvas.getContext('2d');
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = canvas.width / 2;
+    
+    // Draw a circle
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+    ctx.fillStyle = 'white';
+    ctx.fill();
+    
+    circleTexture = new THREE.CanvasTexture(canvas);
+    circleTexture.needsUpdate = true;
+  }
+  return circleTexture;
 }
 
 /**
@@ -504,6 +507,7 @@ function cleanupHealpixDots() {
   if (healpixDotsPoints) {
     scene.remove(healpixDotsPoints);
     healpixDotsPoints.geometry.dispose();
+    // Note: texture is cached and reused, so we don't dispose it here
     healpixDotsPoints.material.dispose();
     healpixDotsPoints = null;
   }
@@ -529,7 +533,7 @@ function createHealpixDots(meshGeometry) {
     sizeAttenuation: true,
     transparent: true,
     opacity: 0.6,
-    map: createCircleTexture(),
+    map: getCircleTexture(),
     alphaTest: 0.5
   });
   
