@@ -559,60 +559,60 @@ function addControlPanel() {
   panel.style.flexWrap = 'wrap';
   panel.style.justifyContent = 'center';
 
-  // Radio buttons for L/H mesh selection
+  // Radio buttons for min/max mesh selection
   const meshTypeGroup = document.createElement('div');
   meshTypeGroup.style.display = 'flex';
   meshTypeGroup.style.alignItems = 'center';
   meshTypeGroup.style.gap = '12px';
 
-  // L mesh radio button (min elevation)
-  const lRadio = document.createElement('input');
-  lRadio.type = 'radio';
-  lRadio.name = 'meshType';
-  lRadio.id = 'lMeshRadio';
-  lRadio.checked = !showMaxMesh;
-  lRadio.style.cursor = 'pointer';
+  // Min mesh radio button (min elevation)
+  const minRadio = document.createElement('input');
+  minRadio.type = 'radio';
+  minRadio.name = 'meshType';
+  minRadio.id = 'minMeshRadio';
+  minRadio.checked = !showMaxMesh;
+  minRadio.style.cursor = 'pointer';
 
-  const lLabel = document.createElement('label');
-  lLabel.htmlFor = 'lMeshRadio';
-  lLabel.textContent = 'Lmesh';
-  lLabel.style.cursor = 'pointer';
+  const minLabel = document.createElement('label');
+  minLabel.htmlFor = 'minMeshRadio';
+  minLabel.textContent = 'Min mesh';
+  minLabel.style.cursor = 'pointer';
 
-  // H mesh radio button (max elevation)
-  const hRadio = document.createElement('input');
-  hRadio.type = 'radio';
-  hRadio.name = 'meshType';
-  hRadio.id = 'hMeshRadio';
-  hRadio.checked = showMaxMesh;
-  hRadio.style.cursor = 'pointer';
+  // Max mesh radio button (max elevation)
+  const maxRadio = document.createElement('input');
+  maxRadio.type = 'radio';
+  maxRadio.name = 'meshType';
+  maxRadio.id = 'maxMeshRadio';
+  maxRadio.checked = showMaxMesh;
+  maxRadio.style.cursor = 'pointer';
 
-  const hLabel = document.createElement('label');
-  hLabel.htmlFor = 'hMeshRadio';
-  hLabel.textContent = 'Hmesh';
-  hLabel.style.cursor = 'pointer';
+  const maxLabel = document.createElement('label');
+  maxLabel.htmlFor = 'maxMeshRadio';
+  maxLabel.textContent = 'Max mesh';
+  maxLabel.style.cursor = 'pointer';
 
   // Radio button change handlers
   const handleMeshTypeChange = () => {
-    showMaxMesh = hRadio.checked;
+    showMaxMesh = maxRadio.checked;
     
     if (showMaxMesh) {
-      // Show H mesh (max elevation), hide L mesh
+      // Show max mesh (max elevation), hide min mesh
       if (maxHealpixMesh && !maxHealpixMesh.parent) scene.add(maxHealpixMesh);
       if (healpixMesh && healpixMesh.parent) scene.remove(healpixMesh);
     } else {
-      // Show L mesh (min elevation), hide H mesh
+      // Show min mesh (min elevation), hide max mesh
       if (healpixMesh && !healpixMesh.parent) scene.add(healpixMesh);
       if (maxHealpixMesh && maxHealpixMesh.parent) scene.remove(maxHealpixMesh);
     }
   };
 
-  lRadio.addEventListener('change', handleMeshTypeChange);
-  hRadio.addEventListener('change', handleMeshTypeChange);
+  minRadio.addEventListener('change', handleMeshTypeChange);
+  maxRadio.addEventListener('change', handleMeshTypeChange);
 
-  meshTypeGroup.appendChild(lRadio);
-  meshTypeGroup.appendChild(lLabel);
-  meshTypeGroup.appendChild(hRadio);
-  meshTypeGroup.appendChild(hLabel);
+  meshTypeGroup.appendChild(minRadio);
+  meshTypeGroup.appendChild(minLabel);
+  meshTypeGroup.appendChild(maxRadio);
+  meshTypeGroup.appendChild(maxLabel);
   panel.appendChild(meshTypeGroup);
 
   // Flip sign checkbox
