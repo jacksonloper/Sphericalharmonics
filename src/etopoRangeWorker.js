@@ -32,9 +32,17 @@ async function loadNpy(filename) {
   
   let offset = 0;
   
-  // Read magic number (6 bytes)
+  // Read and validate magic number (6 bytes: \x93NUMPY)
   const magic = new Uint8Array(arrayBuffer, offset, 6);
   offset += 6;
+  
+  // Validate magic number
+  const expectedMagic = [0x93, 0x4E, 0x55, 0x4D, 0x50, 0x59]; // \x93NUMPY
+  for (let i = 0; i < 6; i++) {
+    if (magic[i] !== expectedMagic[i]) {
+      throw new Error('Invalid NPY file: magic number mismatch');
+    }
+  }
   
   // Read version (2 bytes)
   const major = view.getUint8(offset);
