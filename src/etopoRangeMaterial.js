@@ -84,13 +84,15 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
     // Water-based colormap: blue for water, green for land, black for lowest, white for highest
     vec3 water_colormap(float elevation_t, float water_t) {
       // Check for no-data regions (NaN/Inf in original data, marked as -1)
+      // Fall back to using elevation as the determiner
+      bool isWater;
       if (water_t < 0.0) {
-        // Gray for no-data regions (polar areas without satellite coverage)
-        return vec3(0.5, 0.5, 0.5);
+        // No water data available - use elevation as fallback (elevation <= 0 is water)
+        isWater = vOriginalElevation <= 0.0;
+      } else {
+        // Use water occurrence threshold (values > 50 capture water bodies)
+        isWater = water_t > (50.0 / 255.0);
       }
-      
-      // Threshold for distinguishing water from land (values > 50 capture water bodies)
-      bool isWater = water_t > (50.0 / 255.0);
       
       vec3 baseColor;
       if (isWater) {
@@ -122,8 +124,8 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
       elevation_t = clamp(elevation_t, 0.0, 1.0);
       
       // Map water occurrence to [0, 1] range
+      // NOTE: Do NOT clamp before passing to water_colormap, as negative values indicate no-data
       float water_t = vWaterOccurrence / 255.0;
-      water_t = clamp(water_t, 0.0, 1.0);
       
       // Choose colormap based on uniform
       vec3 color;
