@@ -199,7 +199,14 @@ async function processNside(nside) {
     
     // Load water occurrence data
     const waterFilename = `${self.location.origin}/earthtoposources/water_occurrence_healpix${nside}_NESTED.npy`;
-    const waterData = await load(waterFilename);
+    let waterData = null;
+    try {
+      waterData = await load(waterFilename);
+    } catch (waterError) {
+      console.warn(`[nside=${nside}] Water data not available, using fallback values`);
+      // Create fallback water data (all zeros = land)
+      waterData = { data: new Float32Array(npyData.shape[0]).fill(0) };
+    }
     
     self.postMessage({ type: 'status', nside, message: `Data loaded for nside=${nside}` });
     

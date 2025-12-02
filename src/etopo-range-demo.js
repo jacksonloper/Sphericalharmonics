@@ -817,6 +817,38 @@ function addControlPanel() {
   dotsGroup.appendChild(dotsLabel);
   panel.appendChild(dotsGroup);
 
+  // Water colormap checkbox
+  const waterColormapGroup = document.createElement('div');
+  waterColormapGroup.style.display = 'flex';
+  waterColormapGroup.style.alignItems = 'center';
+  waterColormapGroup.style.gap = '8px';
+
+  const waterColormapCheckbox = document.createElement('input');
+  waterColormapCheckbox.type = 'checkbox';
+  waterColormapCheckbox.id = 'waterColormapCheckbox';
+  waterColormapCheckbox.checked = true; // Default to water colormap
+  waterColormapCheckbox.style.cursor = 'pointer';
+
+  const waterColormapLabel = document.createElement('label');
+  waterColormapLabel.htmlFor = 'waterColormapCheckbox';
+  waterColormapLabel.textContent = 'Water colormap';
+  waterColormapLabel.style.cursor = 'pointer';
+
+  waterColormapCheckbox.addEventListener('change', (e) => {
+    const useWaterColormap = e.target.checked;
+    // Update uniforms in materials to toggle colormap
+    if (material) {
+      material.uniforms.useWaterColormap.value = useWaterColormap;
+    }
+    if (maxMaterial) {
+      maxMaterial.uniforms.useWaterColormap.value = useWaterColormap;
+    }
+  });
+
+  waterColormapGroup.appendChild(waterColormapCheckbox);
+  waterColormapGroup.appendChild(waterColormapLabel);
+  panel.appendChild(waterColormapGroup);
+
   // Nside selector dropdown
   const nsideGroup = document.createElement('div');
   nsideGroup.style.display = 'flex';
