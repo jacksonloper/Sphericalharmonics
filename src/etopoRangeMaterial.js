@@ -34,8 +34,9 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
       vElevation = elevation * flipSign;
 
       // Use precomputed normals from geometry (computed at alpha=0.11)
+      // When flipSign is -1, we need to invert the normals since the displacement is reversed
       // Transform to view space for lighting calculations
-      vNormal = normalize(normalMatrix * normal);
+      vNormal = normalize(normalMatrix * normal * flipSign);
 
       // Compute radial displacement: r = 1 + alpha * e / maxAbsElevation
       // Depths (negative) point inward, heights (positive) point outward
