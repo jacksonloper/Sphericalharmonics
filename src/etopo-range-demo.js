@@ -11,14 +11,18 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createEtopoRangeMaterial } from './etopoRangeMaterial.js';
-import { load } from 'npyjs';
-import { pix2ang_nest } from '@hscmap/healpix';
 import EtopoRangeWorker from './etopoRangeWorker.js?worker';
 
 // HEALPix parameters
 const INITIAL_NSIDE = 64; // Initial resolution
 let currentNside = INITIAL_NSIDE; // Track current resolution
 const HEALPIX_BASE_FACES = 12; // HEALPix tessellation has 12 base faces
+
+// Available nside resolutions
+const AVAILABLE_NSIDES = [64, 128, 256];
+
+// Start the worker immediately - it will autonomously process all resolutions
+const worker = new EtopoRangeWorker();
 
 // UI constants
 const DEBOUNCE_DELAY_MS = 100; // Delay for slider debouncing
@@ -142,19 +146,132 @@ let quadMaterial = null;
 let geometryData = null; // Store data for regeneration
 let alphaValue = 0.1; // Default alpha value
 let regenerateTimeout = null; // For debouncing slider updates
-let meshWorker = null; // Worker for mesh generation
 let showMaxMesh = true; // Toggle for max elevation mesh (true = show max, false = show min)
 let flipSign = false; // Toggle for flipping elevation sign
 let loadingOverlay = null; // Loading overlay for resolution switching
-// Track which nsides are currently being triangulated to prevent race conditions
-let activeTriangulations = new Set();
-
-// Available nside resolutions
-const AVAILABLE_NSIDES = [64, 128, 256];
 
 // Cache for pre-triangulated meshes
 const meshCache = {};
 AVAILABLE_NSIDES.forEach(nside => meshCache[nside] = null);
+
+// Track which nside we're waiting for first (to show initial visualization)
+let waitingForInitialNside = INITIAL_NSIDE;
+let isInitialized = false;
+
+/**
+ * Handle messages from the worker
+ */
+worker.onmessage = (e) => {
+  const { type, nside } = e.data;
+  
+  if (type === 'status') {
+    console.log(`[nside=${nside}] ${e.data.message}`);
+    if (nside === waitingForInitialNside && !isInitialized) {
+      const loadingStatus = document.getElementById('loadingStatus');
+      if (loadingStatus) {
+        loadingStatus.textContent = e.data.message;
+      }
+    } else if (nside === 128 || nside === 256) {
+      showLoading(nside);
+    }
+  } else if (type === 'progress') {
+    console.log(`[nside=${nside}] ${e.data.message}`);
+  } else if (type === 'complete') {
+    console.log(`[nside=${nside}] Triangulation completed in ${e.data.triangulationTime.toFixed(2)}ms`);
+    
+    // Convert transferred ArrayBuffers back to typed arrays
+    const meshGeometry = {
+      positions: new Float32Array(e.data.positions),
+      minNormals: new Float32Array(e.data.minNormals),
+      maxNormals: new Float32Array(e.data.maxNormals),
+      minElevations: new Float32Array(e.data.minElevations),
+      maxElevations: new Float32Array(e.data.maxElevations),
+      triangles: new Uint32Array(e.data.triangles),
+      numPixels: e.data.numPixels
+    };
+    
+    const data = {
+      numPixels: e.data.numPixels,
+      minVals: meshGeometry.minElevations,
+      meanVals: new Float32Array(e.data.numPixels), // Not used in this demo
+      maxVals: meshGeometry.maxElevations,
+      globalMin: e.data.globalMin,
+      globalMax: e.data.globalMax,
+      maxAbsElevation: e.data.maxAbsElevation
+    };
+    
+    // Cache the result
+    meshCache[nside] = { geometry: meshGeometry, data: data };
+    
+    // Hide loading indicator for this nside
+    if (nside === 128 || nside === 256) {
+      hideLoading();
+    }
+    
+    // If this is the initial nside, initialize the scene
+    if (nside === waitingForInitialNside && !isInitialized) {
+      initializeScene(nside, meshGeometry, data);
+      isInitialized = true;
+    }
+    
+    // If user switched to this nside while it was loading, update the view
+    if (nside === currentNside && isInitialized) {
+      switchToNside(nside);
+    }
+  } else if (type === 'error') {
+    console.error(`[nside=${nside}] Worker error:`, e.data.message);
+    hideLoading();
+  }
+};
+
+worker.onerror = (error) => {
+  console.error('Worker error:', error);
+  hideLoading();
+};
+
+/**
+ * Initialize the scene with the first loaded geometry
+ */
+function initializeScene(nside, meshGeometry, data) {
+  // Store data for regeneration when slider changes
+  geometryData = {
+    numPixels: data.numPixels,
+    minVals: data.minVals,
+    meanVals: data.meanVals,
+    maxVals: data.maxVals,
+    globalMin: data.globalMin,
+    globalMax: data.globalMax,
+    maxAbsElevation: data.maxAbsElevation
+  };
+  
+  // Create material for min elevation mesh
+  material = createEtopoRangeMaterial(data.globalMin, data.globalMax, data.maxAbsElevation);
+  
+  // Create material for max elevation mesh (fully opaque)
+  maxMaterial = createEtopoRangeMaterial(data.globalMin, data.globalMax, data.maxAbsElevation);
+  
+  // Create inner non-transparent sphere at radius 0.4
+  const innerSphereGeometry = new THREE.SphereGeometry(0.4, 64, 64);
+  const innerSphereMaterial = new THREE.MeshBasicMaterial({
+    color: 0x1a1a1a,
+    side: THREE.BackSide
+  });
+  innerSphere = new THREE.Mesh(innerSphereGeometry, innerSphereMaterial);
+  scene.add(innerSphere);
+  
+  // Create and add meshes to scene
+  createMeshesFromGeometry(meshGeometry, data.maxAbsElevation);
+  
+  // Update loading status and add Enter button
+  const loadingStatus = document.getElementById('loadingStatus');
+  if (loadingStatus) {
+    loadingStatus.style.display = 'none';
+  }
+  
+  // Add Enter Visualization button
+  const enterButton = createEnterButton();
+  infoCard.appendChild(enterButton);
+}
 
 /**
  * Get estimated time message for triangulation
@@ -316,189 +433,6 @@ function updateVertexCount() {
 }
 
 /**
- * Load HEALPix data for a specific nside value
- */
-async function loadHealpixData(nside) {
-  const startLoadTime = performance.now();
-  console.log(`[nside=${nside}] Starting to load data...`);
-  
-  const filename = `./earthtoposources/etopo2022_surface_min_mean_max_healpix${nside}_NESTED.npy`;
-  const data = await load(filename);
-  
-  const loadTime = performance.now() - startLoadTime;
-  console.log(`[nside=${nside}] Data loaded in ${loadTime.toFixed(2)}ms`);
-  console.log(`[nside=${nside}] Data shape: ${data.shape}, dtype: ${data.dtype}`);
-  
-  // Extract min, mean, max arrays
-  const numPixels = data.shape[0];
-  const minVals = new Float32Array(numPixels);
-  const meanVals = new Float32Array(numPixels);
-  const maxVals = new Float32Array(numPixels);
-  
-  let globalMin = Infinity;
-  let globalMax = -Infinity;
-  
-  for (let i = 0; i < numPixels; i++) {
-    const minVal = data.data[i * 3 + 0];
-    const meanVal = data.data[i * 3 + 1];
-    const maxVal = data.data[i * 3 + 2];
-    minVals[i] = minVal;
-    meanVals[i] = meanVal;
-    maxVals[i] = maxVal;
-    
-    if (minVal < globalMin) globalMin = minVal;
-    if (maxVal > globalMax) globalMax = maxVal;
-  }
-  
-  // Calculate max absolute elevation
-  const maxAbsElevation = Math.max(Math.abs(globalMin), Math.abs(globalMax));
-  
-  console.log(`[nside=${nside}] Elevation range: ${globalMin.toFixed(2)}m to ${globalMax.toFixed(2)}m`);
-  console.log(`[nside=${nside}] Max absolute elevation: ${maxAbsElevation.toFixed(2)}m`);
-  
-  return {
-    data: data.data,
-    numPixels,
-    minVals,
-    meanVals,
-    maxVals,
-    globalMin,
-    globalMax,
-    maxAbsElevation
-  };
-}
-
-/**
- * Generate mesh geometry for a specific nside using a worker (non-blocking)
- * Returns a promise that resolves with geometry data
- */
-function generateMeshGeometry(nside, elevationData, minElevations, maxElevations, maxAbsElevation) {
-  return new Promise((resolve, reject) => {
-    const startTime = performance.now();
-    console.log(`[nside=${nside}] Starting triangulation in worker...`);
-    
-    const worker = new EtopoRangeWorker();
-    
-    worker.onmessage = (e) => {
-      const { type } = e.data;
-      
-      if (type === 'status') {
-        console.log(`[nside=${nside}] ${e.data.message}`);
-      } else if (type === 'progress') {
-        console.log(`[nside=${nside}] ${e.data.message}`);
-      } else if (type === 'complete') {
-        const totalTime = performance.now() - startTime;
-        console.log(`[nside=${nside}] Triangulation completed in ${totalTime.toFixed(2)}ms`);
-        
-        // Convert transferred ArrayBuffers back to typed arrays
-        // Note: minElevations and maxElevations are NOT transferred from worker
-        // We use the original arrays passed to this function
-        const result = {
-          positions: new Float32Array(e.data.positions),
-          minNormals: new Float32Array(e.data.minNormals),
-          maxNormals: new Float32Array(e.data.maxNormals),
-          minElevations: minElevations,
-          maxElevations: maxElevations,
-          triangles: new Uint32Array(e.data.triangles),
-          numPixels: e.data.numPixels
-        };
-        
-        worker.terminate();
-        resolve(result);
-      } else if (type === 'error') {
-        console.error(`[nside=${nside}] Worker error:`, e.data.message);
-        worker.terminate();
-        reject(new Error(e.data.message));
-      }
-    };
-    
-    worker.onerror = (error) => {
-      console.error(`[nside=${nside}] Worker error:`, error);
-      worker.terminate();
-      reject(error);
-    };
-    
-    // Send data to worker
-    worker.postMessage({
-      nside,
-      minElevations,
-      maxElevations,
-      maxAbsElevation
-    });
-  });
-}
-
-/**
- * Load and visualize HEALPix data
- */
-async function loadAndVisualize() {
-  try {
-    // Load initial data for nside=64
-    const data = await loadHealpixData(currentNside);
-    
-    // Store data for regeneration when slider changes
-    geometryData = {
-      numPixels: data.numPixels,
-      minVals: data.minVals,
-      meanVals: data.meanVals,
-      maxVals: data.maxVals,
-      globalMin: data.globalMin,
-      globalMax: data.globalMax,
-      maxAbsElevation: data.maxAbsElevation
-    };
-    
-    // Create material for min elevation mesh
-    material = createEtopoRangeMaterial(data.globalMin, data.globalMax, data.maxAbsElevation);
-    
-    // Create material for max elevation mesh (fully opaque)
-    maxMaterial = createEtopoRangeMaterial(data.globalMin, data.globalMax, data.maxAbsElevation);
-    
-    // Create inner non-transparent sphere at radius 0.4
-    const innerSphereGeometry = new THREE.SphereGeometry(0.4, 64, 64);
-    const innerSphereMaterial = new THREE.MeshBasicMaterial({
-      color: 0x1a1a1a,
-      side: THREE.BackSide
-    });
-    innerSphere = new THREE.Mesh(innerSphereGeometry, innerSphereMaterial);
-    scene.add(innerSphere);
-    
-    // Generate HEALPix mesh using worker (non-blocking)
-    const loadingStatus = document.getElementById('loadingStatus');
-    if (loadingStatus) {
-      loadingStatus.textContent = 'Generating HEALPix mesh...';
-    }
-    
-    const meshGeometry = await generateMeshGeometry(currentNside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
-    
-    // Store in cache with consistent structure
-    meshCache[currentNside] = { geometry: meshGeometry, data: data };
-    
-    // Create and add meshes to scene
-    createMeshesFromGeometry(meshGeometry, data.maxAbsElevation);
-    
-    // Update loading status and add Enter button
-    if (loadingStatus) {
-      loadingStatus.style.display = 'none';
-    }
-    
-    // Add Enter Visualization button
-    const enterButton = createEnterButton();
-    infoCard.appendChild(enterButton);
-    
-    // Start background triangulation for 128 and 256
-    startBackgroundTriangulation();
-    
-  } catch (error) {
-    console.error('Failed to load data:', error);
-    const loadingStatus = document.getElementById('loadingStatus');
-    if (loadingStatus) {
-      loadingStatus.innerHTML = 'Failed: ' + error.message;
-      loadingStatus.style.color = '#ff4444';
-    }
-  }
-}
-
-/**
  * Create Three.js meshes from geometry data and add to scene
  */
 function createMeshesFromGeometry(meshGeometry, maxAbsElevation) {
@@ -535,181 +469,57 @@ function createMeshesFromGeometry(meshGeometry, maxAbsElevation) {
 }
 
 /**
- * Start background triangulation for resolutions not yet loaded
- */
-async function startBackgroundTriangulation() {
-  // Get nsides that need triangulation (excluding current)
-  const nsidesToTriangulate = AVAILABLE_NSIDES.filter(n => n !== currentNside && !meshCache[n]);
-  
-  // Triangulate each in sequence using worker
-  for (const nside of nsidesToTriangulate) {
-    // Skip if already being triangulated
-    if (activeTriangulations.has(nside)) {
-      console.log(`[nside=${nside}] Already being triangulated, skipping background triangulation`);
-      continue;
-    }
-    
-    // Skip if now cached (might have been triangulated by user action)
-    if (meshCache[nside]) {
-      console.log(`[nside=${nside}] Already cached, skipping background triangulation`);
-      continue;
-    }
-    
-    try {
-      activeTriangulations.add(nside);
-      const data = await loadHealpixData(nside);
-      const meshGeometry = await generateMeshGeometry(nside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
-      meshCache[nside] = { geometry: meshGeometry, data: data };
-      console.log(`[nside=${nside}] Pre-triangulation complete and cached`);
-    } catch (error) {
-      console.error(`[nside=${nside}] Failed to pre-triangulate:`, error);
-    } finally {
-      activeTriangulations.delete(nside);
-    }
-  }
-}
-
-/**
  * Switch to a different nside resolution
  */
-async function switchToNside(newNside) {
+function switchToNside(newNside) {
   if (newNside === currentNside) return; // Already at this resolution
   
   console.log(`Switching from nside=${currentNside} to nside=${newNside}`);
   
-  try {
-    // Update current nside
-    currentNside = newNside;
+  // Update current nside
+  currentNside = newNside;
+  
+  // Update vertex count display
+  updateVertexCount();
+  
+  // Check if we have cached geometry
+  if (meshCache[newNside]) {
+    console.log(`Using cached geometry for nside=${newNside}`);
+    const cached = meshCache[newNside];
     
-    // Update vertex count display
-    updateVertexCount();
+    // Update global geometry data
+    geometryData = {
+      numPixels: cached.data.numPixels,
+      minVals: cached.data.minVals,
+      meanVals: cached.data.meanVals,
+      maxVals: cached.data.maxVals,
+      globalMin: cached.data.globalMin,
+      globalMax: cached.data.globalMax,
+      maxAbsElevation: cached.data.maxAbsElevation
+    };
     
-    // Check if we have cached geometry
-    if (meshCache[newNside]) {
-      console.log(`Using cached geometry for nside=${newNside}`);
-      const cached = meshCache[newNside];
-      
-      // Update global geometry data
-      geometryData = {
-        numPixels: cached.data.numPixels,
-        minVals: cached.data.minVals,
-        meanVals: cached.data.meanVals,
-        maxVals: cached.data.maxVals,
-        globalMin: cached.data.globalMin,
-        globalMax: cached.data.globalMax,
-        maxAbsElevation: cached.data.maxAbsElevation
-      };
-      
-      // Clean up old meshes
-      cleanupOldGeometry();
-      
-      // Update materials (if they exist and have uniforms)
-      if (material && material.uniforms) {
-        if (material.uniforms.globalMin) material.uniforms.globalMin.value = cached.data.globalMin;
-        if (material.uniforms.globalMax) material.uniforms.globalMax.value = cached.data.globalMax;
-        if (material.uniforms.maxAbsElevation) material.uniforms.maxAbsElevation.value = cached.data.maxAbsElevation;
-      }
-      if (maxMaterial && maxMaterial.uniforms) {
-        if (maxMaterial.uniforms.globalMin) maxMaterial.uniforms.globalMin.value = cached.data.globalMin;
-        if (maxMaterial.uniforms.globalMax) maxMaterial.uniforms.globalMax.value = cached.data.globalMax;
-        if (maxMaterial.uniforms.maxAbsElevation) maxMaterial.uniforms.maxAbsElevation.value = cached.data.maxAbsElevation;
-      }
-      
-      // Create new meshes from cached geometry
-      createMeshesFromGeometry(cached.geometry, cached.data.maxAbsElevation);
-    } else if (activeTriangulations.has(newNside)) {
-      // Currently being triangulated in background, show loading and wait
-      console.log(`[nside=${newNside}] Triangulation in progress, waiting...`);
-      showLoading(newNside);
-      
-      // Wait for triangulation to complete using a promise
-      await new Promise((resolve) => {
-        const checkInterval = setInterval(() => {
-          if (meshCache[newNside] || !activeTriangulations.has(newNside)) {
-            clearInterval(checkInterval);
-            resolve();
-          }
-        }, 200); // Check every 200ms
-        
-        // Safety timeout - clear after 2 minutes
-        setTimeout(() => {
-          clearInterval(checkInterval);
-          resolve();
-        }, 120000);
-      });
-      
-      hideLoading();
-      
-      // Check if triangulation succeeded
-      if (meshCache[newNside]) {
-        // Recursively call to use the cached geometry
-        return switchToNside(newNside);
-      } else {
-        console.error(`[nside=${newNside}] Triangulation did not complete successfully`);
-        // Revert to a working resolution
-        currentNside = AVAILABLE_NSIDES.find(n => meshCache[n]) || INITIAL_NSIDE;
-        updateVertexCount();
-        return;
-      }
-    } else {
-      console.log(`Loading and triangulating nside=${newNside}...`);
-      
-      // Show loading overlay
-      showLoading(newNside);
-      
-      // Mark as active
-      activeTriangulations.add(newNside);
-      
-      try {
-        // Need to load and triangulate
-        const data = await loadHealpixData(newNside);
-        
-        // Update global geometry data
-        geometryData = {
-          numPixels: data.numPixels,
-          minVals: data.minVals,
-          meanVals: data.meanVals,
-          maxVals: data.maxVals,
-          globalMin: data.globalMin,
-          globalMax: data.globalMax,
-          maxAbsElevation: data.maxAbsElevation
-        };
-        
-        // Clean up old meshes
-        cleanupOldGeometry();
-        
-        // Update materials (if they exist and have uniforms)
-        if (material && material.uniforms) {
-          if (material.uniforms.globalMin) material.uniforms.globalMin.value = data.globalMin;
-          if (material.uniforms.globalMax) material.uniforms.globalMax.value = data.globalMax;
-          if (material.uniforms.maxAbsElevation) material.uniforms.maxAbsElevation.value = data.maxAbsElevation;
-        }
-        if (maxMaterial && maxMaterial.uniforms) {
-          if (maxMaterial.uniforms.globalMin) maxMaterial.uniforms.globalMin.value = data.globalMin;
-          if (maxMaterial.uniforms.globalMax) maxMaterial.uniforms.globalMax.value = data.globalMax;
-          if (maxMaterial.uniforms.maxAbsElevation) maxMaterial.uniforms.maxAbsElevation.value = data.maxAbsElevation;
-        }
-        
-        // Generate and add meshes using worker
-        const meshGeometry = await generateMeshGeometry(newNside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
-        meshCache[newNside] = { geometry: meshGeometry, data: data };
-        createMeshesFromGeometry(meshGeometry, data.maxAbsElevation);
-        
-        // Hide loading overlay
-        hideLoading();
-      } finally {
-        activeTriangulations.delete(newNside);
-      }
+    // Clean up old meshes
+    cleanupOldGeometry();
+    
+    // Update materials (if they exist and have uniforms)
+    if (material && material.uniforms) {
+      if (material.uniforms.globalMin) material.uniforms.globalMin.value = cached.data.globalMin;
+      if (material.uniforms.globalMax) material.uniforms.globalMax.value = cached.data.globalMax;
+      if (material.uniforms.maxAbsElevation) material.uniforms.maxAbsElevation.value = cached.data.maxAbsElevation;
     }
-  } catch (error) {
-    console.error(`Failed to switch to nside=${newNside}:`, error);
-    // Hide loading overlay
+    if (maxMaterial && maxMaterial.uniforms) {
+      if (maxMaterial.uniforms.globalMin) maxMaterial.uniforms.globalMin.value = cached.data.globalMin;
+      if (maxMaterial.uniforms.globalMax) maxMaterial.uniforms.globalMax.value = cached.data.globalMax;
+      if (maxMaterial.uniforms.maxAbsElevation) maxMaterial.uniforms.maxAbsElevation.value = cached.data.maxAbsElevation;
+    }
+    
+    // Create new meshes from cached geometry
+    createMeshesFromGeometry(cached.geometry, cached.data.maxAbsElevation);
     hideLoading();
-    // Remove from active triangulations
-    activeTriangulations.delete(newNside);
-    // Revert to previous nside if switch failed
-    currentNside = AVAILABLE_NSIDES.find(n => meshCache[n]) || INITIAL_NSIDE;
-    updateVertexCount();
+  } else {
+    // Not yet cached, show loading indicator - worker will complete it eventually
+    console.log(`[nside=${newNside}] Waiting for triangulation to complete...`);
+    showLoading(newNside);
   }
 }
 
@@ -942,5 +752,5 @@ window.addEventListener('resize', () => {
 
 // Initialize
 addControlPanel();
-loadAndVisualize();
+// Worker starts autonomously and will call initializeScene when first data is ready
 animate();

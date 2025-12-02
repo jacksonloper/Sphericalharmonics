@@ -1,12 +1,80 @@
 /**
  * Web Worker for generating ETOPO Range mesh geometry with triangulation
- * This offloads the CPU-intensive geoDelaunay triangulation to a background thread
+ * This worker autonomously loads data and triangulates for all resolutions,
+ * posting results back to main thread as each completes.
  */
 
 // Import d3-geo-voronoi using ES module syntax (Vite will bundle this)
 import { geoDelaunay } from 'd3-geo-voronoi';
 // Import HEALPix library for proper NESTED pixel ordering
 import { pix2ang_nest } from '@hscmap/healpix';
+
+// We'll use a lightweight npyjs-like loader in the worker
+// For simplicity, we'll fetch and parse the npy format directly
+
+/**
+ * Load and parse NPY file
+ */
+async function loadNpy(filename) {
+  const response = await fetch(filename);
+  const arrayBuffer = await response.arrayBuffer();
+  
+  // Simple NPY parser (adapted from npyjs logic)
+  const view = new DataView(arrayBuffer);
+  
+  // Skip magic number and version (10 bytes)
+  let offset = 10;
+  
+  // Read header length (2 bytes, little-endian uint16)
+  const headerLen = view.getUint16(offset, true);
+  offset += 2;
+  
+  // Read header (Python dict as string)
+  const headerBytes = new Uint8Array(arrayBuffer, offset, headerLen);
+  const headerStr = new TextDecoder().decode(headerBytes);
+  offset += headerLen;
+  
+  // Parse shape from header
+  const shapeMatch = headerStr.match(/'shape':\s*\((\d+),\s*(\d+)\)/);
+  const shape = [parseInt(shapeMatch[1]), parseInt(shapeMatch[2])];
+  
+  // Parse dtype
+  const dtypeMatch = headerStr.match(/'descr':\s*'([<>|])([a-z])(\d+)'/);
+  const dtype = dtypeMatch[2] + dtypeMatch[3];
+  
+  // Read data
+  const dataLen = shape[0] * shape[1];
+  let data;
+  
+  if (dtype === 'f2') {
+    // float16 - need to convert to float32
+    const uint16Data = new Uint16Array(arrayBuffer, offset, dataLen);
+    data = new Float32Array(dataLen);
+    for (let i = 0; i < dataLen; i++) {
+      data[i] = float16ToFloat32(uint16Data[i]);
+    }
+  } else if (dtype === 'f4') {
+    data = new Float32Array(arrayBuffer, offset, dataLen);
+  } else {
+    throw new Error(`Unsupported dtype: ${dtype}`);
+  }
+  
+  return { data, shape, dtype };
+}
+
+/**
+ * Convert float16 to float32
+ */
+function float16ToFloat32(binary) {
+  const exponent = (binary & 0x7C00) >> 10;
+  const fraction = binary & 0x03FF;
+  
+  return (binary >> 15 ? -1 : 1) * (
+    exponent === 0 ? Math.pow(2, -14) * (fraction / Math.pow(2, 10)) :
+    exponent === 0x1F ? fraction ? NaN : Infinity :
+    Math.pow(2, exponent - 15) * (1 + fraction / Math.pow(2, 10))
+  );
+}
 
 /**
  * Convert spherical coordinates (theta, phi) to Cartesian (x, y, z)
@@ -33,7 +101,7 @@ function generateMeshGeometry(nside, minElevations, maxElevations, maxAbsElevati
   const MESH_GENERATION_ALPHA = 0.11;
   const numPixels = HEALPIX_BASE_FACES * nside * nside;
   
-  self.postMessage({ type: 'progress', message: 'Step 1: Generating vertex positions on sphere...', step: 1, total: 6 });
+  self.postMessage({ type: 'progress', nside, message: 'Step 1: Generating vertex positions on sphere...', step: 1, total: 6 });
   
   const positions = new Float32Array(numPixels * 3);
   const lonLatPoints = []; // [longitude, latitude] pairs for geoDelaunay
@@ -53,15 +121,15 @@ function generateMeshGeometry(nside, minElevations, maxElevations, maxAbsElevati
     lonLatPoints.push([longitude, latitude]);
   }
   
-  self.postMessage({ type: 'progress', message: 'Step 2: Creating spherical Delaunay triangulation...', step: 2, total: 6 });
+  self.postMessage({ type: 'progress', nside, message: 'Step 2: Creating spherical Delaunay triangulation...', step: 2, total: 6 });
   
   // Use geoDelaunay for spherical Delaunay triangulation
   const delaunay = geoDelaunay(lonLatPoints);
   const triangles = delaunay.triangles.flat();
   
-  self.postMessage({ type: 'progress', message: `Generated ${triangles.length / 3} triangles`, step: 2, total: 6 });
+  self.postMessage({ type: 'progress', nside, message: `Generated ${triangles.length / 3} triangles`, step: 2, total: 6 });
   
-  self.postMessage({ type: 'progress', message: 'Step 3: Computing MIN normals...', step: 3, total: 6 });
+  self.postMessage({ type: 'progress', nside, message: 'Step 3: Computing MIN normals...', step: 3, total: 6 });
   
   // Displace vertices temporarily based on MIN elevation
   const displacedMinPositions = new Float32Array(positions.length);
@@ -113,7 +181,7 @@ function generateMeshGeometry(nside, minElevations, maxElevations, maxAbsElevati
     }
   }
   
-  self.postMessage({ type: 'progress', message: 'Step 4: Computing MAX normals...', step: 4, total: 6 });
+  self.postMessage({ type: 'progress', nside, message: 'Step 4: Computing MAX normals...', step: 4, total: 6 });
   
   // Displace vertices temporarily based on MAX elevation
   const displacedMaxPositions = new Float32Array(positions.length);
@@ -164,7 +232,7 @@ function generateMeshGeometry(nside, minElevations, maxElevations, maxAbsElevati
     }
   }
   
-  self.postMessage({ type: 'progress', message: 'Triangulation complete!', step: 6, total: 6 });
+  self.postMessage({ type: 'progress', nside, message: 'Triangulation complete!', step: 6, total: 6 });
   
   // Note: We don't return minElevations and maxElevations because they are
   // already available on the main thread. Transferring them back would cause
@@ -173,46 +241,97 @@ function generateMeshGeometry(nside, minElevations, maxElevations, maxAbsElevati
     positions,
     minNormals,
     maxNormals,
+    minElevations,
+    maxElevations,
     triangles: new Uint32Array(triangles),
     numPixels
   };
 }
 
-// Handle messages from main thread
-self.onmessage = function(e) {
-  const { nside, minElevations, maxElevations, maxAbsElevation } = e.data;
-  
-  self.postMessage({ type: 'status', message: `Starting triangulation for nside=${nside}...` });
-  
+/**
+ * Process a single nside: load data and triangulate
+ */
+async function processNside(nside) {
   const startTime = performance.now();
   
   try {
+    self.postMessage({ type: 'status', nside, message: `Loading data for nside=${nside}...` });
+    
+    // Load data
+    const filename = `./earthtoposources/etopo2022_surface_min_mean_max_healpix${nside}_NESTED.npy`;
+    const npyData = await loadNpy(filename);
+    
+    self.postMessage({ type: 'status', nside, message: `Data loaded for nside=${nside}` });
+    
+    // Extract min, mean, max arrays
+    const numPixels = npyData.shape[0];
+    const minVals = new Float32Array(numPixels);
+    const meanVals = new Float32Array(numPixels);
+    const maxVals = new Float32Array(numPixels);
+    
+    let globalMin = Infinity;
+    let globalMax = -Infinity;
+    
+    for (let i = 0; i < numPixels; i++) {
+      const minVal = npyData.data[i * 3 + 0];
+      const meanVal = npyData.data[i * 3 + 1];
+      const maxVal = npyData.data[i * 3 + 2];
+      minVals[i] = minVal;
+      meanVals[i] = meanVal;
+      maxVals[i] = maxVal;
+      
+      if (minVal < globalMin) globalMin = minVal;
+      if (maxVal > globalMax) globalMax = maxVal;
+    }
+    
+    const maxAbsElevation = Math.max(Math.abs(globalMin), Math.abs(globalMax));
+    
+    self.postMessage({ type: 'status', nside, message: `Starting triangulation for nside=${nside}...` });
+    
     // Generate geometry
-    const result = generateMeshGeometry(nside, minElevations, maxElevations, maxAbsElevation);
+    const result = generateMeshGeometry(nside, minVals, maxVals, maxAbsElevation);
     
     const triangulationTime = performance.now() - startTime;
-    console.log(`[Worker] Triangulation for nside=${nside} completed in ${triangulationTime.toFixed(2)}ms`);
     
-    // Transfer buffers to main thread (zero-copy)
+    // Send complete message with all data
     self.postMessage({
       type: 'complete',
+      nside,
       positions: result.positions.buffer,
       minNormals: result.minNormals.buffer,
       maxNormals: result.maxNormals.buffer,
+      minElevations: result.minElevations.buffer,
+      maxElevations: result.maxElevations.buffer,
       triangles: result.triangles.buffer,
       numPixels: result.numPixels,
-      triangulationTime: triangulationTime
+      globalMin,
+      globalMax,
+      maxAbsElevation,
+      triangulationTime
     }, [
       result.positions.buffer,
       result.minNormals.buffer,
       result.maxNormals.buffer,
+      result.minElevations.buffer,
+      result.maxElevations.buffer,
       result.triangles.buffer
     ]);
+    
   } catch (error) {
     self.postMessage({
       type: 'error',
+      nside,
       message: error.message,
       stack: error.stack
     });
   }
-};
+}
+
+// Start autonomous processing when worker is created
+// Process all three resolutions in sequence
+(async () => {
+  const nsides = [64, 128, 256];
+  for (const nside of nsides) {
+    await processNside(nside);
+  }
+})();
