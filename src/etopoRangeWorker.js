@@ -230,8 +230,9 @@ async function processNside(nside) {
       
       // Extract water occurrence value
       const waterVal = waterData.data[i];
-      // Handle NaN and Inf values by marking them as -1 (no data = gray)
-      waterVals[i] = (isFinite(waterVal) ? waterVal : -1);
+      // Handle NaN, Inf, and negative values by marking them as -1 (no data, use elevation fallback)
+      // Water occurrence should be in range [0, 255], so negative values are invalid
+      waterVals[i] = (isFinite(waterVal) && waterVal >= 0) ? waterVal : -1;
       
       if (minVal < globalMin) globalMin = minVal;
       if (maxVal > globalMax) globalMax = maxVal;
