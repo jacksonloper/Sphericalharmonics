@@ -234,7 +234,9 @@ function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
   // Step 2: Use geoDelaunay for spherical Delaunay triangulation (watertight mesh)
   console.log('Step 2: Creating spherical Delaunay triangulation...');
   const delaunay = geoDelaunay(lonLatPoints);
-  const triangles = delaunay.triangles; // Array of triangle indices [i1, i2, i3, ...]
+  // geoDelaunay returns array of arrays: [[i1, i2, i3], [i4, i5, i6], ...]
+  // Flatten it to a single array for Three.js: [i1, i2, i3, i4, i5, i6, ...]
+  const triangles = delaunay.triangles.flat();
   
   console.log(`Generated ${triangles.length / 3} triangles (spherical Delaunay)`);
   
