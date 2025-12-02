@@ -5,40 +5,8 @@
 
 // Import d3-geo-voronoi using ES module syntax (Vite will bundle this)
 import { geoDelaunay } from 'd3-geo-voronoi';
-
-/**
- * Convert HEALPix NESTED pixel index to (theta, phi) in spherical coordinates
- * Inline implementation to avoid dependency issues in worker
- */
-function pix2ang_nest(nside, ipix) {
-  const npface = nside * nside;
-  const ncap = 2 * nside * (nside - 1);
-  
-  if (ipix < ncap) {
-    // North polar cap
-    const iring = Math.floor((Math.sqrt(1 + 2 * ipix) + 1) / 2);
-    const iphi = ipix - 2 * iring * (iring - 1);
-    const phi = (iphi + 0.5) * Math.PI / (2 * iring);
-    const theta = Math.acos(1 - iring * iring / (3 * nside * nside));
-    return { theta, phi };
-  } else if (ipix < 12 * npface - ncap) {
-    // Equatorial region
-    const ip = ipix - ncap;
-    const iring = Math.floor(ip / (4 * nside)) + nside;
-    const iphi = ip % (4 * nside);
-    const phi = (iphi + 0.5) * Math.PI / (2 * nside);
-    const theta = Math.acos((2 * nside - iring) * 2 / (3 * nside));
-    return { theta, phi };
-  } else {
-    // South polar cap
-    const ip = 12 * npface - ipix;
-    const iring = Math.floor((Math.sqrt(1 + 2 * (ip - 1)) + 1) / 2);
-    const iphi = ip - 2 * iring * (iring - 1) - 1;
-    const phi = (iphi + 0.5) * Math.PI / (2 * iring);
-    const theta = Math.acos(-1 + iring * iring / (3 * nside * nside));
-    return { theta, phi };
-  }
-}
+// Import HEALPix library for proper NESTED pixel ordering
+import { pix2ang_nest } from '@hscmap/healpix';
 
 /**
  * Convert spherical coordinates (theta, phi) to Cartesian (x, y, z)
