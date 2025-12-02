@@ -230,9 +230,23 @@ async function processNside(nside) {
       
       // Extract water occurrence value
       const waterVal = waterData.data[i];
-      // Handle NaN, Inf, and negative values by marking them as -1 (no data, use elevation fallback)
-      // Water occurrence should be in range [0, 255], so negative values are invalid
-      waterVals[i] = (isFinite(waterVal) && waterVal >= 0) ? waterVal : -1;
+      
+      // Get pixel coordinates to calculate latitude
+      const { theta, phi } = pix2ang_nest(nside, i);
+      // theta is colatitude (0 at north pole, π at south pole)
+      // latitude = 90° - theta (in radians: π/2 - theta)
+      const latitude = (Math.PI / 2 - theta) * 180 / Math.PI; // Convert to degrees
+      
+      // Check if we're in polar regions with data artifacts
+      // Ignore water data below 56°S or above 76°N
+      const inPolarRegion = (latitude < -56.0 || latitude > 76.0);
+      
+      // Handle invalid data or polar regions by marking as NaN
+      if (!isFinite(waterVal) || waterVal < 0 || inPolarRegion) {
+        waterVals[i] = NaN;
+      } else {
+        waterVals[i] = waterVal;
+      }
       
       if (minVal < globalMin) globalMin = minVal;
       if (maxVal > globalMax) globalMax = maxVal;

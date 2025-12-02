@@ -82,22 +82,12 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
     }
 
     // Water-based colormap: blue for water, green for land, black for lowest, white for highest
-    vec3 water_colormap(float elevation_t, float water_t, vec3 position) {
-      // Calculate latitude from normalized position on unit sphere
-      // position.y is the z-component in world space, which gives us sin(latitude)
-      float sinLat = position.y;
-      float latitude = asin(sinLat) * 180.0 / 3.14159265359; // Convert to degrees
-      
-      // Ignore water data in polar regions due to artifacts:
-      // - Below 56°S (Antarctic region)
-      // - Above 76°N (Arctic region)
-      bool usePolarFallback = (latitude < -56.0 || latitude > 76.0);
-      
-      // Check for no-data regions (NaN/Inf in original data, marked as -1)
-      // or if we're in polar regions with artifacts
+    vec3 water_colormap(float elevation_t, float water_t) {
+      // Check for no-data regions (NaN in water data from invalid values or polar regions)
+      // Use isnan() check - NaN values were set during data loading for polar regions
       bool isWater;
-      if (water_t < 0.0 || usePolarFallback) {
-        // No water data available or polar region - use elevation as fallback (elevation <= 0 is water)
+      if (isnan(water_t)) {
+        // No water data available - use elevation as fallback (elevation <= 0 is water)
         isWater = vOriginalElevation <= 0.0;
       } else {
         // Use water occurrence threshold (values > 50 capture water bodies)
@@ -140,7 +130,7 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
       // Choose colormap based on uniform
       vec3 color;
       if (useWaterColormap) {
-        color = water_colormap(elevation_t, water_t, vPosition);
+        color = water_colormap(elevation_t, water_t);
       } else {
         color = turbo_colormap(elevation_t);
       }
