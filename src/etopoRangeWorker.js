@@ -192,10 +192,14 @@ async function processNside(nside) {
   try {
     self.postMessage({ type: 'status', nside, message: `Loading data for nside=${nside}...` });
     
-    // Load data using npyjs
+    // Load elevation data using npyjs
     // In a worker, we need to use an absolute path or construct it relative to the location
     const filename = `${self.location.origin}/earthtoposources/etopo2022_surface_min_mean_max_healpix${nside}_NESTED.npy`;
     const npyData = await load(filename);
+    
+    // Load water occurrence data
+    const waterFilename = `${self.location.origin}/earthtoposources/water_occurrence_healpix${nside}_NESTED.npy`;
+    const waterData = await load(waterFilename);
     
     self.postMessage({ type: 'status', nside, message: `Data loaded for nside=${nside}` });
     
@@ -204,6 +208,7 @@ async function processNside(nside) {
     const minVals = new Float32Array(numPixels);
     const meanVals = new Float32Array(numPixels);
     const maxVals = new Float32Array(numPixels);
+    const waterVals = new Float32Array(numPixels);
     
     let globalMin = Infinity;
     let globalMax = -Infinity;
@@ -215,6 +220,11 @@ async function processNside(nside) {
       minVals[i] = minVal;
       meanVals[i] = meanVal;
       maxVals[i] = maxVal;
+      
+      // Extract water occurrence value
+      const waterVal = waterData.data[i];
+      // Handle NaN and Inf values by treating them as water (255)
+      waterVals[i] = (isFinite(waterVal) ? waterVal : 255);
       
       if (minVal < globalMin) globalMin = minVal;
       if (maxVal > globalMax) globalMax = maxVal;
@@ -238,6 +248,7 @@ async function processNside(nside) {
       maxNormals: result.maxNormals.buffer,
       minElevations: result.minElevations.buffer,
       maxElevations: result.maxElevations.buffer,
+      waterOccurrence: waterVals.buffer,
       triangles: result.triangles.buffer,
       numPixels: result.numPixels,
       globalMin,
@@ -250,6 +261,7 @@ async function processNside(nside) {
       result.maxNormals.buffer,
       result.minElevations.buffer,
       result.maxElevations.buffer,
+      waterVals.buffer,
       result.triangles.buffer
     ]);
     

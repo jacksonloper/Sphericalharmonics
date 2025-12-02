@@ -193,6 +193,7 @@ worker.onmessage = (e) => {
       maxNormals: new Float32Array(e.data.maxNormals),
       minElevations: new Float32Array(e.data.minElevations),
       maxElevations: new Float32Array(e.data.maxElevations),
+      waterOccurrence: new Float32Array(e.data.waterOccurrence),
       triangles: new Uint32Array(e.data.triangles),
       numPixels: e.data.numPixels
     };
@@ -474,6 +475,7 @@ function createMeshesFromGeometry(meshGeometry, maxAbsElevation) {
   minGeometry.setAttribute('position', new THREE.BufferAttribute(meshGeometry.positions, 3));
   minGeometry.setAttribute('normal', new THREE.BufferAttribute(meshGeometry.minNormals, 3));
   minGeometry.setAttribute('elevation', new THREE.BufferAttribute(meshGeometry.minElevations, 1));
+  minGeometry.setAttribute('waterOccurrence', new THREE.BufferAttribute(meshGeometry.waterOccurrence, 1));
   minGeometry.setIndex(new THREE.BufferAttribute(new Uint32Array(meshGeometry.triangles), 1));
   
   const meshMaterial = material;
@@ -491,6 +493,7 @@ function createMeshesFromGeometry(meshGeometry, maxAbsElevation) {
   maxGeometry.setAttribute('position', new THREE.BufferAttribute(meshGeometry.positions, 3));
   maxGeometry.setAttribute('normal', new THREE.BufferAttribute(meshGeometry.maxNormals, 3));
   maxGeometry.setAttribute('elevation', new THREE.BufferAttribute(meshGeometry.maxElevations, 1));
+  maxGeometry.setAttribute('waterOccurrence', new THREE.BufferAttribute(meshGeometry.waterOccurrence, 1));
   maxGeometry.setIndex(new THREE.BufferAttribute(new Uint32Array(meshGeometry.triangles), 1));
   
   maxHealpixMesh = new THREE.Mesh(maxGeometry, maxMaterial);
