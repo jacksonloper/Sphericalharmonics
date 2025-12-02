@@ -527,10 +527,16 @@ function createHealpixDots(meshGeometry) {
   const dotsGeometry = new THREE.BufferGeometry();
   dotsGeometry.setAttribute('position', new THREE.BufferAttribute(meshGeometry.positions, 3));
   
+  // Calculate dot size: scale inversely with nside so dots remain proportional to grid spacing
+  // Reference: nside=64 uses size=0.01, so size = 0.01 * (64 / currentNside)
+  const baseSize = 0.01;
+  const referenceNside = 64;
+  const dotSize = baseSize * (referenceNside / currentNside);
+  
   // Create material for the points with circular shape
   const dotsMaterial = new THREE.PointsMaterial({
     color: 0xffffff,
-    size: 0.01,
+    size: dotSize,
     sizeAttenuation: true,
     transparent: true,
     opacity: 0.6,
@@ -543,7 +549,7 @@ function createHealpixDots(meshGeometry) {
     scene.add(healpixDotsPoints);
   }
   
-  console.log(`HEALPix dots created: ${meshGeometry.numPixels} points`);
+  console.log(`HEALPix dots created: ${meshGeometry.numPixels} points, size: ${dotSize.toFixed(4)}`);
 }
 
 /**
