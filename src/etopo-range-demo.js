@@ -10,26 +10,15 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { geoDelaunay } from 'd3-geo-voronoi';
 import { createEtopoRangeMaterial } from './etopoRangeMaterial.js';
 import { load } from 'npyjs';
 import { pix2ang_nest } from '@hscmap/healpix';
-import * as healpix from '@hscmap/healpix';
+import EtopoRangeWorker from './etopoRangeWorker.js?worker';
 
 // HEALPix parameters
 const INITIAL_NSIDE = 64; // Initial resolution
 let currentNside = INITIAL_NSIDE; // Track current resolution
 const HEALPIX_BASE_FACES = 12; // HEALPix tessellation has 12 base faces
-
-/**
- * Calculate number of HEALPix pixels for a given nside
- */
-function getNpix(nside) {
-  return HEALPIX_BASE_FACES * nside * nside;
-}
-
-// Mesh generation parameters
-const MESH_GENERATION_ALPHA = 0.11; // Alpha value used for vertex displacement during mesh generation
 
 // UI constants
 const DEBOUNCE_DELAY_MS = 100; // Delay for slider debouncing
@@ -201,41 +190,10 @@ function createEnterButton() {
 }
 
 /**
- * Convert HEALPix NESTED pixel index to (theta, phi) in spherical coordinates
- * Uses the @hscmap/healpix library for accurate conversion
- * 
- * @param {number} nside - HEALPix nside parameter
- * @param {number} ipix - Pixel index in NESTED scheme
- * @returns {Array} [theta, phi] in radians where theta is colatitude [0, π], phi is longitude [0, 2π]
+ * Calculate number of HEALPix pixels for a given nside
  */
-function healpixNestedToSpherical(nside, ipix) {
-  const { theta, phi } = pix2ang_nest(nside, ipix);
-  return [theta, phi];
-}
-
-/**
- * Convert spherical coordinates (theta, phi) to Cartesian (x, y, z)
- * with optional radial displacement
- * 
- * @param {number} theta - Colatitude in radians [0, π]
- * @param {number} phi - Longitude in radians [0, 2π]
- * @param {number} r - Radial distance (default 1.0)
- * @returns {Array} [x, y, z]
- */
-function sphericalToCartesian(theta, phi, r = 1.0) {
-  const sinTheta = Math.sin(theta);
-  const cosTheta = Math.cos(theta);
-  const sinPhi = Math.sin(phi);
-  const cosPhi = Math.cos(phi);
-  
-  // Standard right-handed spherical coordinates with y-up convention
-  // theta=0 at north pole (positive y), phi=0 at positive x
-  // Negate z for correct chirality (left-right orientation)
-  return [
-    r * sinTheta * cosPhi,
-    r * cosTheta,           // y-axis points to poles
-    -r * sinTheta * sinPhi  // Negate for correct chirality
-  ];
+function getNpix(nside) {
+  return HEALPIX_BASE_FACES * nside * nside;
 }
 
 /**
@@ -302,155 +260,61 @@ async function loadHealpixData(nside) {
 }
 
 /**
- * Generate mesh geometry for a specific nside (returns geometry data, doesn't add to scene)
+ * Generate mesh geometry for a specific nside using a worker (non-blocking)
+ * Returns a promise that resolves with geometry data
  */
 function generateMeshGeometry(nside, elevationData, minElevations, maxElevations, maxAbsElevation) {
-  const startTime = performance.now();
-  console.log(`[nside=${nside}] Starting triangulation...`);
-  
-  const numPixels = HEALPIX_BASE_FACES * nside * nside;
-  
-  // Step 1: Generate vertex positions on unit sphere
-  console.log(`[nside=${nside}] Step 1: Generating vertex positions on sphere...`);
-  
-  const positions = new Float32Array(numPixels * 3);
-  const lonLatPoints = []; // [longitude, latitude] pairs for geoDelaunay
-  
-  for (let i = 0; i < numPixels; i++) {
-    const { theta, phi } = pix2ang_nest(nside, i);
-    const [x, y, z] = sphericalToCartesian(theta, phi, 1.0);
+  return new Promise((resolve, reject) => {
+    const startTime = performance.now();
+    console.log(`[nside=${nside}] Starting triangulation in worker...`);
     
-    positions[i * 3] = x;
-    positions[i * 3 + 1] = y;
-    positions[i * 3 + 2] = z;
+    const worker = new EtopoRangeWorker();
     
-    // Convert to longitude/latitude for geoDelaunay
-    let longitude = phi * 180 / Math.PI;
-    if (longitude > 180) longitude -= 360;
-    const latitude = 90 - (theta * 180 / Math.PI);
-    lonLatPoints.push([longitude, latitude]);
-  }
-  
-  // Step 2: Use geoDelaunay for spherical Delaunay triangulation
-  console.log(`[nside=${nside}] Step 2: Creating spherical Delaunay triangulation...`);
-  const delaunay = geoDelaunay(lonLatPoints);
-  const triangles = delaunay.triangles.flat();
-  
-  console.log(`[nside=${nside}] Generated ${triangles.length / 3} triangles`);
-  
-  // Step 3: Displace vertices temporarily based on MIN elevation
-  console.log(`[nside=${nside}] Step 3: Computing MIN normals...`);
-  const displacedMinPositions = new Float32Array(positions.length);
-  const alpha = MESH_GENERATION_ALPHA;
-  
-  for (let i = 0; i < numPixels; i++) {
-    const x = positions[i * 3];
-    const y = positions[i * 3 + 1];
-    const z = positions[i * 3 + 2];
+    worker.onmessage = (e) => {
+      const { type } = e.data;
+      
+      if (type === 'status') {
+        console.log(`[nside=${nside}] ${e.data.message}`);
+      } else if (type === 'progress') {
+        console.log(`[nside=${nside}] ${e.data.message}`);
+      } else if (type === 'complete') {
+        const totalTime = performance.now() - startTime;
+        console.log(`[nside=${nside}] Triangulation completed in ${totalTime.toFixed(2)}ms`);
+        
+        // Convert transferred ArrayBuffers back to typed arrays
+        const result = {
+          positions: new Float32Array(e.data.positions),
+          minNormals: new Float32Array(e.data.minNormals),
+          maxNormals: new Float32Array(e.data.maxNormals),
+          minElevations: new Float32Array(e.data.minElevations),
+          maxElevations: new Float32Array(e.data.maxElevations),
+          triangles: new Uint32Array(e.data.triangles),
+          numPixels: e.data.numPixels
+        };
+        
+        worker.terminate();
+        resolve(result);
+      } else if (type === 'error') {
+        console.error(`[nside=${nside}] Worker error:`, e.data.message);
+        worker.terminate();
+        reject(new Error(e.data.message));
+      }
+    };
     
-    const elevation = minElevations[i];
-    const r = 1.0 + alpha * elevation / maxAbsElevation;
+    worker.onerror = (error) => {
+      console.error(`[nside=${nside}] Worker error:`, error);
+      worker.terminate();
+      reject(error);
+    };
     
-    displacedMinPositions[i * 3] = x * r;
-    displacedMinPositions[i * 3 + 1] = y * r;
-    displacedMinPositions[i * 3 + 2] = z * r;
-  }
-  
-  // Step 4: Compute normals from displaced MIN geometry
-  const minNormals = new Float32Array(numPixels * 3);
-  
-  for (let i = 0; i < triangles.length; i += 3) {
-    const i1 = triangles[i], i2 = triangles[i + 1], i3 = triangles[i + 2];
-    
-    const ax = displacedMinPositions[i1 * 3], ay = displacedMinPositions[i1 * 3 + 1], az = displacedMinPositions[i1 * 3 + 2];
-    const bx = displacedMinPositions[i2 * 3], by = displacedMinPositions[i2 * 3 + 1], bz = displacedMinPositions[i2 * 3 + 2];
-    const cx = displacedMinPositions[i3 * 3], cy = displacedMinPositions[i3 * 3 + 1], cz = displacedMinPositions[i3 * 3 + 2];
-    
-    const e1x = bx - ax, e1y = by - ay, e1z = bz - az;
-    const e2x = cx - ax, e2y = cy - ay, e2z = cz - az;
-    
-    const nx = e1y * e2z - e1z * e2y;
-    const ny = e1z * e2x - e1x * e2z;
-    const nz = e1x * e2y - e1y * e2x;
-    
-    minNormals[i1 * 3] += nx; minNormals[i1 * 3 + 1] += ny; minNormals[i1 * 3 + 2] += nz;
-    minNormals[i2 * 3] += nx; minNormals[i2 * 3 + 1] += ny; minNormals[i2 * 3 + 2] += nz;
-    minNormals[i3 * 3] += nx; minNormals[i3 * 3 + 1] += ny; minNormals[i3 * 3 + 2] += nz;
-  }
-  
-  // Normalize min normals
-  for (let i = 0; i < numPixels; i++) {
-    const x = minNormals[i * 3], y = minNormals[i * 3 + 1], z = minNormals[i * 3 + 2];
-    const len = Math.sqrt(x * x + y * y + z * z);
-    if (len > 0) {
-      minNormals[i * 3] /= len;
-      minNormals[i * 3 + 1] /= len;
-      minNormals[i * 3 + 2] /= len;
-    }
-  }
-  
-  // Step 5: Displace vertices temporarily based on MAX elevation
-  console.log(`[nside=${nside}] Step 5: Computing MAX normals...`);
-  const displacedMaxPositions = new Float32Array(positions.length);
-  
-  for (let i = 0; i < numPixels; i++) {
-    const x = positions[i * 3];
-    const y = positions[i * 3 + 1];
-    const z = positions[i * 3 + 2];
-    
-    const elevation = maxElevations[i];
-    const r = 1.0 + alpha * elevation / maxAbsElevation;
-    
-    displacedMaxPositions[i * 3] = x * r;
-    displacedMaxPositions[i * 3 + 1] = y * r;
-    displacedMaxPositions[i * 3 + 2] = z * r;
-  }
-  
-  // Step 6: Compute normals from displaced MAX geometry
-  const maxNormals = new Float32Array(numPixels * 3);
-  
-  for (let i = 0; i < triangles.length; i += 3) {
-    const i1 = triangles[i], i2 = triangles[i + 1], i3 = triangles[i + 2];
-    
-    const ax = displacedMaxPositions[i1 * 3], ay = displacedMaxPositions[i1 * 3 + 1], az = displacedMaxPositions[i1 * 3 + 2];
-    const bx = displacedMaxPositions[i2 * 3], by = displacedMaxPositions[i2 * 3 + 1], bz = displacedMaxPositions[i2 * 3 + 2];
-    const cx = displacedMaxPositions[i3 * 3], cy = displacedMaxPositions[i3 * 3 + 1], cz = displacedMaxPositions[i3 * 3 + 2];
-    
-    const e1x = bx - ax, e1y = by - ay, e1z = bz - az;
-    const e2x = cx - ax, e2y = cy - ay, e2z = cz - az;
-    
-    const nx = e1y * e2z - e1z * e2y;
-    const ny = e1z * e2x - e1x * e2z;
-    const nz = e1x * e2y - e1y * e2x;
-    
-    maxNormals[i1 * 3] += nx; maxNormals[i1 * 3 + 1] += ny; maxNormals[i1 * 3 + 2] += nz;
-    maxNormals[i2 * 3] += nx; maxNormals[i2 * 3 + 1] += ny; maxNormals[i2 * 3 + 2] += nz;
-    maxNormals[i3 * 3] += nx; maxNormals[i3 * 3 + 1] += ny; maxNormals[i3 * 3 + 2] += nz;
-  }
-  
-  // Normalize max normals
-  for (let i = 0; i < numPixels; i++) {
-    const x = maxNormals[i * 3], y = maxNormals[i * 3 + 1], z = maxNormals[i * 3 + 2];
-    const len = Math.sqrt(x * x + y * y + z * z);
-    if (len > 0) {
-      maxNormals[i * 3] /= len;
-      maxNormals[i * 3 + 1] /= len;
-      maxNormals[i * 3 + 2] /= len;
-    }
-  }
-  
-  const triangulationTime = performance.now() - startTime;
-  console.log(`[nside=${nside}] Triangulation completed in ${triangulationTime.toFixed(2)}ms`);
-  
-  return {
-    positions,
-    minNormals,
-    maxNormals,
-    minElevations,
-    maxElevations,
-    triangles,
-    numPixels
-  };
+    // Send data to worker
+    worker.postMessage({
+      nside,
+      minElevations,
+      maxElevations,
+      maxAbsElevation
+    });
+  });
 }
 
 /**
@@ -487,32 +351,31 @@ async function loadAndVisualize() {
     innerSphere = new THREE.Mesh(innerSphereGeometry, innerSphereMaterial);
     scene.add(innerSphere);
     
-    // Generate HEALPix mesh directly
+    // Generate HEALPix mesh using worker (non-blocking)
     const loadingStatus = document.getElementById('loadingStatus');
     if (loadingStatus) {
       loadingStatus.textContent = 'Generating HEALPix mesh...';
     }
-    setTimeout(() => {
-      const meshGeometry = generateMeshGeometry(currentNside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
-      
-      // Store in cache with consistent structure
-      meshCache[currentNside] = { geometry: meshGeometry, data: data };
-      
-      // Create and add meshes to scene
-      createMeshesFromGeometry(meshGeometry, data.maxAbsElevation);
-      
-      // Update loading status and add Enter button
-      if (loadingStatus) {
-        loadingStatus.style.display = 'none';
-      }
-      
-      // Add Enter Visualization button
-      const enterButton = createEnterButton();
-      infoCard.appendChild(enterButton);
-      
-      // Start background triangulation for 128 and 256
-      startBackgroundTriangulation();
-    }, 100); // Small delay to allow loading message to display
+    
+    const meshGeometry = await generateMeshGeometry(currentNside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
+    
+    // Store in cache with consistent structure
+    meshCache[currentNside] = { geometry: meshGeometry, data: data };
+    
+    // Create and add meshes to scene
+    createMeshesFromGeometry(meshGeometry, data.maxAbsElevation);
+    
+    // Update loading status and add Enter button
+    if (loadingStatus) {
+      loadingStatus.style.display = 'none';
+    }
+    
+    // Add Enter Visualization button
+    const enterButton = createEnterButton();
+    infoCard.appendChild(enterButton);
+    
+    // Start background triangulation for 128 and 256
+    startBackgroundTriangulation();
     
   } catch (error) {
     console.error('Failed to load data:', error);
@@ -567,11 +430,11 @@ async function startBackgroundTriangulation() {
   // Get nsides that need triangulation (excluding current)
   const nsidesToTriangulate = AVAILABLE_NSIDES.filter(n => n !== currentNside && !meshCache[n]);
   
-  // Triangulate each in sequence
+  // Triangulate each in sequence using worker
   for (const nside of nsidesToTriangulate) {
     try {
       const data = await loadHealpixData(nside);
-      const meshGeometry = generateMeshGeometry(nside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
+      const meshGeometry = await generateMeshGeometry(nside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
       meshCache[nside] = { geometry: meshGeometry, data: data };
       console.log(`[nside=${nside}] Pre-triangulation complete and cached`);
     } catch (error) {
@@ -658,8 +521,8 @@ async function switchToNside(newNside) {
       if (maxMaterial.uniforms.maxAbsElevation) maxMaterial.uniforms.maxAbsElevation.value = data.maxAbsElevation;
     }
     
-    // Generate and add meshes
-    const meshGeometry = generateMeshGeometry(newNside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
+    // Generate and add meshes using worker
+    const meshGeometry = await generateMeshGeometry(newNside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
     meshCache[newNside] = { geometry: meshGeometry, data: data };
     createMeshesFromGeometry(meshGeometry, data.maxAbsElevation);
   }
