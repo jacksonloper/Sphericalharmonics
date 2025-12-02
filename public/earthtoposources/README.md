@@ -68,10 +68,6 @@ Each file contains min, mean, and max elevation values for each HEALPix cell.
 
 Each file contains water occurrence percentages for each HEALPix cell.
 
-### Generation Scripts
-- `generate_compact_mesh_from_bshc.py` - Script for processing BSHC files
-- `generate_truncated_meshes.py` - Script for generating truncated meshes
-
 ---
 
 ## License
