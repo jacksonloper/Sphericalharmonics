@@ -26,6 +26,7 @@ const worker = new EtopoRangeWorker();
 
 // UI constants
 const DEBOUNCE_DELAY_MS = 100; // Delay for slider debouncing
+const HEALPIX_DOT_BASE_SIZE = 0.01; // Base dot size for reference resolution (INITIAL_NSIDE)
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -149,6 +150,9 @@ let regenerateTimeout = null; // For debouncing slider updates
 let showMaxMesh = true; // Toggle for max elevation mesh (true = show max, false = show min)
 let flipSign = false; // Toggle for flipping elevation sign
 let loadingOverlay = null; // Loading overlay for resolution switching
+let healpixDotsPoints = null; // Points mesh for HEALPix location dots
+let showHealpixDots = false; // Toggle for showing HEALPix location dots
+let circleTexture = null; // Cached circular texture for point sprites
 
 // Cache for pre-triangulated meshes
 const meshCache = {};
@@ -466,6 +470,85 @@ function createMeshesFromGeometry(meshGeometry, maxAbsElevation) {
   }
   
   console.log(`MAX HEALPix mesh added: ${meshGeometry.numPixels} vertices, ${meshGeometry.triangles.length / 3} triangles`);
+  
+  // Create HEALPix location dots
+  createHealpixDots(meshGeometry);
+}
+
+/**
+ * Get or create a circular texture for point sprites (cached)
+ */
+function getCircleTexture() {
+  if (!circleTexture) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    
+    const ctx = canvas.getContext('2d');
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = canvas.width / 2 - 1; // Slightly smaller to prevent edge clipping
+    
+    // Draw a circle
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+    ctx.fillStyle = 'white';
+    ctx.fill();
+    
+    circleTexture = new THREE.CanvasTexture(canvas);
+    circleTexture.needsUpdate = true;
+  }
+  return circleTexture;
+}
+
+/**
+ * Clean up HEALPix dots
+ */
+function cleanupHealpixDots() {
+  if (healpixDotsPoints) {
+    scene.remove(healpixDotsPoints);
+    healpixDotsPoints.geometry.dispose();
+    // Note: circleTexture is cached globally and reused across resolution switches.
+    // It will be automatically garbage collected when the page is closed/refreshed.
+    healpixDotsPoints.material.dispose();
+    healpixDotsPoints = null;
+  }
+}
+
+/**
+ * Create points at each HEALPix pixel location (at elevation 0)
+ * Note: meshGeometry.positions contains unit sphere coordinates (r=1.0)
+ * before displacement, so dots are correctly placed at elevation 0
+ */
+function createHealpixDots(meshGeometry) {
+  // Clean up old dots if they exist
+  cleanupHealpixDots();
+  
+  // Create geometry for points at elevation 0 (unit sphere)
+  const dotsGeometry = new THREE.BufferGeometry();
+  dotsGeometry.setAttribute('position', new THREE.BufferAttribute(meshGeometry.positions, 3));
+  
+  // Calculate dot size: scale inversely with nside so dots remain proportional to grid spacing
+  // Reference: INITIAL_NSIDE uses HEALPIX_DOT_BASE_SIZE, size scales as (INITIAL_NSIDE / currentNside)
+  const dotSize = HEALPIX_DOT_BASE_SIZE * (INITIAL_NSIDE / currentNside);
+  
+  // Create material for the points with circular shape
+  const dotsMaterial = new THREE.PointsMaterial({
+    color: 0xffffff,
+    size: dotSize,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity: 0.6,
+    map: getCircleTexture(),
+    alphaTest: 0.5
+  });
+  
+  healpixDotsPoints = new THREE.Points(dotsGeometry, dotsMaterial);
+  if (showHealpixDots) {
+    scene.add(healpixDotsPoints);
+  }
+  
+  console.log(`HEALPix dots created: ${meshGeometry.numPixels} points, size: ${dotSize.toFixed(4)}`);
 }
 
 /**
@@ -542,6 +625,7 @@ function cleanupOldGeometry() {
     maxHealpixMesh.geometry.dispose();
     // Material is reused, so don't dispose it
   }
+  cleanupHealpixDots();
 }
 
 function addControlPanel() {
@@ -649,6 +733,38 @@ function addControlPanel() {
   flipSignGroup.appendChild(flipCheckbox);
   flipSignGroup.appendChild(flipLabel);
   panel.appendChild(flipSignGroup);
+
+  // Show HEALPix dots checkbox
+  const dotsGroup = document.createElement('div');
+  dotsGroup.style.display = 'flex';
+  dotsGroup.style.alignItems = 'center';
+  dotsGroup.style.gap = '8px';
+
+  const dotsCheckbox = document.createElement('input');
+  dotsCheckbox.type = 'checkbox';
+  dotsCheckbox.id = 'dotsCheckbox';
+  dotsCheckbox.checked = showHealpixDots;
+  dotsCheckbox.style.cursor = 'pointer';
+
+  const dotsLabel = document.createElement('label');
+  dotsLabel.htmlFor = 'dotsCheckbox';
+  dotsLabel.textContent = 'Show HEALPix dots';
+  dotsLabel.style.cursor = 'pointer';
+
+  dotsCheckbox.addEventListener('change', (e) => {
+    showHealpixDots = e.target.checked;
+    if (healpixDotsPoints) {
+      if (showHealpixDots) {
+        scene.add(healpixDotsPoints);
+      } else {
+        scene.remove(healpixDotsPoints);
+      }
+    }
+  });
+
+  dotsGroup.appendChild(dotsCheckbox);
+  dotsGroup.appendChild(dotsLabel);
+  panel.appendChild(dotsGroup);
 
   // Nside selector dropdown
   const nsideGroup = document.createElement('div');
