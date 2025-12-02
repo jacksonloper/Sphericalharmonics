@@ -66,15 +66,23 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
         color = mix(vec3(0.2, 0.4, 0.8), vec3(0.0, 0.0, 0.0), t);
       }
 
-      // Simple lighting using precomputed normals
-      // The normals are slightly off because they were computed at MESH_GENERATION_ALPHA (0.11)
-      // but vertices are displaced at current alpha, but that's okay per spec
-      vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0));
-      float diffuse = max(dot(vNormal, lightDir), 0.0);
-      float ambient = 0.3;
-      float lighting = ambient + (1.0 - ambient) * diffuse;
+      // Multi-directional lighting for full illumination
+      // Multiple lights from different directions ensure all surfaces are well lit
+      vec3 light1 = normalize(vec3(1.0, 1.0, 1.0));
+      vec3 light2 = normalize(vec3(-1.0, 0.5, -0.5));
+      vec3 light3 = normalize(vec3(0.0, -1.0, 0.5));
+      vec3 light4 = normalize(vec3(-0.5, 1.0, -1.0));
 
-      gl_FragColor = vec4(color * lighting, 1.0);
+      float diffuse1 = max(dot(vNormal, light1), 0.0) * 0.25;
+      float diffuse2 = max(dot(vNormal, light2), 0.0) * 0.2;
+      float diffuse3 = max(dot(vNormal, light3), 0.0) * 0.15;
+      float diffuse4 = max(dot(vNormal, light4), 0.0) * 0.15;
+      float ambient = 0.8;
+
+      float lighting = diffuse1 + diffuse2 + diffuse3 + diffuse4 + ambient;
+      vec3 finalColor = color * lighting;
+
+      gl_FragColor = vec4(finalColor, 1.0);
     }
   `;
 
