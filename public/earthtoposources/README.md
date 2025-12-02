@@ -2,57 +2,66 @@
 
 This directory contains Earth topography data sources used for visualizations.
 
-## Source Data
+## Data Sources & Citations
 
 ### Earth2014 Spherical Harmonics
 
-The BSHC files are from the **Earth2014** model:
+**Earth2014** global relief model:
 https://ddfe.curtin.edu.au/gravitymodels/Earth2014/data_5min/shcs_to2160/
 
+Used for:
 - `sur.bshc` - Earth surface elevation (topography)
 - `bed.bshc` - Earth bedrock elevation (bathymetry/sub-ice topography)
 
-### ETOPO Data
+### ETOPO 2022
 
-ETOPO data is from the **ETOPO 2022 15 Arc-Second Global Relief Model**:
+**ETOPO 2022 15 Arc-Second Global Relief Model**:
 https://www.ncei.noaa.gov/products/etopo-global-relief-model
 
 **Citation**:
 > NOAA National Centers for Environmental Information. 2022: ETOPO 2022 15 Arc-Second Global Relief Model. NOAA National Centers for Environmental Information. DOI: 10.25921/fd45-gt74. Accessed [date].
 
-### BSHC File Format
+Used for HEALPix-gridded elevation data at multiple resolutions.
 
-BSHC (Binary Spherical Harmonic Coefficients) is a format used by [SHTOOLS](https://shtools.github.io/SHTOOLS/) / Curtin University:
+### Global Surface Water
 
-- **Type**: Raw binary, little-endian float64
-- **Structure**:
-  - First 2 float64 values: `min_degree` (0) and `max_degree` (2160)
-  - Then `(lmax+1)(lmax+2)/2` cosine coefficients C(l,m)
-  - Then `(lmax+1)(lmax+2)/2` sine coefficients S(l,m)
-- **Coefficients**: 2,336,041 each for cosine and sine (lmax=2160)
-- **Size**: ~35.6 MB each
+**Global Surface Water** dataset:
+https://global-surface-water.appspot.com/download
 
-**Loading with pyshtools**:
+**Citation**:
+> Jean-Francois Pekel, Andrew Cottam, Noel Gorelick, Alan S. Belward, High-resolution mapping of global surface water and its long-term changes. Nature 540, 418-422 (2016).
+
+Used for water occurrence data at HEALPix resolutions.
+
+---
+
+## File Formats
+
+### BSHC (Binary Spherical Harmonic Coefficients)
+
+BSHC is a binary format used by [SHTOOLS](https://shtools.github.io/SHTOOLS/) for storing spherical harmonic coefficients. To read these files, use the SHTOOLS library:
+
 ```python
 import pyshtools as pysh
 coeffs, lmax = pysh.shio.read_bshc('sur.bshc')
 ```
 
-### Water Data
+### HEALPix NumPy Arrays
 
-The water data is from the **Global Surface Water** dataset:
-https://global-surface-water.appspot.com/download
+The `.npy` files store NumPy arrays with HEALPix-gridded data in NESTED ordering scheme. Load with:
 
-**Citation**:
-> Jean-Francois Pekel, Andrew Cottam, Noel Gorelick, Alan S. Belward, High-resolution mapping of global surface water and its long-term changes. Nature 540, 418-422 (2016).
+```python
+import numpy as np
+data = np.load('etopo2022_surface_min_mean_max_healpix128_NESTED.npy')
+```
 
 ---
 
 ## Files in This Directory
 
 ### BSHC Files (Spherical Harmonic Coefficients)
-- `sur.bshc` - Earth surface elevation (topography)
-- `bed.bshc` - Earth bedrock elevation (bathymetry/sub-ice topography)
+- `sur.bshc` - Earth surface elevation (topography) at lmax=2160
+- `bed.bshc` - Earth bedrock elevation (bathymetry/sub-ice topography) at lmax=2160
 
 ### ETOPO Data Files (HEALPix Format)
 - `etopo2022_surface_min_mean_max_healpix64_NESTED.npy` - Resolution 64
