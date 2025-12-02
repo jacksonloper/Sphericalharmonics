@@ -193,7 +193,7 @@ worker.onmessage = (e) => {
     const data = {
       numPixels: e.data.numPixels,
       minVals: meshGeometry.minElevations,
-      meanVals: new Float32Array(e.data.numPixels), // Not used in this demo
+      meanVals: null, // Not used in this demo
       maxVals: meshGeometry.maxElevations,
       globalMin: e.data.globalMin,
       globalMax: e.data.globalMax,

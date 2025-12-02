@@ -36,10 +36,12 @@ async function loadNpy(filename) {
   
   // Parse shape from header
   const shapeMatch = headerStr.match(/'shape':\s*\((\d+),\s*(\d+)\)/);
+  if (!shapeMatch) throw new Error('Could not parse shape from NPY header');
   const shape = [parseInt(shapeMatch[1]), parseInt(shapeMatch[2])];
   
   // Parse dtype
   const dtypeMatch = headerStr.match(/'descr':\s*'([<>|])([a-z])(\d+)'/);
+  if (!dtypeMatch) throw new Error('Could not parse dtype from NPY header');
   const dtype = dtypeMatch[2] + dtypeMatch[3];
   
   // Read data
