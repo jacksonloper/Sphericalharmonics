@@ -16,24 +16,15 @@ A real-time 3D shape with coefficients evolving via an Ornstein-Uhlenbeck proces
 - The shape's radius at each direction is `r = |f(θ,φ)|` where f is the spherical harmonic function
 - Colors indicate sign: red/orange for positive values, teal/blue for negative
 
-### 🌍 Earth Topography
+### 📊 ETOPO Range
 
-Earth surface elevation rendered using spherical harmonic decomposition on a subdivided icosahedron.
+Earth surface elevation range (min to max) for each HEALPix cell, visualizing terrain roughness and topographic diversity.
 
-- Select different harmonic truncation levels (lmax: 4 to 2160) to see approximation quality
-- Higher lmax values include more coefficients for finer detail
-- Visualizes how spherical harmonics can represent real-world geographic data
-- Interactive time-of-day lighting based on your timezone
-- Relief slider to adjust topographic exaggeration
-
-### 🪨 Bedrock Elevation
-
-Earth's bedrock topography including ocean bathymetry and sub-ice terrain, visualized with spherical harmonics.
-
-- Green indicates elevation above sea level
-- Blue shows areas below sea level (ocean floors, sub-ice topography)
-- Reveals the true shape of Earth's crust beneath water and ice
-- Adjustable relief to emphasize topographic features
+- Each line segment shows the elevation variation within a region
+- Color-coded by elevation using the turbo colormap
+- Multiple resolution levels (HEALPix 64, 128, 256)
+- Circular dots at HEALPix cell centers
+- Interactive camera controls
 
 ## Features
 
@@ -53,13 +44,13 @@ Earth's bedrock topography including ocean bathymetry and sub-ice terrain, visua
 - Live coefficient display (all 15 values)
 - Dual-light setup with ambient lighting
 
-### Earth & Bedrock Specific
-- Icosahedral mesh with adaptive subdivision levels
-- Spherical harmonic coefficient-based topography (BSHC format)
-- Real geographic data visualization
-- Color-coded elevation mapping
-- Relief control for topographic exaggeration
-- Selectable truncation levels (lmax) to compare approximations
+### ETOPO Range Specific
+- HEALPix grid-based elevation data
+- Multiple resolution options (64, 128, 256)
+- Min/mean/max elevation per cell
+- Range visualization with line segments
+- Turbo colormap for elevation coding
+- Optional grid dots and axes visualization
 
 ## Technical Details
 
@@ -73,11 +64,11 @@ Earth's bedrock topography including ocean bathymetry and sub-ice terrain, visua
 - Total: 15 active coefficients evolving on the 14-sphere
 - l=0 term (Y₀⁰) fixed at 0 for balanced red/blue coloring
 
-**Earth & Bedrock Demos:**
-- Variable truncation levels from lmax=4 to lmax=2160
-- Higher lmax provides more detail: lmax=2160 uses over 4.5 million coefficients
-- Data stored in BSHC (spherical harmonic coefficient) format
-- Demonstrates approximation quality at different resolutions
+**ETOPO Range Demo:**
+- HEALPix grid representation at multiple resolutions
+- Each cell stores min, mean, and max elevation
+- Data derived from ETOPO 2022 15 Arc-Second Global Relief Model
+- Visualizes terrain roughness and topographic diversity
 
 ### Physics Simulation (SH Flow)
 Ornstein-Uhlenbeck process for smooth, organic motion:
@@ -90,19 +81,20 @@ Ornstein-Uhlenbeck process for smooth, organic motion:
 
 **All Demos:**
 - WebGL with Three.js
-- Custom GLSL shaders for spherical harmonic evaluation
-- Vertex displacement based on harmonic functions
+- Custom GLSL shaders where applicable
+- Interactive camera controls
 
 **SH Flow:**
 - Base geometry: Icosahedron with 64 subdivisions
 - Two-point lighting (key + fill) with ambient
 - Vertex displacement: `r = |f(θ,φ)| × scale`
+- Custom GLSL shaders for spherical harmonic evaluation
 
-**Earth & Bedrock:**
-- Procedurally generated icosahedral mesh (2-9 subdivision levels)
-- Adaptive subdivision based on Nyquist frequency: `sqrt(vertices)/2 >= lmax`
-- Web Worker support for large meshes (subdivision >= 7)
-- Dynamic time-of-day lighting (Earth only)
+**ETOPO Range:**
+- Line segments representing elevation ranges
+- Circular dots at HEALPix cell centers
+- Color mapping using turbo colormap
+- Efficient instanced rendering for thousands of elements
 
 ## Controls
 
@@ -125,12 +117,11 @@ Ornstein-Uhlenbeck process for smooth, organic motion:
 - **Wireframe**: Toggle wireframe rendering
 - **Max Harmonic Order**: Adjust active spherical harmonic levels
 
-### Earth & Bedrock Settings
-- **lmax**: Select truncation level (4, 8, 16, 32, 64, 128, 360, 2160)
-- **Relief**: Adjust topographic exaggeration
-- **Wireframe**: Toggle wireframe rendering
-- **Axes**: Show/hide polar axis and equator ring
-- **Time slider** (Earth only): Adjust sun position (0-24 hours)
+### ETOPO Range Settings
+- **Resolution**: Select HEALPix resolution (64, 128, 256)
+- **Show Dots**: Toggle circular dots at cell centers
+- **Show Axes**: Toggle polar axis and equator ring
+- **Auto-rotate**: Toggle automatic rotation
 
 ## Local Development
 

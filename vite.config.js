@@ -12,8 +12,6 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         shflow: resolve(__dirname, 'shflow.html'),
-        earth: resolve(__dirname, 'earth.html'),
-        bedrock: resolve(__dirname, 'bedrock.html'),
         etopoRange: resolve(__dirname, 'etopo-range.html')
       },
       output: {
