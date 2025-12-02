@@ -82,8 +82,8 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
 
     // Water-based colormap: blue for water, green for land, black for lowest, white for highest
     vec3 water_colormap(float elevation_t, float water_t) {
-      // Threshold for distinguishing water from land (values > 128 = 50% are considered water)
-      bool isWater = water_t > (128.0 / 255.0);
+      // Threshold for distinguishing water from land (values > 10 capture lakes and oceans)
+      bool isWater = water_t > (10.0 / 255.0);
       
       vec3 baseColor;
       if (isWater) {
