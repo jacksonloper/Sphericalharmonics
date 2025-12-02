@@ -146,6 +146,7 @@ let meshWorker = null; // Worker for mesh generation
 let showMaxMesh = true; // Toggle for max elevation mesh (true = show max, false = show min)
 let flipSign = false; // Toggle for flipping elevation sign
 let loadingOverlay = null; // Loading overlay for resolution switching
+let activeTriangulations = new Set(); // Track which nsides are currently being triangulated
 
 // Available nside resolutions
 const AVAILABLE_NSIDES = [64, 128, 256];
@@ -155,37 +156,100 @@ const meshCache = {};
 AVAILABLE_NSIDES.forEach(nside => meshCache[nside] = null);
 
 /**
+ * Get estimated time message for triangulation
+ */
+function getEstimatedTimeMessage(nside) {
+  if (nside === 256) {
+    return 'This can take up to 1 minute...';
+  } else if (nside === 128) {
+    return 'This can take up to 10 seconds...';
+  }
+  return '';
+}
+
+/**
  * Create loading overlay for resolution switching
  */
 function createLoadingOverlay() {
   const overlay = document.createElement('div');
   overlay.id = 'loadingOverlay';
   overlay.style.position = 'fixed';
-  overlay.style.top = '0';
-  overlay.style.left = '0';
-  overlay.style.width = '100%';
-  overlay.style.height = '100%';
-  overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+  overlay.style.top = '20px';
+  overlay.style.right = '20px';
+  overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
   overlay.style.display = 'none';
-  overlay.style.alignItems = 'center';
-  overlay.style.justifyContent = 'center';
+  overlay.style.padding = '20px 25px';
+  overlay.style.borderRadius = '12px';
   overlay.style.zIndex = '2000';
   overlay.style.color = 'white';
   overlay.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-  overlay.style.fontSize = '18px';
-  overlay.innerHTML = '<div>Loading higher resolution...</div>';
+  overlay.style.fontSize = '14px';
+  overlay.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.5)';
+  overlay.style.minWidth = '250px';
+  
+  const content = document.createElement('div');
+  content.style.display = 'flex';
+  content.style.alignItems = 'center';
+  content.style.gap = '15px';
+  
+  // Spinning loader
+  const spinner = document.createElement('div');
+  spinner.id = 'loadingSpinner';
+  spinner.style.width = '24px';
+  spinner.style.height = '24px';
+  spinner.style.border = '3px solid rgba(255, 255, 255, 0.3)';
+  spinner.style.borderTop = '3px solid #4ecdc4';
+  spinner.style.borderRadius = '50%';
+  spinner.style.animation = 'spin 1s linear infinite';
+  
+  // Add keyframe animation
+  if (!document.getElementById('spinnerStyles')) {
+    const style = document.createElement('style');
+    style.id = 'spinnerStyles';
+    style.textContent = `
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  const textContainer = document.createElement('div');
+  const loadingText = document.createElement('div');
+  loadingText.id = 'loadingText';
+  loadingText.textContent = 'Loading higher resolution...';
+  loadingText.style.fontWeight = '500';
+  loadingText.style.marginBottom = '5px';
+  
+  const estimateText = document.createElement('div');
+  estimateText.id = 'estimateText';
+  estimateText.style.fontSize = '12px';
+  estimateText.style.color = '#aaa';
+  
+  textContainer.appendChild(loadingText);
+  textContainer.appendChild(estimateText);
+  
+  content.appendChild(spinner);
+  content.appendChild(textContainer);
+  overlay.appendChild(content);
+  
   document.body.appendChild(overlay);
   return overlay;
 }
 
 /**
- * Show loading overlay
+ * Show loading overlay with estimated time
  */
-function showLoading() {
+function showLoading(nside) {
   if (!loadingOverlay) {
     loadingOverlay = createLoadingOverlay();
   }
-  loadingOverlay.style.display = 'flex';
+  const estimateText = document.getElementById('estimateText');
+  if (estimateText) {
+    estimateText.textContent = getEstimatedTimeMessage(nside);
+  }
+  loadingOverlay.style.display = 'block';
 }
 
 /**
@@ -478,13 +542,28 @@ async function startBackgroundTriangulation() {
   
   // Triangulate each in sequence using worker
   for (const nside of nsidesToTriangulate) {
+    // Skip if already being triangulated
+    if (activeTriangulations.has(nside)) {
+      console.log(`[nside=${nside}] Already being triangulated, skipping background triangulation`);
+      continue;
+    }
+    
+    // Skip if now cached (might have been triangulated by user action)
+    if (meshCache[nside]) {
+      console.log(`[nside=${nside}] Already cached, skipping background triangulation`);
+      continue;
+    }
+    
     try {
+      activeTriangulations.add(nside);
       const data = await loadHealpixData(nside);
       const meshGeometry = await generateMeshGeometry(nside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
       meshCache[nside] = { geometry: meshGeometry, data: data };
       console.log(`[nside=${nside}] Pre-triangulation complete and cached`);
     } catch (error) {
       console.error(`[nside=${nside}] Failed to pre-triangulate:`, error);
+    } finally {
+      activeTriangulations.delete(nside);
     }
   }
 }
@@ -537,53 +616,76 @@ async function switchToNside(newNside) {
       
       // Create new meshes from cached geometry
       createMeshesFromGeometry(cached.geometry, cached.data.maxAbsElevation);
+    } else if (activeTriangulations.has(newNside)) {
+      // Currently being triangulated in background, show loading and wait
+      console.log(`[nside=${newNside}] Triangulation in progress, waiting...`);
+      showLoading(newNside);
+      
+      // Poll until triangulation completes
+      const checkInterval = setInterval(() => {
+        if (meshCache[newNside]) {
+          clearInterval(checkInterval);
+          hideLoading();
+          // Recursively call to use the cached geometry
+          switchToNside(newNside);
+        }
+      }, 100);
     } else {
       console.log(`Loading and triangulating nside=${newNside}...`);
       
       // Show loading overlay
-      showLoading();
+      showLoading(newNside);
       
-      // Need to load and triangulate
-      const data = await loadHealpixData(newNside);
+      // Mark as active
+      activeTriangulations.add(newNside);
       
-      // Update global geometry data
-      geometryData = {
-        numPixels: data.numPixels,
-        minVals: data.minVals,
-        meanVals: data.meanVals,
-        maxVals: data.maxVals,
-        globalMin: data.globalMin,
-        globalMax: data.globalMax,
-        maxAbsElevation: data.maxAbsElevation
-      };
-      
-      // Clean up old meshes
-      cleanupOldGeometry();
-      
-      // Update materials (if they exist and have uniforms)
-      if (material && material.uniforms) {
-        if (material.uniforms.globalMin) material.uniforms.globalMin.value = data.globalMin;
-        if (material.uniforms.globalMax) material.uniforms.globalMax.value = data.globalMax;
-        if (material.uniforms.maxAbsElevation) material.uniforms.maxAbsElevation.value = data.maxAbsElevation;
+      try {
+        // Need to load and triangulate
+        const data = await loadHealpixData(newNside);
+        
+        // Update global geometry data
+        geometryData = {
+          numPixels: data.numPixels,
+          minVals: data.minVals,
+          meanVals: data.meanVals,
+          maxVals: data.maxVals,
+          globalMin: data.globalMin,
+          globalMax: data.globalMax,
+          maxAbsElevation: data.maxAbsElevation
+        };
+        
+        // Clean up old meshes
+        cleanupOldGeometry();
+        
+        // Update materials (if they exist and have uniforms)
+        if (material && material.uniforms) {
+          if (material.uniforms.globalMin) material.uniforms.globalMin.value = data.globalMin;
+          if (material.uniforms.globalMax) material.uniforms.globalMax.value = data.globalMax;
+          if (material.uniforms.maxAbsElevation) material.uniforms.maxAbsElevation.value = data.maxAbsElevation;
+        }
+        if (maxMaterial && maxMaterial.uniforms) {
+          if (maxMaterial.uniforms.globalMin) maxMaterial.uniforms.globalMin.value = data.globalMin;
+          if (maxMaterial.uniforms.globalMax) maxMaterial.uniforms.globalMax.value = data.globalMax;
+          if (maxMaterial.uniforms.maxAbsElevation) maxMaterial.uniforms.maxAbsElevation.value = data.maxAbsElevation;
+        }
+        
+        // Generate and add meshes using worker
+        const meshGeometry = await generateMeshGeometry(newNside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
+        meshCache[newNside] = { geometry: meshGeometry, data: data };
+        createMeshesFromGeometry(meshGeometry, data.maxAbsElevation);
+        
+        // Hide loading overlay
+        hideLoading();
+      } finally {
+        activeTriangulations.delete(newNside);
       }
-      if (maxMaterial && maxMaterial.uniforms) {
-        if (maxMaterial.uniforms.globalMin) maxMaterial.uniforms.globalMin.value = data.globalMin;
-        if (maxMaterial.uniforms.globalMax) maxMaterial.uniforms.globalMax.value = data.globalMax;
-        if (maxMaterial.uniforms.maxAbsElevation) maxMaterial.uniforms.maxAbsElevation.value = data.maxAbsElevation;
-      }
-      
-      // Generate and add meshes using worker
-      const meshGeometry = await generateMeshGeometry(newNside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
-      meshCache[newNside] = { geometry: meshGeometry, data: data };
-      createMeshesFromGeometry(meshGeometry, data.maxAbsElevation);
-      
-      // Hide loading overlay
-      hideLoading();
     }
   } catch (error) {
     console.error(`Failed to switch to nside=${newNside}:`, error);
     // Hide loading overlay
     hideLoading();
+    // Remove from active triangulations
+    activeTriangulations.delete(newNside);
     // Revert to previous nside if switch failed
     currentNside = AVAILABLE_NSIDES.find(n => meshCache[n]) || INITIAL_NSIDE;
     updateVertexCount();
