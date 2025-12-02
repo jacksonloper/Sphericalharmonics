@@ -486,7 +486,7 @@ function getCircleTexture() {
     const ctx = canvas.getContext('2d');
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
-    const radius = canvas.width / 2;
+    const radius = canvas.width / 2 - 1; // Slightly smaller to prevent edge clipping
     
     // Draw a circle
     ctx.beginPath();
@@ -507,7 +507,8 @@ function cleanupHealpixDots() {
   if (healpixDotsPoints) {
     scene.remove(healpixDotsPoints);
     healpixDotsPoints.geometry.dispose();
-    // Note: texture is cached and reused, so we don't dispose it here
+    // Note: circleTexture is cached globally and reused across resolution switches.
+    // It will be automatically garbage collected when the page is closed/refreshed.
     healpixDotsPoints.material.dispose();
     healpixDotsPoints = null;
   }
