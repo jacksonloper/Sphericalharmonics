@@ -474,15 +474,25 @@ function createMeshesFromGeometry(meshGeometry, maxAbsElevation) {
 }
 
 /**
- * Create points at each HEALPix pixel location (at elevation 0)
+ * Clean up HEALPix dots
  */
-function createHealpixDots(meshGeometry) {
-  // Clean up old dots if they exist
+function cleanupHealpixDots() {
   if (healpixDotsPoints) {
     scene.remove(healpixDotsPoints);
     healpixDotsPoints.geometry.dispose();
     healpixDotsPoints.material.dispose();
+    healpixDotsPoints = null;
   }
+}
+
+/**
+ * Create points at each HEALPix pixel location (at elevation 0)
+ * Note: meshGeometry.positions contains unit sphere coordinates (r=1.0)
+ * before displacement, so dots are correctly placed at elevation 0
+ */
+function createHealpixDots(meshGeometry) {
+  // Clean up old dots if they exist
+  cleanupHealpixDots();
   
   // Create geometry for points at elevation 0 (unit sphere)
   const dotsGeometry = new THREE.BufferGeometry();
@@ -579,11 +589,7 @@ function cleanupOldGeometry() {
     maxHealpixMesh.geometry.dispose();
     // Material is reused, so don't dispose it
   }
-  if (healpixDotsPoints) {
-    scene.remove(healpixDotsPoints);
-    healpixDotsPoints.geometry.dispose();
-    healpixDotsPoints.material.dispose();
-  }
+  cleanupHealpixDots();
 }
 
 function addControlPanel() {
