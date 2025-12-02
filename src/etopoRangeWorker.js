@@ -3,8 +3,8 @@
  * This offloads the CPU-intensive geoDelaunay triangulation to a background thread
  */
 
-// Import required libraries for the worker
-importScripts('https://unpkg.com/d3-geo-voronoi@2.1.0/build/d3-geo-voronoi.min.js');
+// Import d3-geo-voronoi using ES module syntax (Vite will bundle this)
+import { geoDelaunay } from 'd3-geo-voronoi';
 
 /**
  * Convert HEALPix NESTED pixel index to (theta, phi) in spherical coordinates
@@ -88,7 +88,7 @@ function generateMeshGeometry(nside, minElevations, maxElevations, maxAbsElevati
   self.postMessage({ type: 'progress', message: 'Step 2: Creating spherical Delaunay triangulation...', step: 2, total: 6 });
   
   // Use geoDelaunay for spherical Delaunay triangulation
-  const delaunay = d3.geoDelaunay(lonLatPoints);
+  const delaunay = geoDelaunay(lonLatPoints);
   const triangles = delaunay.triangles.flat();
   
   self.postMessage({ type: 'progress', message: `Generated ${triangles.length / 3} triangles`, step: 2, total: 6 });
