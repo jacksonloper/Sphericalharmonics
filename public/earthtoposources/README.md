@@ -74,8 +74,11 @@ Each file contains min, mean, and max elevation values for each HEALPix cell.
 - `water_occurrence_healpix64_NESTED.npy` - Resolution 64
 - `water_occurrence_healpix128_NESTED.npy` - Resolution 128
 - `water_occurrence_healpix256_NESTED.npy` - Resolution 256
+- `water_occurrence_healpix256_thumbnail_mollweide.png` - Visualization thumbnail
 
 Each file contains water occurrence percentages for each HEALPix cell.
+
+**Note on Polar Regions**: The Global Surface Water dataset has no data near the poles. For these regions, water vs land classification is determined using elevation above sea level from the ETOPO 2022 dataset instead of water occurrence data.
 
 ---
 
