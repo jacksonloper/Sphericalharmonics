@@ -145,6 +145,7 @@ let regenerateTimeout = null; // For debouncing slider updates
 let meshWorker = null; // Worker for mesh generation
 let showMaxMesh = true; // Toggle for max elevation mesh (true = show max, false = show min)
 let flipSign = false; // Toggle for flipping elevation sign
+let loadingOverlay = null; // Loading overlay for resolution switching
 
 // Available nside resolutions
 const AVAILABLE_NSIDES = [64, 128, 256];
@@ -152,6 +153,49 @@ const AVAILABLE_NSIDES = [64, 128, 256];
 // Cache for pre-triangulated meshes
 const meshCache = {};
 AVAILABLE_NSIDES.forEach(nside => meshCache[nside] = null);
+
+/**
+ * Create loading overlay for resolution switching
+ */
+function createLoadingOverlay() {
+  const overlay = document.createElement('div');
+  overlay.id = 'loadingOverlay';
+  overlay.style.position = 'fixed';
+  overlay.style.top = '0';
+  overlay.style.left = '0';
+  overlay.style.width = '100%';
+  overlay.style.height = '100%';
+  overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+  overlay.style.display = 'none';
+  overlay.style.alignItems = 'center';
+  overlay.style.justifyContent = 'center';
+  overlay.style.zIndex = '2000';
+  overlay.style.color = 'white';
+  overlay.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+  overlay.style.fontSize = '18px';
+  overlay.innerHTML = '<div>Loading higher resolution...</div>';
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+/**
+ * Show loading overlay
+ */
+function showLoading() {
+  if (!loadingOverlay) {
+    loadingOverlay = createLoadingOverlay();
+  }
+  loadingOverlay.style.display = 'flex';
+}
+
+/**
+ * Hide loading overlay
+ */
+function hideLoading() {
+  if (loadingOverlay) {
+    loadingOverlay.style.display = 'none';
+  }
+}
 
 /**
  * Create the "Enter Visualization" button
@@ -282,12 +326,14 @@ function generateMeshGeometry(nside, elevationData, minElevations, maxElevations
         console.log(`[nside=${nside}] Triangulation completed in ${totalTime.toFixed(2)}ms`);
         
         // Convert transferred ArrayBuffers back to typed arrays
+        // Note: minElevations and maxElevations are NOT transferred from worker
+        // We use the original arrays passed to this function
         const result = {
           positions: new Float32Array(e.data.positions),
           minNormals: new Float32Array(e.data.minNormals),
           maxNormals: new Float32Array(e.data.maxNormals),
-          minElevations: new Float32Array(e.data.minElevations),
-          maxElevations: new Float32Array(e.data.maxElevations),
+          minElevations: minElevations,
+          maxElevations: maxElevations,
           triangles: new Uint32Array(e.data.triangles),
           numPixels: e.data.numPixels
         };
@@ -493,6 +539,10 @@ async function switchToNside(newNside) {
       createMeshesFromGeometry(cached.geometry, cached.data.maxAbsElevation);
     } else {
       console.log(`Loading and triangulating nside=${newNside}...`);
+      
+      // Show loading overlay
+      showLoading();
+      
       // Need to load and triangulate
       const data = await loadHealpixData(newNside);
       
@@ -526,9 +576,14 @@ async function switchToNside(newNside) {
       const meshGeometry = await generateMeshGeometry(newNside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
       meshCache[newNside] = { geometry: meshGeometry, data: data };
       createMeshesFromGeometry(meshGeometry, data.maxAbsElevation);
+      
+      // Hide loading overlay
+      hideLoading();
     }
   } catch (error) {
     console.error(`Failed to switch to nside=${newNside}:`, error);
+    // Hide loading overlay
+    hideLoading();
     // Revert to previous nside if switch failed
     currentNside = AVAILABLE_NSIDES.find(n => meshCache[n]) || INITIAL_NSIDE;
     updateVertexCount();

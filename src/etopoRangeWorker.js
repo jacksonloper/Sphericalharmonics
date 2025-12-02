@@ -202,8 +202,6 @@ function generateMeshGeometry(nside, minElevations, maxElevations, maxAbsElevati
     positions,
     minNormals,
     maxNormals,
-    minElevations,
-    maxElevations,
     triangles: new Uint32Array(triangles),
     numPixels
   };
@@ -230,8 +228,6 @@ self.onmessage = function(e) {
       positions: result.positions.buffer,
       minNormals: result.minNormals.buffer,
       maxNormals: result.maxNormals.buffer,
-      minElevations: result.minElevations.buffer,
-      maxElevations: result.maxElevations.buffer,
       triangles: result.triangles.buffer,
       numPixels: result.numPixels,
       triangulationTime: triangulationTime
@@ -239,8 +235,6 @@ self.onmessage = function(e) {
       result.positions.buffer,
       result.minNormals.buffer,
       result.maxNormals.buffer,
-      result.minElevations.buffer,
-      result.maxElevations.buffer,
       result.triangles.buffer
     ]);
   } catch (error) {
