@@ -5,7 +5,7 @@
  * 
  * Each HEALPix cell is rendered with two meshes:
  * - MIN mesh: solid surface at minimum elevation
- * - MAX mesh: transparent surface at maximum elevation (shows elevation range)
+ * - MAX mesh: solid surface at maximum elevation (shows elevation range)
  */
 
 import * as THREE from 'three';
@@ -67,11 +67,11 @@ document.body.appendChild(loadingDiv);
 
 // Global state
 let healpixMesh = null; // MIN elevation mesh (solid)
-let maxHealpixMesh = null; // MAX elevation mesh (transparent)
+let maxHealpixMesh = null; // MAX elevation mesh (solid)
 let quadMesh = null;
 let innerSphere = null;
 let material = null; // Material for MIN mesh
-let maxMaterial = null; // Transparent material for MAX mesh
+let maxMaterial = null; // Material for MAX mesh
 let quadMaterial = null;
 let geometryData = null; // Store data for regeneration
 let alphaValue = 0.1; // Default alpha value
@@ -169,11 +169,8 @@ async function loadAndVisualize() {
     // Create material for min elevation mesh
     material = createEtopoRangeMaterial(globalMin, globalMax, maxAbsElevation);
     
-    // Create transparent material for max elevation mesh
+    // Create material for max elevation mesh (fully opaque)
     maxMaterial = createEtopoRangeMaterial(globalMin, globalMax, maxAbsElevation);
-    maxMaterial.transparent = true;
-    maxMaterial.opacity = 0.3;
-    maxMaterial.depthWrite = false; // Prevent z-fighting issues
     
     // Create inner non-transparent sphere at radius 0.4
     const innerSphereGeometry = new THREE.SphereGeometry(0.4, 64, 64);
