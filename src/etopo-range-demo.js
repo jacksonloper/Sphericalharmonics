@@ -20,7 +20,13 @@ import * as healpix from '@hscmap/healpix';
 const INITIAL_NSIDE = 64; // Initial resolution
 let currentNside = INITIAL_NSIDE; // Track current resolution
 const HEALPIX_BASE_FACES = 12; // HEALPix tessellation has 12 base faces
-let NPIX = HEALPIX_BASE_FACES * currentNside * currentNside; // 49152 initially
+
+/**
+ * Calculate number of HEALPix pixels for a given nside
+ */
+function getNpix(nside) {
+  return HEALPIX_BASE_FACES * nside * nside;
+}
 
 // Mesh generation parameters
 const MESH_GENERATION_ALPHA = 0.11; // Alpha value used for vertex displacement during mesh generation
@@ -83,7 +89,7 @@ cardTitle.style.fontWeight = 'bold';
 const cardContent = document.createElement('div');
 cardContent.id = 'cardContent';
 cardContent.innerHTML = `
-  <p style="margin: 0 0 12px 0;">Using <strong id="vertexCount">${NPIX.toLocaleString()} samples</strong> to map Earth's elevation—will the Great Lakes be visible? Mt. Denali?</p>
+  <p style="margin: 0 0 12px 0;">Using <strong id="vertexCount">${getNpix(currentNside).toLocaleString()} samples</strong> to map Earth's elevation—will the Great Lakes be visible? Mt. Denali?</p>
   <p style="margin: 0 0 12px 0;">This visualization shows the <em>min</em> and <em>max</em> elevation in each region, divided equally using <a href="https://healpix.sourceforge.io/" target="_blank" style="color: #4ecdc4;">HEALPix</a>. You can also flip to view deep ocean trenches.</p>
   <div id="loadingStatus" style="margin-top: 20px; text-align: center; color: #4ecdc4;">Loading HEALPix data...</div>
 `;
@@ -238,7 +244,7 @@ function sphericalToCartesian(theta, phi, r = 1.0) {
 function updateVertexCount() {
   const vertexCountElement = document.getElementById('vertexCount');
   if (vertexCountElement) {
-    vertexCountElement.textContent = `${NPIX.toLocaleString()} samples`;
+    vertexCountElement.textContent = `${getNpix(currentNside).toLocaleString()} samples`;
   }
 }
 
@@ -489,8 +495,8 @@ async function loadAndVisualize() {
     setTimeout(() => {
       const meshGeometry = generateMeshGeometry(currentNside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
       
-      // Store in cache
-      meshCache[currentNside] = meshGeometry;
+      // Store in cache with consistent structure
+      meshCache[currentNside] = { geometry: meshGeometry, data: data };
       
       // Create and add meshes to scene
       createMeshesFromGeometry(meshGeometry, data.maxAbsElevation);
@@ -591,9 +597,8 @@ async function switchToNside(newNside) {
   
   console.log(`Switching from nside=${currentNside} to nside=${newNside}`);
   
-  // Update global currentNside and NPIX
+  // Update current nside
   currentNside = newNside;
-  NPIX = HEALPIX_BASE_FACES * currentNside * currentNside;
   
   // Update vertex count display
   updateVertexCount();
