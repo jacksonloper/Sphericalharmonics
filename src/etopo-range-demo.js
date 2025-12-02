@@ -10,26 +10,19 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { geoDelaunay } from 'd3-geo-voronoi';
 import { createEtopoRangeMaterial } from './etopoRangeMaterial.js';
-import { load } from 'npyjs';
-import { pix2ang_nest } from '@hscmap/healpix';
-import * as healpix from '@hscmap/healpix';
+import EtopoRangeWorker from './etopoRangeWorker.js?worker';
 
 // HEALPix parameters
 const INITIAL_NSIDE = 64; // Initial resolution
 let currentNside = INITIAL_NSIDE; // Track current resolution
 const HEALPIX_BASE_FACES = 12; // HEALPix tessellation has 12 base faces
 
-/**
- * Calculate number of HEALPix pixels for a given nside
- */
-function getNpix(nside) {
-  return HEALPIX_BASE_FACES * nside * nside;
-}
+// Available nside resolutions
+const AVAILABLE_NSIDES = [64, 128, 256];
 
-// Mesh generation parameters
-const MESH_GENERATION_ALPHA = 0.11; // Alpha value used for vertex displacement during mesh generation
+// Start the worker immediately - it will autonomously process all resolutions
+const worker = new EtopoRangeWorker();
 
 // UI constants
 const DEBOUNCE_DELAY_MS = 100; // Delay for slider debouncing
@@ -153,16 +146,238 @@ let quadMaterial = null;
 let geometryData = null; // Store data for regeneration
 let alphaValue = 0.1; // Default alpha value
 let regenerateTimeout = null; // For debouncing slider updates
-let meshWorker = null; // Worker for mesh generation
 let showMaxMesh = true; // Toggle for max elevation mesh (true = show max, false = show min)
 let flipSign = false; // Toggle for flipping elevation sign
-
-// Available nside resolutions
-const AVAILABLE_NSIDES = [64, 128, 256];
+let loadingOverlay = null; // Loading overlay for resolution switching
 
 // Cache for pre-triangulated meshes
 const meshCache = {};
 AVAILABLE_NSIDES.forEach(nside => meshCache[nside] = null);
+
+// Track which nside we're waiting for first (to show initial visualization)
+let waitingForInitialNside = INITIAL_NSIDE;
+let isInitialized = false;
+
+/**
+ * Handle messages from the worker
+ */
+worker.onmessage = (e) => {
+  const { type, nside } = e.data;
+  
+  if (type === 'status') {
+    console.log(`[nside=${nside}] ${e.data.message}`);
+    if (nside === waitingForInitialNside && !isInitialized) {
+      const loadingStatus = document.getElementById('loadingStatus');
+      if (loadingStatus) {
+        loadingStatus.textContent = e.data.message;
+      }
+    } else if (nside === 128 || nside === 256) {
+      showLoading(nside);
+    }
+  } else if (type === 'progress') {
+    console.log(`[nside=${nside}] ${e.data.message}`);
+  } else if (type === 'complete') {
+    console.log(`[nside=${nside}] Triangulation completed in ${e.data.triangulationTime.toFixed(2)}ms`);
+    
+    // Convert transferred ArrayBuffers back to typed arrays
+    const meshGeometry = {
+      positions: new Float32Array(e.data.positions),
+      minNormals: new Float32Array(e.data.minNormals),
+      maxNormals: new Float32Array(e.data.maxNormals),
+      minElevations: new Float32Array(e.data.minElevations),
+      maxElevations: new Float32Array(e.data.maxElevations),
+      triangles: new Uint32Array(e.data.triangles),
+      numPixels: e.data.numPixels
+    };
+    
+    const data = {
+      numPixels: e.data.numPixels,
+      minVals: meshGeometry.minElevations,
+      meanVals: null, // Not used in this demo
+      maxVals: meshGeometry.maxElevations,
+      globalMin: e.data.globalMin,
+      globalMax: e.data.globalMax,
+      maxAbsElevation: e.data.maxAbsElevation
+    };
+    
+    // Cache the result
+    meshCache[nside] = { geometry: meshGeometry, data: data };
+    
+    // Hide loading indicator for this nside
+    if (nside === 128 || nside === 256) {
+      hideLoading();
+    }
+    
+    // If this is the initial nside, initialize the scene
+    if (nside === waitingForInitialNside && !isInitialized) {
+      initializeScene(nside, meshGeometry, data);
+      isInitialized = true;
+    }
+    
+    // If user switched to this nside while it was loading, update the view
+    if (nside === currentNside && isInitialized) {
+      switchToNside(nside);
+    }
+  } else if (type === 'error') {
+    console.error(`[nside=${nside}] Worker error:`, e.data.message);
+    hideLoading();
+  }
+};
+
+worker.onerror = (error) => {
+  console.error('Worker error:', error);
+  hideLoading();
+};
+
+/**
+ * Initialize the scene with the first loaded geometry
+ */
+function initializeScene(nside, meshGeometry, data) {
+  // Store data for regeneration when slider changes
+  geometryData = {
+    numPixels: data.numPixels,
+    minVals: data.minVals,
+    meanVals: data.meanVals,
+    maxVals: data.maxVals,
+    globalMin: data.globalMin,
+    globalMax: data.globalMax,
+    maxAbsElevation: data.maxAbsElevation
+  };
+  
+  // Create material for min elevation mesh
+  material = createEtopoRangeMaterial(data.globalMin, data.globalMax, data.maxAbsElevation);
+  
+  // Create material for max elevation mesh (fully opaque)
+  maxMaterial = createEtopoRangeMaterial(data.globalMin, data.globalMax, data.maxAbsElevation);
+  
+  // Create inner non-transparent sphere at radius 0.4
+  const innerSphereGeometry = new THREE.SphereGeometry(0.4, 64, 64);
+  const innerSphereMaterial = new THREE.MeshBasicMaterial({
+    color: 0x1a1a1a,
+    side: THREE.BackSide
+  });
+  innerSphere = new THREE.Mesh(innerSphereGeometry, innerSphereMaterial);
+  scene.add(innerSphere);
+  
+  // Create and add meshes to scene
+  createMeshesFromGeometry(meshGeometry, data.maxAbsElevation);
+  
+  // Update loading status and add Enter button
+  const loadingStatus = document.getElementById('loadingStatus');
+  if (loadingStatus) {
+    loadingStatus.style.display = 'none';
+  }
+  
+  // Add Enter Visualization button
+  const enterButton = createEnterButton();
+  infoCard.appendChild(enterButton);
+}
+
+/**
+ * Get estimated time message for triangulation
+ */
+function getEstimatedTimeMessage(nside) {
+  if (nside === 256) {
+    return 'This can take up to 1 minute...';
+  } else if (nside === 128) {
+    return 'This can take up to 10 seconds...';
+  }
+  return '';
+}
+
+/**
+ * Create loading overlay for resolution switching
+ */
+function createLoadingOverlay() {
+  const overlay = document.createElement('div');
+  overlay.id = 'loadingOverlay';
+  overlay.style.position = 'fixed';
+  overlay.style.top = '20px';
+  overlay.style.right = '20px';
+  overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
+  overlay.style.display = 'none';
+  overlay.style.padding = '20px 25px';
+  overlay.style.borderRadius = '12px';
+  overlay.style.zIndex = '2000';
+  overlay.style.color = 'white';
+  overlay.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+  overlay.style.fontSize = '14px';
+  overlay.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.5)';
+  overlay.style.minWidth = '250px';
+  
+  const content = document.createElement('div');
+  content.style.display = 'flex';
+  content.style.alignItems = 'center';
+  content.style.gap = '15px';
+  
+  // Spinning loader
+  const spinner = document.createElement('div');
+  spinner.id = 'loadingSpinner';
+  spinner.style.width = '24px';
+  spinner.style.height = '24px';
+  spinner.style.border = '3px solid rgba(255, 255, 255, 0.3)';
+  spinner.style.borderTop = '3px solid #4ecdc4';
+  spinner.style.borderRadius = '50%';
+  spinner.style.animation = 'spin 1s linear infinite';
+  
+  // Add keyframe animation
+  if (!document.getElementById('spinnerStyles')) {
+    const style = document.createElement('style');
+    style.id = 'spinnerStyles';
+    style.textContent = `
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  const textContainer = document.createElement('div');
+  const loadingText = document.createElement('div');
+  loadingText.id = 'loadingText';
+  loadingText.textContent = 'Loading higher resolution...';
+  loadingText.style.fontWeight = '500';
+  loadingText.style.marginBottom = '5px';
+  
+  const estimateText = document.createElement('div');
+  estimateText.id = 'estimateText';
+  estimateText.style.fontSize = '12px';
+  estimateText.style.color = '#aaa';
+  
+  textContainer.appendChild(loadingText);
+  textContainer.appendChild(estimateText);
+  
+  content.appendChild(spinner);
+  content.appendChild(textContainer);
+  overlay.appendChild(content);
+  
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+/**
+ * Show loading overlay with estimated time
+ */
+function showLoading(nside) {
+  if (!loadingOverlay) {
+    loadingOverlay = createLoadingOverlay();
+  }
+  const estimateText = document.getElementById('estimateText');
+  if (estimateText) {
+    estimateText.textContent = getEstimatedTimeMessage(nside);
+  }
+  loadingOverlay.style.display = 'block';
+}
+
+/**
+ * Hide loading overlay
+ */
+function hideLoading() {
+  if (loadingOverlay) {
+    loadingOverlay.style.display = 'none';
+  }
+}
 
 /**
  * Create the "Enter Visualization" button
@@ -201,41 +416,10 @@ function createEnterButton() {
 }
 
 /**
- * Convert HEALPix NESTED pixel index to (theta, phi) in spherical coordinates
- * Uses the @hscmap/healpix library for accurate conversion
- * 
- * @param {number} nside - HEALPix nside parameter
- * @param {number} ipix - Pixel index in NESTED scheme
- * @returns {Array} [theta, phi] in radians where theta is colatitude [0, π], phi is longitude [0, 2π]
+ * Calculate number of HEALPix pixels for a given nside
  */
-function healpixNestedToSpherical(nside, ipix) {
-  const { theta, phi } = pix2ang_nest(nside, ipix);
-  return [theta, phi];
-}
-
-/**
- * Convert spherical coordinates (theta, phi) to Cartesian (x, y, z)
- * with optional radial displacement
- * 
- * @param {number} theta - Colatitude in radians [0, π]
- * @param {number} phi - Longitude in radians [0, 2π]
- * @param {number} r - Radial distance (default 1.0)
- * @returns {Array} [x, y, z]
- */
-function sphericalToCartesian(theta, phi, r = 1.0) {
-  const sinTheta = Math.sin(theta);
-  const cosTheta = Math.cos(theta);
-  const sinPhi = Math.sin(phi);
-  const cosPhi = Math.cos(phi);
-  
-  // Standard right-handed spherical coordinates with y-up convention
-  // theta=0 at north pole (positive y), phi=0 at positive x
-  // Negate z for correct chirality (left-right orientation)
-  return [
-    r * sinTheta * cosPhi,
-    r * cosTheta,           // y-axis points to poles
-    -r * sinTheta * sinPhi  // Negate for correct chirality
-  ];
+function getNpix(nside) {
+  return HEALPIX_BASE_FACES * nside * nside;
 }
 
 /**
@@ -245,282 +429,6 @@ function updateVertexCount() {
   const vertexCountElement = document.getElementById('vertexCount');
   if (vertexCountElement) {
     vertexCountElement.textContent = `${getNpix(currentNside).toLocaleString()} samples`;
-  }
-}
-
-/**
- * Load HEALPix data for a specific nside value
- */
-async function loadHealpixData(nside) {
-  const startLoadTime = performance.now();
-  console.log(`[nside=${nside}] Starting to load data...`);
-  
-  const filename = `./earthtoposources/etopo2022_surface_min_mean_max_healpix${nside}_NESTED.npy`;
-  const data = await load(filename);
-  
-  const loadTime = performance.now() - startLoadTime;
-  console.log(`[nside=${nside}] Data loaded in ${loadTime.toFixed(2)}ms`);
-  console.log(`[nside=${nside}] Data shape: ${data.shape}, dtype: ${data.dtype}`);
-  
-  // Extract min, mean, max arrays
-  const numPixels = data.shape[0];
-  const minVals = new Float32Array(numPixels);
-  const meanVals = new Float32Array(numPixels);
-  const maxVals = new Float32Array(numPixels);
-  
-  let globalMin = Infinity;
-  let globalMax = -Infinity;
-  
-  for (let i = 0; i < numPixels; i++) {
-    const minVal = data.data[i * 3 + 0];
-    const meanVal = data.data[i * 3 + 1];
-    const maxVal = data.data[i * 3 + 2];
-    minVals[i] = minVal;
-    meanVals[i] = meanVal;
-    maxVals[i] = maxVal;
-    
-    if (minVal < globalMin) globalMin = minVal;
-    if (maxVal > globalMax) globalMax = maxVal;
-  }
-  
-  // Calculate max absolute elevation
-  const maxAbsElevation = Math.max(Math.abs(globalMin), Math.abs(globalMax));
-  
-  console.log(`[nside=${nside}] Elevation range: ${globalMin.toFixed(2)}m to ${globalMax.toFixed(2)}m`);
-  console.log(`[nside=${nside}] Max absolute elevation: ${maxAbsElevation.toFixed(2)}m`);
-  
-  return {
-    data: data.data,
-    numPixels,
-    minVals,
-    meanVals,
-    maxVals,
-    globalMin,
-    globalMax,
-    maxAbsElevation
-  };
-}
-
-/**
- * Generate mesh geometry for a specific nside (returns geometry data, doesn't add to scene)
- */
-function generateMeshGeometry(nside, elevationData, minElevations, maxElevations, maxAbsElevation) {
-  const startTime = performance.now();
-  console.log(`[nside=${nside}] Starting triangulation...`);
-  
-  const numPixels = HEALPIX_BASE_FACES * nside * nside;
-  
-  // Step 1: Generate vertex positions on unit sphere
-  console.log(`[nside=${nside}] Step 1: Generating vertex positions on sphere...`);
-  
-  const positions = new Float32Array(numPixels * 3);
-  const lonLatPoints = []; // [longitude, latitude] pairs for geoDelaunay
-  
-  for (let i = 0; i < numPixels; i++) {
-    const { theta, phi } = pix2ang_nest(nside, i);
-    const [x, y, z] = sphericalToCartesian(theta, phi, 1.0);
-    
-    positions[i * 3] = x;
-    positions[i * 3 + 1] = y;
-    positions[i * 3 + 2] = z;
-    
-    // Convert to longitude/latitude for geoDelaunay
-    let longitude = phi * 180 / Math.PI;
-    if (longitude > 180) longitude -= 360;
-    const latitude = 90 - (theta * 180 / Math.PI);
-    lonLatPoints.push([longitude, latitude]);
-  }
-  
-  // Step 2: Use geoDelaunay for spherical Delaunay triangulation
-  console.log(`[nside=${nside}] Step 2: Creating spherical Delaunay triangulation...`);
-  const delaunay = geoDelaunay(lonLatPoints);
-  const triangles = delaunay.triangles.flat();
-  
-  console.log(`[nside=${nside}] Generated ${triangles.length / 3} triangles`);
-  
-  // Step 3: Displace vertices temporarily based on MIN elevation
-  console.log(`[nside=${nside}] Step 3: Computing MIN normals...`);
-  const displacedMinPositions = new Float32Array(positions.length);
-  const alpha = MESH_GENERATION_ALPHA;
-  
-  for (let i = 0; i < numPixels; i++) {
-    const x = positions[i * 3];
-    const y = positions[i * 3 + 1];
-    const z = positions[i * 3 + 2];
-    
-    const elevation = minElevations[i];
-    const r = 1.0 + alpha * elevation / maxAbsElevation;
-    
-    displacedMinPositions[i * 3] = x * r;
-    displacedMinPositions[i * 3 + 1] = y * r;
-    displacedMinPositions[i * 3 + 2] = z * r;
-  }
-  
-  // Step 4: Compute normals from displaced MIN geometry
-  const minNormals = new Float32Array(numPixels * 3);
-  
-  for (let i = 0; i < triangles.length; i += 3) {
-    const i1 = triangles[i], i2 = triangles[i + 1], i3 = triangles[i + 2];
-    
-    const ax = displacedMinPositions[i1 * 3], ay = displacedMinPositions[i1 * 3 + 1], az = displacedMinPositions[i1 * 3 + 2];
-    const bx = displacedMinPositions[i2 * 3], by = displacedMinPositions[i2 * 3 + 1], bz = displacedMinPositions[i2 * 3 + 2];
-    const cx = displacedMinPositions[i3 * 3], cy = displacedMinPositions[i3 * 3 + 1], cz = displacedMinPositions[i3 * 3 + 2];
-    
-    const e1x = bx - ax, e1y = by - ay, e1z = bz - az;
-    const e2x = cx - ax, e2y = cy - ay, e2z = cz - az;
-    
-    const nx = e1y * e2z - e1z * e2y;
-    const ny = e1z * e2x - e1x * e2z;
-    const nz = e1x * e2y - e1y * e2x;
-    
-    minNormals[i1 * 3] += nx; minNormals[i1 * 3 + 1] += ny; minNormals[i1 * 3 + 2] += nz;
-    minNormals[i2 * 3] += nx; minNormals[i2 * 3 + 1] += ny; minNormals[i2 * 3 + 2] += nz;
-    minNormals[i3 * 3] += nx; minNormals[i3 * 3 + 1] += ny; minNormals[i3 * 3 + 2] += nz;
-  }
-  
-  // Normalize min normals
-  for (let i = 0; i < numPixels; i++) {
-    const x = minNormals[i * 3], y = minNormals[i * 3 + 1], z = minNormals[i * 3 + 2];
-    const len = Math.sqrt(x * x + y * y + z * z);
-    if (len > 0) {
-      minNormals[i * 3] /= len;
-      minNormals[i * 3 + 1] /= len;
-      minNormals[i * 3 + 2] /= len;
-    }
-  }
-  
-  // Step 5: Displace vertices temporarily based on MAX elevation
-  console.log(`[nside=${nside}] Step 5: Computing MAX normals...`);
-  const displacedMaxPositions = new Float32Array(positions.length);
-  
-  for (let i = 0; i < numPixels; i++) {
-    const x = positions[i * 3];
-    const y = positions[i * 3 + 1];
-    const z = positions[i * 3 + 2];
-    
-    const elevation = maxElevations[i];
-    const r = 1.0 + alpha * elevation / maxAbsElevation;
-    
-    displacedMaxPositions[i * 3] = x * r;
-    displacedMaxPositions[i * 3 + 1] = y * r;
-    displacedMaxPositions[i * 3 + 2] = z * r;
-  }
-  
-  // Step 6: Compute normals from displaced MAX geometry
-  const maxNormals = new Float32Array(numPixels * 3);
-  
-  for (let i = 0; i < triangles.length; i += 3) {
-    const i1 = triangles[i], i2 = triangles[i + 1], i3 = triangles[i + 2];
-    
-    const ax = displacedMaxPositions[i1 * 3], ay = displacedMaxPositions[i1 * 3 + 1], az = displacedMaxPositions[i1 * 3 + 2];
-    const bx = displacedMaxPositions[i2 * 3], by = displacedMaxPositions[i2 * 3 + 1], bz = displacedMaxPositions[i2 * 3 + 2];
-    const cx = displacedMaxPositions[i3 * 3], cy = displacedMaxPositions[i3 * 3 + 1], cz = displacedMaxPositions[i3 * 3 + 2];
-    
-    const e1x = bx - ax, e1y = by - ay, e1z = bz - az;
-    const e2x = cx - ax, e2y = cy - ay, e2z = cz - az;
-    
-    const nx = e1y * e2z - e1z * e2y;
-    const ny = e1z * e2x - e1x * e2z;
-    const nz = e1x * e2y - e1y * e2x;
-    
-    maxNormals[i1 * 3] += nx; maxNormals[i1 * 3 + 1] += ny; maxNormals[i1 * 3 + 2] += nz;
-    maxNormals[i2 * 3] += nx; maxNormals[i2 * 3 + 1] += ny; maxNormals[i2 * 3 + 2] += nz;
-    maxNormals[i3 * 3] += nx; maxNormals[i3 * 3 + 1] += ny; maxNormals[i3 * 3 + 2] += nz;
-  }
-  
-  // Normalize max normals
-  for (let i = 0; i < numPixels; i++) {
-    const x = maxNormals[i * 3], y = maxNormals[i * 3 + 1], z = maxNormals[i * 3 + 2];
-    const len = Math.sqrt(x * x + y * y + z * z);
-    if (len > 0) {
-      maxNormals[i * 3] /= len;
-      maxNormals[i * 3 + 1] /= len;
-      maxNormals[i * 3 + 2] /= len;
-    }
-  }
-  
-  const triangulationTime = performance.now() - startTime;
-  console.log(`[nside=${nside}] Triangulation completed in ${triangulationTime.toFixed(2)}ms`);
-  
-  return {
-    positions,
-    minNormals,
-    maxNormals,
-    minElevations,
-    maxElevations,
-    triangles,
-    numPixels
-  };
-}
-
-/**
- * Load and visualize HEALPix data
- */
-async function loadAndVisualize() {
-  try {
-    // Load initial data for nside=64
-    const data = await loadHealpixData(currentNside);
-    
-    // Store data for regeneration when slider changes
-    geometryData = {
-      numPixels: data.numPixels,
-      minVals: data.minVals,
-      meanVals: data.meanVals,
-      maxVals: data.maxVals,
-      globalMin: data.globalMin,
-      globalMax: data.globalMax,
-      maxAbsElevation: data.maxAbsElevation
-    };
-    
-    // Create material for min elevation mesh
-    material = createEtopoRangeMaterial(data.globalMin, data.globalMax, data.maxAbsElevation);
-    
-    // Create material for max elevation mesh (fully opaque)
-    maxMaterial = createEtopoRangeMaterial(data.globalMin, data.globalMax, data.maxAbsElevation);
-    
-    // Create inner non-transparent sphere at radius 0.4
-    const innerSphereGeometry = new THREE.SphereGeometry(0.4, 64, 64);
-    const innerSphereMaterial = new THREE.MeshBasicMaterial({
-      color: 0x1a1a1a,
-      side: THREE.BackSide
-    });
-    innerSphere = new THREE.Mesh(innerSphereGeometry, innerSphereMaterial);
-    scene.add(innerSphere);
-    
-    // Generate HEALPix mesh directly
-    const loadingStatus = document.getElementById('loadingStatus');
-    if (loadingStatus) {
-      loadingStatus.textContent = 'Generating HEALPix mesh...';
-    }
-    setTimeout(() => {
-      const meshGeometry = generateMeshGeometry(currentNside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
-      
-      // Store in cache with consistent structure
-      meshCache[currentNside] = { geometry: meshGeometry, data: data };
-      
-      // Create and add meshes to scene
-      createMeshesFromGeometry(meshGeometry, data.maxAbsElevation);
-      
-      // Update loading status and add Enter button
-      if (loadingStatus) {
-        loadingStatus.style.display = 'none';
-      }
-      
-      // Add Enter Visualization button
-      const enterButton = createEnterButton();
-      infoCard.appendChild(enterButton);
-      
-      // Start background triangulation for 128 and 256
-      startBackgroundTriangulation();
-    }, 100); // Small delay to allow loading message to display
-    
-  } catch (error) {
-    console.error('Failed to load data:', error);
-    const loadingStatus = document.getElementById('loadingStatus');
-    if (loadingStatus) {
-      loadingStatus.innerHTML = 'Failed: ' + error.message;
-      loadingStatus.style.color = '#ff4444';
-    }
   }
 }
 
@@ -561,29 +469,9 @@ function createMeshesFromGeometry(meshGeometry, maxAbsElevation) {
 }
 
 /**
- * Start background triangulation for resolutions not yet loaded
- */
-async function startBackgroundTriangulation() {
-  // Get nsides that need triangulation (excluding current)
-  const nsidesToTriangulate = AVAILABLE_NSIDES.filter(n => n !== currentNside && !meshCache[n]);
-  
-  // Triangulate each in sequence
-  for (const nside of nsidesToTriangulate) {
-    try {
-      const data = await loadHealpixData(nside);
-      const meshGeometry = generateMeshGeometry(nside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
-      meshCache[nside] = { geometry: meshGeometry, data: data };
-      console.log(`[nside=${nside}] Pre-triangulation complete and cached`);
-    } catch (error) {
-      console.error(`[nside=${nside}] Failed to pre-triangulate:`, error);
-    }
-  }
-}
-
-/**
  * Switch to a different nside resolution
  */
-async function switchToNside(newNside) {
+function switchToNside(newNside) {
   if (newNside === currentNside) return; // Already at this resolution
   
   console.log(`Switching from nside=${currentNside} to nside=${newNside}`);
@@ -627,41 +515,11 @@ async function switchToNside(newNside) {
     
     // Create new meshes from cached geometry
     createMeshesFromGeometry(cached.geometry, cached.data.maxAbsElevation);
+    hideLoading();
   } else {
-    console.log(`Loading and triangulating nside=${newNside}...`);
-    // Need to load and triangulate
-    const data = await loadHealpixData(newNside);
-    
-    // Update global geometry data
-    geometryData = {
-      numPixels: data.numPixels,
-      minVals: data.minVals,
-      meanVals: data.meanVals,
-      maxVals: data.maxVals,
-      globalMin: data.globalMin,
-      globalMax: data.globalMax,
-      maxAbsElevation: data.maxAbsElevation
-    };
-    
-    // Clean up old meshes
-    cleanupOldGeometry();
-    
-    // Update materials (if they exist and have uniforms)
-    if (material && material.uniforms) {
-      if (material.uniforms.globalMin) material.uniforms.globalMin.value = data.globalMin;
-      if (material.uniforms.globalMax) material.uniforms.globalMax.value = data.globalMax;
-      if (material.uniforms.maxAbsElevation) material.uniforms.maxAbsElevation.value = data.maxAbsElevation;
-    }
-    if (maxMaterial && maxMaterial.uniforms) {
-      if (maxMaterial.uniforms.globalMin) maxMaterial.uniforms.globalMin.value = data.globalMin;
-      if (maxMaterial.uniforms.globalMax) maxMaterial.uniforms.globalMax.value = data.globalMax;
-      if (maxMaterial.uniforms.maxAbsElevation) maxMaterial.uniforms.maxAbsElevation.value = data.maxAbsElevation;
-    }
-    
-    // Generate and add meshes
-    const meshGeometry = generateMeshGeometry(newNside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
-    meshCache[newNside] = { geometry: meshGeometry, data: data };
-    createMeshesFromGeometry(meshGeometry, data.maxAbsElevation);
+    // Not yet cached, show loading indicator - worker will complete it eventually
+    console.log(`[nside=${newNside}] Waiting for triangulation to complete...`);
+    showLoading(newNside);
   }
 }
 
@@ -894,5 +752,5 @@ window.addEventListener('resize', () => {
 
 // Initialize
 addControlPanel();
-loadAndVisualize();
+// Worker starts autonomously and will call initializeScene when first data is ready
 animate();
