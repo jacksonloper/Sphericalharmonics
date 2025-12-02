@@ -192,10 +192,21 @@ async function processNside(nside) {
   try {
     self.postMessage({ type: 'status', nside, message: `Loading data for nside=${nside}...` });
     
-    // Load data using npyjs
+    // Load elevation data using npyjs
     // In a worker, we need to use an absolute path or construct it relative to the location
     const filename = `${self.location.origin}/earthtoposources/etopo2022_surface_min_mean_max_healpix${nside}_NESTED.npy`;
     const npyData = await load(filename);
+    
+    // Load water occurrence data
+    const waterFilename = `${self.location.origin}/earthtoposources/water_occurrence_healpix${nside}_NESTED.npy`;
+    let waterData = null;
+    try {
+      waterData = await load(waterFilename);
+    } catch (waterError) {
+      console.warn(`[nside=${nside}] Water data not available, using fallback values`);
+      // Create fallback water data (all zeros = land)
+      waterData = { data: new Float32Array(npyData.shape[0]).fill(0) };
+    }
     
     self.postMessage({ type: 'status', nside, message: `Data loaded for nside=${nside}` });
     
@@ -204,6 +215,7 @@ async function processNside(nside) {
     const minVals = new Float32Array(numPixels);
     const meanVals = new Float32Array(numPixels);
     const maxVals = new Float32Array(numPixels);
+    const waterVals = new Float32Array(numPixels);
     
     let globalMin = Infinity;
     let globalMax = -Infinity;
@@ -215,6 +227,26 @@ async function processNside(nside) {
       minVals[i] = minVal;
       meanVals[i] = meanVal;
       maxVals[i] = maxVal;
+      
+      // Extract water occurrence value
+      const waterVal = waterData.data[i];
+      
+      // Get pixel coordinates to calculate latitude
+      const { theta, phi } = pix2ang_nest(nside, i);
+      // theta is colatitude (0 at north pole, π at south pole)
+      // latitude = 90° - theta (in radians: π/2 - theta)
+      const latitude = (Math.PI / 2 - theta) * 180 / Math.PI; // Convert to degrees
+      
+      // Check if we're in polar regions with data artifacts
+      // Ignore water data below 56°S or above 76°N
+      const inPolarRegion = (latitude < -56.0 || latitude > 76.0);
+      
+      // Handle invalid data or polar regions by marking as NaN
+      if (!isFinite(waterVal) || waterVal < 0 || inPolarRegion) {
+        waterVals[i] = NaN;
+      } else {
+        waterVals[i] = waterVal;
+      }
       
       if (minVal < globalMin) globalMin = minVal;
       if (maxVal > globalMax) globalMax = maxVal;
@@ -238,6 +270,7 @@ async function processNside(nside) {
       maxNormals: result.maxNormals.buffer,
       minElevations: result.minElevations.buffer,
       maxElevations: result.maxElevations.buffer,
+      waterOccurrence: waterVals.buffer,
       triangles: result.triangles.buffer,
       numPixels: result.numPixels,
       globalMin,
@@ -250,6 +283,7 @@ async function processNside(nside) {
       result.maxNormals.buffer,
       result.minElevations.buffer,
       result.maxElevations.buffer,
+      waterVals.buffer,
       result.triangles.buffer
     ]);
     

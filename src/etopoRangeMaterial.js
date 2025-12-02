@@ -1,7 +1,7 @@
 /**
  * ETOPO Range Material for three.js
  * Creates shader materials for visualizing elevation range data (min to max) on HEALPix meshes
- * Uses the turbo colormap - a perceptually uniform colormap that doesn't imply sea level
+ * Supports both turbo colormap and water-based colormap
  */
 
 import * as THREE from 'three';
@@ -17,24 +17,30 @@ import * as THREE from 'three';
 export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9000, maxAbsElevation = 11000) {
   const vertexShader = `
     attribute float elevation;
+    attribute float waterOccurrence;
     uniform float alpha;
     uniform float maxAbsElevation;
-    uniform float flipSign;
+    uniform float flipOceans;
     varying float vElevation;
     varying float vOriginalElevation;
+    varying float vWaterOccurrence;
     varying vec3 vNormal;
     varying vec3 vPosition;
 
     void main() {
-      // Store original elevation for color mapping (not affected by flip sign)
+      // Store original elevation for color mapping (not affected by flip oceans)
       vOriginalElevation = elevation;
       
-      // Apply flip sign to elevation for displacement
+      // Pass water occurrence to fragment shader
+      vWaterOccurrence = waterOccurrence;
+      
+      // Apply flip oceans: reverse sign of elevation for displacement
+      // When flipOceans is 1.0, mountains become valleys and vice versa
+      float flipSign = flipOceans > 0.5 ? -1.0 : 1.0;
       vElevation = elevation * flipSign;
 
       // Use precomputed normals from geometry (computed at alpha=0.11)
-      // When flipSign is -1, we need to invert the normals since the displacement is reversed
-      // Transform to view space for lighting calculations
+      // When flipOceans is enabled, invert normals since displacement is reversed
       vNormal = normalize(normalMatrix * normal * flipSign);
 
       // Compute radial displacement: r = 1 + alpha * e / maxAbsElevation
@@ -52,9 +58,11 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
   const fragmentShader = `
     uniform float minElevation;
     uniform float maxElevation;
+    uniform bool useWaterColormap;
 
     varying float vElevation;
     varying float vOriginalElevation;
+    varying float vWaterOccurrence;
     varying vec3 vNormal;
     varying vec3 vPosition;
 
@@ -73,14 +81,59 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
       return c0 + t * (c1 + t * (c2 + t * (c3 + t * (c4 + t * (c5 + t * c6)))));
     }
 
-    void main() {
-      // Map elevation to [0, 1] range for turbo colormap
-      // Always use original elevation for color mapping
-      float t = (vOriginalElevation - minElevation) / (maxElevation - minElevation);
-      t = clamp(t, 0.0, 1.0);
+    // Water-based colormap: blue for water, green for land, black for lowest, white for highest
+    vec3 water_colormap(float elevation_t, float water_t) {
+      // Check for no-data regions (NaN in water data from invalid values or polar regions)
+      // Use isnan() check - NaN values were set during data loading for polar regions
+      bool isWater;
+      if (isnan(water_t)) {
+        // No water data available - use elevation as fallback (elevation <= 0 is water)
+        isWater = vOriginalElevation <= 0.0;
+      } else {
+        // Use water occurrence threshold (values > 50 capture water bodies)
+        isWater = water_t > (50.0 / 255.0);
+      }
       
-      // Apply turbo colormap
-      vec3 color = turbo_colormap(t);
+      vec3 baseColor;
+      if (isWater) {
+        // Blue gradient for water: darker blue at low elevations, lighter blue at high elevations
+        baseColor = mix(vec3(0.0, 0.0, 0.5), vec3(0.3, 0.5, 1.0), elevation_t);
+      } else {
+        // Green gradient for land: darker green at low elevations, lighter green at high elevations
+        baseColor = mix(vec3(0.0, 0.3, 0.0), vec3(0.4, 0.8, 0.3), elevation_t);
+      }
+      
+      // Mix with black (lowest) and white (highest) based on elevation
+      // Black contribution is strongest at lowest elevation, white at highest
+      vec3 finalColor = baseColor;
+      if (elevation_t < 0.2) {
+        // Blend toward black for lowest elevations
+        finalColor = mix(vec3(0.0, 0.0, 0.0), baseColor, elevation_t / 0.2);
+      } else if (elevation_t > 0.8) {
+        // Blend toward white for highest elevations
+        finalColor = mix(baseColor, vec3(1.0, 1.0, 1.0), (elevation_t - 0.8) / 0.2);
+      }
+      
+      return finalColor;
+    }
+
+    void main() {
+      // Map elevation to [0, 1] range
+      // Always use original elevation for color mapping
+      float elevation_t = (vOriginalElevation - minElevation) / (maxElevation - minElevation);
+      elevation_t = clamp(elevation_t, 0.0, 1.0);
+      
+      // Map water occurrence to [0, 1] range
+      // NOTE: Do NOT clamp before passing to water_colormap, as negative values indicate no-data
+      float water_t = vWaterOccurrence / 255.0;
+      
+      // Choose colormap based on uniform
+      vec3 color;
+      if (useWaterColormap) {
+        color = water_colormap(elevation_t, water_t);
+      } else {
+        color = turbo_colormap(elevation_t);
+      }
 
       // Multi-directional lighting for full illumination
       // Multiple lights from different directions ensure all surfaces are well lit
@@ -108,7 +161,8 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
       maxElevation: { value: maxElevation },
       maxAbsElevation: { value: maxAbsElevation },
       alpha: { value: 0.1 },
-      flipSign: { value: 1.0 }
+      flipOceans: { value: 0.0 },
+      useWaterColormap: { value: true }  // Default to water-based colormap
     },
     vertexShader,
     fragmentShader,

@@ -193,6 +193,7 @@ worker.onmessage = (e) => {
       maxNormals: new Float32Array(e.data.maxNormals),
       minElevations: new Float32Array(e.data.minElevations),
       maxElevations: new Float32Array(e.data.maxElevations),
+      waterOccurrence: new Float32Array(e.data.waterOccurrence),
       triangles: new Uint32Array(e.data.triangles),
       numPixels: e.data.numPixels
     };
@@ -474,6 +475,7 @@ function createMeshesFromGeometry(meshGeometry, maxAbsElevation) {
   minGeometry.setAttribute('position', new THREE.BufferAttribute(meshGeometry.positions, 3));
   minGeometry.setAttribute('normal', new THREE.BufferAttribute(meshGeometry.minNormals, 3));
   minGeometry.setAttribute('elevation', new THREE.BufferAttribute(meshGeometry.minElevations, 1));
+  minGeometry.setAttribute('waterOccurrence', new THREE.BufferAttribute(meshGeometry.waterOccurrence, 1));
   minGeometry.setIndex(new THREE.BufferAttribute(new Uint32Array(meshGeometry.triangles), 1));
   
   const meshMaterial = material;
@@ -491,6 +493,7 @@ function createMeshesFromGeometry(meshGeometry, maxAbsElevation) {
   maxGeometry.setAttribute('position', new THREE.BufferAttribute(meshGeometry.positions, 3));
   maxGeometry.setAttribute('normal', new THREE.BufferAttribute(meshGeometry.maxNormals, 3));
   maxGeometry.setAttribute('elevation', new THREE.BufferAttribute(meshGeometry.maxElevations, 1));
+  maxGeometry.setAttribute('waterOccurrence', new THREE.BufferAttribute(meshGeometry.waterOccurrence, 1));
   maxGeometry.setIndex(new THREE.BufferAttribute(new Uint32Array(meshGeometry.triangles), 1));
   
   maxHealpixMesh = new THREE.Mesh(maxGeometry, maxMaterial);
@@ -750,37 +753,37 @@ function addControlPanel() {
   meshTypeGroup.appendChild(maxLabel);
   panel.appendChild(meshTypeGroup);
 
-  // Flip sign checkbox
-  const flipSignGroup = document.createElement('div');
-  flipSignGroup.style.display = 'flex';
-  flipSignGroup.style.alignItems = 'center';
-  flipSignGroup.style.gap = '8px';
+  // Flip oceans checkbox
+  const flipOceansGroup = document.createElement('div');
+  flipOceansGroup.style.display = 'flex';
+  flipOceansGroup.style.alignItems = 'center';
+  flipOceansGroup.style.gap = '8px';
 
   const flipCheckbox = document.createElement('input');
   flipCheckbox.type = 'checkbox';
-  flipCheckbox.id = 'flipSignCheckbox';
+  flipCheckbox.id = 'flipOceansCheckbox';
   flipCheckbox.checked = flipSign;
   flipCheckbox.style.cursor = 'pointer';
 
   const flipLabel = document.createElement('label');
-  flipLabel.htmlFor = 'flipSignCheckbox';
-  flipLabel.textContent = 'Flip sign';
+  flipLabel.htmlFor = 'flipOceansCheckbox';
+  flipLabel.textContent = 'Flip oceans';
   flipLabel.style.cursor = 'pointer';
 
   flipCheckbox.addEventListener('change', (e) => {
     flipSign = e.target.checked;
-    // Update uniforms in materials to flip the sign
+    // Update uniforms in materials to use absolute elevation
     if (material) {
-      material.uniforms.flipSign.value = flipSign ? -1.0 : 1.0;
+      material.uniforms.flipOceans.value = flipSign ? 1.0 : 0.0;
     }
     if (maxMaterial) {
-      maxMaterial.uniforms.flipSign.value = flipSign ? -1.0 : 1.0;
+      maxMaterial.uniforms.flipOceans.value = flipSign ? 1.0 : 0.0;
     }
   });
 
-  flipSignGroup.appendChild(flipCheckbox);
-  flipSignGroup.appendChild(flipLabel);
-  panel.appendChild(flipSignGroup);
+  flipOceansGroup.appendChild(flipCheckbox);
+  flipOceansGroup.appendChild(flipLabel);
+  panel.appendChild(flipOceansGroup);
 
   // Show HEALPix dots checkbox
   const dotsGroup = document.createElement('div');
@@ -813,6 +816,38 @@ function addControlPanel() {
   dotsGroup.appendChild(dotsCheckbox);
   dotsGroup.appendChild(dotsLabel);
   panel.appendChild(dotsGroup);
+
+  // Water colormap checkbox
+  const waterColormapGroup = document.createElement('div');
+  waterColormapGroup.style.display = 'flex';
+  waterColormapGroup.style.alignItems = 'center';
+  waterColormapGroup.style.gap = '8px';
+
+  const waterColormapCheckbox = document.createElement('input');
+  waterColormapCheckbox.type = 'checkbox';
+  waterColormapCheckbox.id = 'waterColormapCheckbox';
+  waterColormapCheckbox.checked = true; // Default to water colormap
+  waterColormapCheckbox.style.cursor = 'pointer';
+
+  const waterColormapLabel = document.createElement('label');
+  waterColormapLabel.htmlFor = 'waterColormapCheckbox';
+  waterColormapLabel.textContent = 'Water colormap';
+  waterColormapLabel.style.cursor = 'pointer';
+
+  waterColormapCheckbox.addEventListener('change', (e) => {
+    const useWaterColormap = e.target.checked;
+    // Update uniforms in materials to toggle colormap
+    if (material) {
+      material.uniforms.useWaterColormap.value = useWaterColormap;
+    }
+    if (maxMaterial) {
+      maxMaterial.uniforms.useWaterColormap.value = useWaterColormap;
+    }
+  });
+
+  waterColormapGroup.appendChild(waterColormapCheckbox);
+  waterColormapGroup.appendChild(waterColormapLabel);
+  panel.appendChild(waterColormapGroup);
 
   // Nside selector dropdown
   const nsideGroup = document.createElement('div');
