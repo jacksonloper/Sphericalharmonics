@@ -14,8 +14,6 @@ function pix2ang_nest(nside, ipix) {
   const npface = nside * nside;
   const ncap = 2 * nside * (nside - 1);
   
-  let jrt, jr, jp, nr, kshift;
-  
   if (ipix < ncap) {
     // North polar cap
     const iring = Math.floor((Math.sqrt(1 + 2 * ipix) + 1) / 2);

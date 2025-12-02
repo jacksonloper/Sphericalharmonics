@@ -451,80 +451,87 @@ async function switchToNside(newNside) {
   
   console.log(`Switching from nside=${currentNside} to nside=${newNside}`);
   
-  // Update current nside
-  currentNside = newNside;
-  
-  // Update vertex count display
-  updateVertexCount();
-  
-  // Check if we have cached geometry
-  if (meshCache[newNside]) {
-    console.log(`Using cached geometry for nside=${newNside}`);
-    const cached = meshCache[newNside];
+  try {
+    // Update current nside
+    currentNside = newNside;
     
-    // Update global geometry data
-    geometryData = {
-      numPixels: cached.data.numPixels,
-      minVals: cached.data.minVals,
-      meanVals: cached.data.meanVals,
-      maxVals: cached.data.maxVals,
-      globalMin: cached.data.globalMin,
-      globalMax: cached.data.globalMax,
-      maxAbsElevation: cached.data.maxAbsElevation
-    };
+    // Update vertex count display
+    updateVertexCount();
     
-    // Clean up old meshes
-    cleanupOldGeometry();
-    
-    // Update materials (if they exist and have uniforms)
-    if (material && material.uniforms) {
-      if (material.uniforms.globalMin) material.uniforms.globalMin.value = cached.data.globalMin;
-      if (material.uniforms.globalMax) material.uniforms.globalMax.value = cached.data.globalMax;
-      if (material.uniforms.maxAbsElevation) material.uniforms.maxAbsElevation.value = cached.data.maxAbsElevation;
+    // Check if we have cached geometry
+    if (meshCache[newNside]) {
+      console.log(`Using cached geometry for nside=${newNside}`);
+      const cached = meshCache[newNside];
+      
+      // Update global geometry data
+      geometryData = {
+        numPixels: cached.data.numPixels,
+        minVals: cached.data.minVals,
+        meanVals: cached.data.meanVals,
+        maxVals: cached.data.maxVals,
+        globalMin: cached.data.globalMin,
+        globalMax: cached.data.globalMax,
+        maxAbsElevation: cached.data.maxAbsElevation
+      };
+      
+      // Clean up old meshes
+      cleanupOldGeometry();
+      
+      // Update materials (if they exist and have uniforms)
+      if (material && material.uniforms) {
+        if (material.uniforms.globalMin) material.uniforms.globalMin.value = cached.data.globalMin;
+        if (material.uniforms.globalMax) material.uniforms.globalMax.value = cached.data.globalMax;
+        if (material.uniforms.maxAbsElevation) material.uniforms.maxAbsElevation.value = cached.data.maxAbsElevation;
+      }
+      if (maxMaterial && maxMaterial.uniforms) {
+        if (maxMaterial.uniforms.globalMin) maxMaterial.uniforms.globalMin.value = cached.data.globalMin;
+        if (maxMaterial.uniforms.globalMax) maxMaterial.uniforms.globalMax.value = cached.data.globalMax;
+        if (maxMaterial.uniforms.maxAbsElevation) maxMaterial.uniforms.maxAbsElevation.value = cached.data.maxAbsElevation;
+      }
+      
+      // Create new meshes from cached geometry
+      createMeshesFromGeometry(cached.geometry, cached.data.maxAbsElevation);
+    } else {
+      console.log(`Loading and triangulating nside=${newNside}...`);
+      // Need to load and triangulate
+      const data = await loadHealpixData(newNside);
+      
+      // Update global geometry data
+      geometryData = {
+        numPixels: data.numPixels,
+        minVals: data.minVals,
+        meanVals: data.meanVals,
+        maxVals: data.maxVals,
+        globalMin: data.globalMin,
+        globalMax: data.globalMax,
+        maxAbsElevation: data.maxAbsElevation
+      };
+      
+      // Clean up old meshes
+      cleanupOldGeometry();
+      
+      // Update materials (if they exist and have uniforms)
+      if (material && material.uniforms) {
+        if (material.uniforms.globalMin) material.uniforms.globalMin.value = data.globalMin;
+        if (material.uniforms.globalMax) material.uniforms.globalMax.value = data.globalMax;
+        if (material.uniforms.maxAbsElevation) material.uniforms.maxAbsElevation.value = data.maxAbsElevation;
+      }
+      if (maxMaterial && maxMaterial.uniforms) {
+        if (maxMaterial.uniforms.globalMin) maxMaterial.uniforms.globalMin.value = data.globalMin;
+        if (maxMaterial.uniforms.globalMax) maxMaterial.uniforms.globalMax.value = data.globalMax;
+        if (maxMaterial.uniforms.maxAbsElevation) maxMaterial.uniforms.maxAbsElevation.value = data.maxAbsElevation;
+      }
+      
+      // Generate and add meshes using worker
+      const meshGeometry = await generateMeshGeometry(newNside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
+      meshCache[newNside] = { geometry: meshGeometry, data: data };
+      createMeshesFromGeometry(meshGeometry, data.maxAbsElevation);
     }
-    if (maxMaterial && maxMaterial.uniforms) {
-      if (maxMaterial.uniforms.globalMin) maxMaterial.uniforms.globalMin.value = cached.data.globalMin;
-      if (maxMaterial.uniforms.globalMax) maxMaterial.uniforms.globalMax.value = cached.data.globalMax;
-      if (maxMaterial.uniforms.maxAbsElevation) maxMaterial.uniforms.maxAbsElevation.value = cached.data.maxAbsElevation;
-    }
-    
-    // Create new meshes from cached geometry
-    createMeshesFromGeometry(cached.geometry, cached.data.maxAbsElevation);
-  } else {
-    console.log(`Loading and triangulating nside=${newNside}...`);
-    // Need to load and triangulate
-    const data = await loadHealpixData(newNside);
-    
-    // Update global geometry data
-    geometryData = {
-      numPixels: data.numPixels,
-      minVals: data.minVals,
-      meanVals: data.meanVals,
-      maxVals: data.maxVals,
-      globalMin: data.globalMin,
-      globalMax: data.globalMax,
-      maxAbsElevation: data.maxAbsElevation
-    };
-    
-    // Clean up old meshes
-    cleanupOldGeometry();
-    
-    // Update materials (if they exist and have uniforms)
-    if (material && material.uniforms) {
-      if (material.uniforms.globalMin) material.uniforms.globalMin.value = data.globalMin;
-      if (material.uniforms.globalMax) material.uniforms.globalMax.value = data.globalMax;
-      if (material.uniforms.maxAbsElevation) material.uniforms.maxAbsElevation.value = data.maxAbsElevation;
-    }
-    if (maxMaterial && maxMaterial.uniforms) {
-      if (maxMaterial.uniforms.globalMin) maxMaterial.uniforms.globalMin.value = data.globalMin;
-      if (maxMaterial.uniforms.globalMax) maxMaterial.uniforms.globalMax.value = data.globalMax;
-      if (maxMaterial.uniforms.maxAbsElevation) maxMaterial.uniforms.maxAbsElevation.value = data.maxAbsElevation;
-    }
-    
-    // Generate and add meshes using worker
-    const meshGeometry = await generateMeshGeometry(newNside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
-    meshCache[newNside] = { geometry: meshGeometry, data: data };
-    createMeshesFromGeometry(meshGeometry, data.maxAbsElevation);
+  } catch (error) {
+    console.error(`Failed to switch to nside=${newNside}:`, error);
+    // Revert to previous nside if switch failed
+    currentNside = AVAILABLE_NSIDES.find(n => meshCache[n]) || INITIAL_NSIDE;
+    updateVertexCount();
   }
 }
 
