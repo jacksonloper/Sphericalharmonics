@@ -1,7 +1,7 @@
 /**
  * ETOPO Range Material for three.js
  * Creates shader materials for visualizing elevation range data (min to max) on HEALPix meshes
- * Uses similar colormap to bedrock.html
+ * Uses the turbo colormap - a perceptually uniform colormap that doesn't imply sea level
  */
 
 import * as THREE from 'three';
@@ -26,8 +26,7 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
     varying vec3 vPosition;
 
     void main() {
-      // Store original elevation for color mapping (always based on original sign)
-      // This ensures land stays green and ocean stays blue regardless of flip sign
+      // Store original elevation for color mapping (not affected by flip sign)
       vOriginalElevation = elevation;
       
       // Apply flip sign to elevation for displacement
@@ -59,22 +58,29 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
     varying vec3 vNormal;
     varying vec3 vPosition;
 
-    void main() {
-      // Colormap: black at lowest depth → blue → green → white at highest peak
-      // Always use original elevation for color mapping so land stays green
-      vec3 color;
+    // Turbo colormap - a perceptually uniform colormap developed by Google
+    // Maps a value in [0, 1] to an RGB color
+    vec3 turbo_colormap(float t) {
+      t = clamp(t, 0.0, 1.0);
+      const vec3 c0 = vec3(0.1140890109226559, 0.06288340699912215, 0.2248337216805064);
+      const vec3 c1 = vec3(6.716419496985708, 3.182286745507602, 7.571581586103393);
+      const vec3 c2 = vec3(-66.09402360453038, -4.9279827041226, -10.09439367561635);
+      const vec3 c3 = vec3(228.7660791526501, 25.04986699771073, -91.54105330182436);
+      const vec3 c4 = vec3(-334.8351565777451, -69.31749712757485, 288.5858850615712);
+      const vec3 c5 = vec3(218.7637218434795, 67.52150567819112, -305.2045772184957);
+      const vec3 c6 = vec3(-52.88903478218835, -21.54527364654712, 110.5174647748972);
+      
+      return c0 + t * (c1 + t * (c2 + t * (c3 + t * (c4 + t * (c5 + t * c6)))));
+    }
 
-      if (vOriginalElevation >= 0.0) {
-        // Above sea level: green gradient toward white at highest peak
-        float t = vOriginalElevation / maxElevation;
-        t = clamp(t, 0.0, 1.0);
-        color = mix(vec3(0.2, 0.7, 0.2), vec3(1.0, 1.0, 1.0), t);
-      } else {
-        // Below sea level: black at deepest → blue at sea level
-        float t = vOriginalElevation / minElevation;
-        t = clamp(t, 0.0, 1.0);
-        color = mix(vec3(0.2, 0.4, 0.8), vec3(0.0, 0.0, 0.0), t);
-      }
+    void main() {
+      // Map elevation to [0, 1] range for turbo colormap
+      // Always use original elevation for color mapping
+      float t = (vOriginalElevation - minElevation) / (maxElevation - minElevation);
+      t = clamp(t, 0.0, 1.0);
+      
+      // Apply turbo colormap
+      vec3 color = turbo_colormap(t);
 
       // Multi-directional lighting for full illumination
       // Multiple lights from different directions ensure all surfaces are well lit
