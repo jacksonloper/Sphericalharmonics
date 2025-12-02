@@ -17,9 +17,10 @@ import { pix2ang_nest } from '@hscmap/healpix';
 import * as healpix from '@hscmap/healpix';
 
 // HEALPix parameters
-let NSIDE = 64; // Start with nside=64
+const INITIAL_NSIDE = 64; // Initial resolution
+let currentNside = INITIAL_NSIDE; // Track current resolution
 const HEALPIX_BASE_FACES = 12; // HEALPix tessellation has 12 base faces
-let NPIX = HEALPIX_BASE_FACES * NSIDE * NSIDE; // 49152 initially
+let NPIX = HEALPIX_BASE_FACES * currentNside * currentNside; // 49152 initially
 
 // Mesh generation parameters
 const MESH_GENERATION_ALPHA = 0.11; // Alpha value used for vertex displacement during mesh generation
@@ -452,7 +453,7 @@ function generateMeshGeometry(nside, elevationData, minElevations, maxElevations
 async function loadAndVisualize() {
   try {
     // Load initial data for nside=64
-    const data = await loadHealpixData(NSIDE);
+    const data = await loadHealpixData(currentNside);
     
     // Store data for regeneration when slider changes
     geometryData = {
@@ -486,10 +487,10 @@ async function loadAndVisualize() {
       loadingStatus.textContent = 'Generating HEALPix mesh...';
     }
     setTimeout(() => {
-      const meshGeometry = generateMeshGeometry(NSIDE, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
+      const meshGeometry = generateMeshGeometry(currentNside, data.data, data.minVals, data.maxVals, data.maxAbsElevation);
       
       // Store in cache
-      meshCache[NSIDE] = meshGeometry;
+      meshCache[currentNside] = meshGeometry;
       
       // Create and add meshes to scene
       createMeshesFromGeometry(meshGeometry, data.maxAbsElevation);
@@ -586,13 +587,13 @@ async function startBackgroundTriangulation() {
  * Switch to a different nside resolution
  */
 async function switchToNside(newNside) {
-  if (newNside === NSIDE) return; // Already at this resolution
+  if (newNside === currentNside) return; // Already at this resolution
   
-  console.log(`Switching from nside=${NSIDE} to nside=${newNside}`);
+  console.log(`Switching from nside=${currentNside} to nside=${newNside}`);
   
-  // Update global NSIDE and NPIX
-  NSIDE = newNside;
-  NPIX = HEALPIX_BASE_FACES * NSIDE * NSIDE;
+  // Update global currentNside and NPIX
+  currentNside = newNside;
+  NPIX = HEALPIX_BASE_FACES * currentNside * currentNside;
   
   // Update vertex count display
   updateVertexCount();
@@ -827,7 +828,7 @@ function addControlPanel() {
     const optionEl = document.createElement('option');
     optionEl.value = option.nside;
     optionEl.textContent = `${option.vertices.toLocaleString()} vertices`;
-    if (option.nside === NSIDE) {
+    if (option.nside === currentNside) {
       optionEl.selected = true;
     }
     nsideSelect.appendChild(optionEl);
