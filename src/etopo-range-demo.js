@@ -52,18 +52,89 @@ controls.minDistance = 1.2;
 controls.maxDistance = 10;
 controls.autoRotate = false;
 
-// Loading indicator
-const loadingDiv = document.createElement('div');
-loadingDiv.style.position = 'absolute';
-loadingDiv.style.top = '50%';
-loadingDiv.style.left = '50%';
-loadingDiv.style.transform = 'translate(-50%, -50%)';
-loadingDiv.style.color = 'white';
-loadingDiv.style.fontFamily = 'monospace';
-loadingDiv.style.fontSize = '16px';
-loadingDiv.style.textAlign = 'center';
-loadingDiv.innerHTML = 'Loading HEALPix data...';
-document.body.appendChild(loadingDiv);
+// Info card for introduction and loading
+const infoCard = document.createElement('div');
+infoCard.id = 'infoCard';
+infoCard.style.position = 'absolute';
+infoCard.style.top = '50%';
+infoCard.style.left = '50%';
+infoCard.style.transform = 'translate(-50%, -50%)';
+infoCard.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
+infoCard.style.color = 'white';
+infoCard.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+infoCard.style.fontSize = '16px';
+infoCard.style.padding = '30px';
+infoCard.style.borderRadius = '12px';
+infoCard.style.maxWidth = '600px';
+infoCard.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.5)';
+infoCard.style.lineHeight = '1.6';
+infoCard.style.zIndex = '1000';
+
+const cardTitle = document.createElement('h2');
+cardTitle.textContent = 'Earth Elevation Visualization';
+cardTitle.style.marginTop = '0';
+cardTitle.style.marginBottom = '20px';
+cardTitle.style.fontSize = '24px';
+cardTitle.style.fontWeight = 'bold';
+
+const cardContent = document.createElement('div');
+cardContent.id = 'cardContent';
+cardContent.innerHTML = `
+  <p>Using <strong>${NPIX.toLocaleString()} samples</strong> to represent Earth's elevation, how accurate do you think our picture of the world will be?</p>
+  <p><strong>Will the Great Lakes be visible? What about Mt. Denali?</strong></p>
+  <p>The following visualization allows you to see the difference between the <em>minimum</em> and <em>maximum</em> elevation in each of ${NPIX.toLocaleString()} regions, chosen to divide the Earth equally using <a href="https://healpix.sourceforge.io/" target="_blank" style="color: #4ecdc4;">HEALPix</a>.</p>
+  <p><strong>How much difference do you expect?</strong></p>
+  <p>You can also "flip" the visualization to view the deep marine trenches.</p>
+  <div id="loadingStatus" style="margin-top: 25px; text-align: center; color: #4ecdc4;">Loading HEALPix data...</div>
+`;
+
+infoCard.appendChild(cardTitle);
+infoCard.appendChild(cardContent);
+document.body.appendChild(infoCard);
+
+// About button (initially hidden)
+const aboutButton = document.createElement('button');
+aboutButton.id = 'aboutButton';
+aboutButton.textContent = 'About';
+aboutButton.style.position = 'absolute';
+aboutButton.style.top = '15px';
+aboutButton.style.left = '15px';
+aboutButton.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+aboutButton.style.color = 'white';
+aboutButton.style.border = 'none';
+aboutButton.style.padding = '10px 20px';
+aboutButton.style.borderRadius = '6px';
+aboutButton.style.fontSize = '14px';
+aboutButton.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+aboutButton.style.cursor = 'pointer';
+aboutButton.style.display = 'none';
+aboutButton.style.zIndex = '1000';
+aboutButton.style.transition = 'background-color 0.2s';
+
+aboutButton.addEventListener('mouseenter', () => {
+  aboutButton.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
+});
+aboutButton.addEventListener('mouseleave', () => {
+  aboutButton.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+});
+aboutButton.addEventListener('click', () => {
+  // Show the info card again
+  infoCard.style.display = 'block';
+  aboutButton.style.display = 'none';
+  // Update content to show without loading status
+  const loadingStatus = document.getElementById('loadingStatus');
+  if (loadingStatus) {
+    loadingStatus.style.display = 'none';
+  }
+  // Re-add the enter button if it's not there
+  let enterBtn = document.getElementById('enterButton');
+  if (!enterBtn) {
+    enterBtn = createEnterButton();
+    infoCard.appendChild(enterBtn);
+  }
+});
+
+document.body.appendChild(aboutButton);
 
 // Global state
 let healpixMesh = null; // MIN elevation mesh (solid)
@@ -79,6 +150,41 @@ let regenerateTimeout = null; // For debouncing slider updates
 let meshWorker = null; // Worker for mesh generation
 let showMaxMesh = true; // Toggle for max elevation mesh (true = show max, false = show min)
 let flipSign = false; // Toggle for flipping elevation sign
+
+/**
+ * Create the "Enter Visualization" button
+ */
+function createEnterButton() {
+  const enterButton = document.createElement('button');
+  enterButton.id = 'enterButton';
+  enterButton.textContent = 'Enter Visualization';
+  enterButton.style.marginTop = '25px';
+  enterButton.style.padding = '12px 30px';
+  enterButton.style.fontSize = '16px';
+  enterButton.style.fontWeight = 'bold';
+  enterButton.style.backgroundColor = '#4ecdc4';
+  enterButton.style.color = 'black';
+  enterButton.style.border = 'none';
+  enterButton.style.borderRadius = '6px';
+  enterButton.style.cursor = 'pointer';
+  enterButton.style.width = '100%';
+  enterButton.style.transition = 'background-color 0.2s';
+  
+  enterButton.addEventListener('mouseenter', () => {
+    enterButton.style.backgroundColor = '#45b8af';
+  });
+  enterButton.addEventListener('mouseleave', () => {
+    enterButton.style.backgroundColor = '#4ecdc4';
+  });
+  enterButton.addEventListener('click', () => {
+    // Hide the info card
+    infoCard.style.display = 'none';
+    // Show the about button
+    aboutButton.style.display = 'block';
+  });
+  
+  return enterButton;
+}
 
 /**
  * Convert HEALPix NESTED pixel index to (theta, phi) in spherical coordinates
@@ -183,16 +289,30 @@ async function loadAndVisualize() {
     scene.add(innerSphere);
     
     // Generate HEALPix mesh directly (not in worker to avoid complexity)
-    loadingDiv.innerHTML = 'Generating HEALPix mesh...';
+    const loadingStatus = document.getElementById('loadingStatus');
+    if (loadingStatus) {
+      loadingStatus.textContent = 'Generating HEALPix mesh...';
+    }
     setTimeout(() => {
       generateHealpixMeshDirect(data.data, maxAbsElevation);
-      loadingDiv.style.display = 'none';
+      
+      // Update loading status and add Enter button
+      if (loadingStatus) {
+        loadingStatus.style.display = 'none';
+      }
+      
+      // Add Enter Visualization button
+      const enterButton = createEnterButton();
+      infoCard.appendChild(enterButton);
     }, 100); // Small delay to allow loading message to display
     
   } catch (error) {
     console.error('Failed to load data:', error);
-    loadingDiv.innerHTML = 'Failed: ' + error.message;
-    loadingDiv.style.color = '#ff4444';
+    const loadingStatus = document.getElementById('loadingStatus');
+    if (loadingStatus) {
+      loadingStatus.innerHTML = 'Failed: ' + error.message;
+      loadingStatus.style.color = '#ff4444';
+    }
   }
 }
 
