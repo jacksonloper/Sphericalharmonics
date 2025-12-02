@@ -27,6 +27,7 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
 
     void main() {
       // Store original elevation for color mapping (always based on original sign)
+      // This ensures land stays green and ocean stays blue regardless of flip sign
       vOriginalElevation = elevation;
       
       // Apply flip sign to elevation for displacement

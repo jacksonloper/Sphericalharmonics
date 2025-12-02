@@ -480,16 +480,16 @@ function addControlPanel() {
   const updateVisibleMesh = () => {
     // When flip sign is checked, the meaning of min/max is reversed
     // because flipping the sign makes the lowest values (deep ocean) become the highest
-    const effectiveShowMax = flipSign ? !showMaxMesh : showMaxMesh;
+    const shouldShowMaxMesh = flipSign ? !showMaxMesh : showMaxMesh;
     
-    if (effectiveShowMax) {
+    if (shouldShowMaxMesh) {
       // Show max mesh, hide min mesh
-      if (maxHealpixMesh) scene.add(maxHealpixMesh);
-      if (healpixMesh) scene.remove(healpixMesh);
+      if (maxHealpixMesh && !maxHealpixMesh.parent) scene.add(maxHealpixMesh);
+      if (healpixMesh && healpixMesh.parent) scene.remove(healpixMesh);
     } else {
       // Show min mesh, hide max mesh
-      if (healpixMesh) scene.add(healpixMesh);
-      if (maxHealpixMesh) scene.remove(maxHealpixMesh);
+      if (healpixMesh && !healpixMesh.parent) scene.add(healpixMesh);
+      if (maxHealpixMesh && maxHealpixMesh.parent) scene.remove(maxHealpixMesh);
     }
   };
 
