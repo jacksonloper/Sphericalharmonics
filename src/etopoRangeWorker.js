@@ -22,17 +22,44 @@ async function loadNpy(filename) {
   // Simple NPY parser (adapted from npyjs logic)
   const view = new DataView(arrayBuffer);
   
-  // Skip magic number and version (10 bytes)
-  let offset = 10;
+  // NPY format:
+  // 6 bytes: magic number "\x93NUMPY"
+  // 1 byte: major version
+  // 1 byte: minor version
+  // 2 bytes (v1.0) or 4 bytes (v2.0+): header length (little-endian)
+  // N bytes: header (ASCII string, padded to 64-byte alignment)
+  // Data follows
   
-  // Read header length (2 bytes, little-endian uint16)
-  const headerLen = view.getUint16(offset, true);
+  let offset = 0;
+  
+  // Read magic number (6 bytes)
+  const magic = new Uint8Array(arrayBuffer, offset, 6);
+  offset += 6;
+  
+  // Read version (2 bytes)
+  const major = view.getUint8(offset);
+  const minor = view.getUint8(offset + 1);
   offset += 2;
+  
+  // Read header length
+  let headerLen;
+  if (major === 1) {
+    headerLen = view.getUint16(offset, true);
+    offset += 2;
+  } else if (major === 2 || major === 3) {
+    headerLen = view.getUint32(offset, true);
+    offset += 4;
+  } else {
+    throw new Error(`Unsupported NPY version: ${major}.${minor}`);
+  }
   
   // Read header (Python dict as string)
   const headerBytes = new Uint8Array(arrayBuffer, offset, headerLen);
   const headerStr = new TextDecoder().decode(headerBytes);
   offset += headerLen;
+  
+  // The data section starts after the header, but we need to ensure
+  // we're at the correct offset (header is already padded in the file)
   
   // Parse shape from header
   const shapeMatch = headerStr.match(/'shape':\s*\((\d+),\s*(\d+)\)/);
@@ -44,7 +71,11 @@ async function loadNpy(filename) {
   if (!dtypeMatch) throw new Error('Could not parse dtype from NPY header');
   const dtype = dtypeMatch[2] + dtypeMatch[3];
   
-  // Read data
+  // Parse fortran_order (should be False for C-order)
+  const fortranMatch = headerStr.match(/'fortran_order':\s*(True|False)/);
+  const fortranOrder = fortranMatch && fortranMatch[1] === 'True';
+  
+  // Calculate data size
   const dataLen = shape[0] * shape[1];
   let data;
   
@@ -57,6 +88,8 @@ async function loadNpy(filename) {
     }
   } else if (dtype === 'f4') {
     data = new Float32Array(arrayBuffer, offset, dataLen);
+  } else if (dtype === 'f8') {
+    data = new Float64Array(arrayBuffer, offset, dataLen);
   } else {
     throw new Error(`Unsupported dtype: ${dtype}`);
   }
