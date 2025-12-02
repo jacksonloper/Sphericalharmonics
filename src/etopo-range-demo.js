@@ -77,7 +77,8 @@ let geometryData = null; // Store data for regeneration
 let alphaValue = 0.1; // Default alpha value
 let regenerateTimeout = null; // For debouncing slider updates
 let meshWorker = null; // Worker for mesh generation
-let showMaxMesh = true; // Toggle for max elevation mesh
+let showMaxMesh = true; // Toggle for max elevation mesh (true = show max, false = show min)
+let flipSign = false; // Toggle for flipping elevation sign
 
 /**
  * Convert HEALPix NESTED pixel index to (theta, phi) in spherical coordinates
@@ -370,10 +371,12 @@ function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
   const meshMaterial = material;
   meshMaterial.side = THREE.DoubleSide;
   
-  // Step 9: Create and add MIN mesh to scene
+  // Step 9: Create and add MIN mesh to scene (initially hidden if showMaxMesh is true)
   // Vertex shader will re-displace based on alpha uniform using precomputed normals
   healpixMesh = new THREE.Mesh(minGeometry, meshMaterial);
-  scene.add(healpixMesh);
+  if (!showMaxMesh) {
+    scene.add(healpixMesh);
+  }
   
   console.log(`MIN HEALPix mesh added: ${numPixels} vertices, ${triangles.length / 3} triangles`);
   
@@ -387,9 +390,9 @@ function generateHealpixMeshDirect(elevationData, maxAbsElevation) {
   // Set indices from Delaunay triangulation
   maxGeometry.setIndex(new THREE.BufferAttribute(new Uint32Array(triangles), 1));
   
-  // Step 11: Create and add transparent MAX mesh to scene if enabled
+  // Step 11: Create and add MAX mesh to scene (initially shown if showMaxMesh is true)
+  maxHealpixMesh = new THREE.Mesh(maxGeometry, maxMaterial);
   if (showMaxMesh) {
-    maxHealpixMesh = new THREE.Mesh(maxGeometry, maxMaterial);
     scene.add(maxHealpixMesh);
     console.log(`MAX HEALPix mesh added: ${numPixels} vertices, ${triangles.length / 3} triangles`);
   }
@@ -436,39 +439,102 @@ function addControlPanel() {
   panel.style.flexWrap = 'wrap';
   panel.style.justifyContent = 'center';
 
-  // Show max mesh checkbox
-  const maxMeshGroup = document.createElement('div');
-  maxMeshGroup.style.display = 'flex';
-  maxMeshGroup.style.alignItems = 'center';
-  maxMeshGroup.style.gap = '8px';
+  // Radio buttons for min/max mesh selection
+  const meshTypeGroup = document.createElement('div');
+  meshTypeGroup.style.display = 'flex';
+  meshTypeGroup.style.alignItems = 'center';
+  meshTypeGroup.style.gap = '12px';
 
-  const checkbox = document.createElement('input');
-  checkbox.type = 'checkbox';
-  checkbox.id = 'showMaxMeshCheckbox';
-  checkbox.checked = showMaxMesh;
-  checkbox.style.cursor = 'pointer';
+  // Min mesh radio button
+  const minRadio = document.createElement('input');
+  minRadio.type = 'radio';
+  minRadio.name = 'meshType';
+  minRadio.id = 'minMeshRadio';
+  minRadio.checked = !showMaxMesh;
+  minRadio.style.cursor = 'pointer';
 
-  const checkboxLabel = document.createElement('label');
-  checkboxLabel.htmlFor = 'showMaxMeshCheckbox';
-  checkboxLabel.textContent = 'Show max mesh';
-  checkboxLabel.style.cursor = 'pointer';
+  const minLabel = document.createElement('label');
+  minLabel.htmlFor = 'minMeshRadio';
+  minLabel.textContent = 'Min mesh';
+  minLabel.style.cursor = 'pointer';
 
-  checkbox.addEventListener('change', (e) => {
-    showMaxMesh = e.target.checked;
-    if (showMaxMesh) {
-      if (maxHealpixMesh) {
-        scene.add(maxHealpixMesh);
-      }
+  // Max mesh radio button
+  const maxRadio = document.createElement('input');
+  maxRadio.type = 'radio';
+  maxRadio.name = 'meshType';
+  maxRadio.id = 'maxMeshRadio';
+  maxRadio.checked = showMaxMesh;
+  maxRadio.style.cursor = 'pointer';
+
+  const maxLabel = document.createElement('label');
+  maxLabel.htmlFor = 'maxMeshRadio';
+  maxLabel.textContent = 'Max mesh';
+  maxLabel.style.cursor = 'pointer';
+
+  // Radio button change handlers
+  const handleMeshTypeChange = () => {
+    showMaxMesh = maxRadio.checked;
+    updateVisibleMesh();
+  };
+
+  const updateVisibleMesh = () => {
+    // When flip sign is checked, the meaning of min/max is reversed
+    // because flipping the sign makes the lowest values (deep ocean) become the highest
+    const effectiveShowMax = flipSign ? !showMaxMesh : showMaxMesh;
+    
+    if (effectiveShowMax) {
+      // Show max mesh, hide min mesh
+      if (maxHealpixMesh) scene.add(maxHealpixMesh);
+      if (healpixMesh) scene.remove(healpixMesh);
     } else {
-      if (maxHealpixMesh) {
-        scene.remove(maxHealpixMesh);
-      }
+      // Show min mesh, hide max mesh
+      if (healpixMesh) scene.add(healpixMesh);
+      if (maxHealpixMesh) scene.remove(maxHealpixMesh);
     }
+  };
+
+  minRadio.addEventListener('change', handleMeshTypeChange);
+  maxRadio.addEventListener('change', handleMeshTypeChange);
+
+  meshTypeGroup.appendChild(minRadio);
+  meshTypeGroup.appendChild(minLabel);
+  meshTypeGroup.appendChild(maxRadio);
+  meshTypeGroup.appendChild(maxLabel);
+  panel.appendChild(meshTypeGroup);
+
+  // Flip sign checkbox
+  const flipSignGroup = document.createElement('div');
+  flipSignGroup.style.display = 'flex';
+  flipSignGroup.style.alignItems = 'center';
+  flipSignGroup.style.gap = '8px';
+
+  const flipCheckbox = document.createElement('input');
+  flipCheckbox.type = 'checkbox';
+  flipCheckbox.id = 'flipSignCheckbox';
+  flipCheckbox.checked = flipSign;
+  flipCheckbox.style.cursor = 'pointer';
+
+  const flipLabel = document.createElement('label');
+  flipLabel.htmlFor = 'flipSignCheckbox';
+  flipLabel.textContent = 'Flip sign';
+  flipLabel.style.cursor = 'pointer';
+
+  flipCheckbox.addEventListener('change', (e) => {
+    flipSign = e.target.checked;
+    // Update uniforms in materials to flip the sign
+    if (material) {
+      material.uniforms.flipSign.value = flipSign ? -1.0 : 1.0;
+    }
+    if (maxMaterial) {
+      maxMaterial.uniforms.flipSign.value = flipSign ? -1.0 : 1.0;
+    }
+    // Update which mesh is visible since the meaning of min/max is reversed
+    updateVisibleMesh();
   });
 
-  maxMeshGroup.appendChild(checkbox);
-  maxMeshGroup.appendChild(checkboxLabel);
-  panel.appendChild(maxMeshGroup);
+  flipSignGroup.appendChild(flipCheckbox);
+  flipSignGroup.appendChild(flipLabel);
+  panel.appendChild(flipSignGroup);
 
   // Relief slider
   const reliefGroup = document.createElement('div');
