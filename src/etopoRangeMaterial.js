@@ -34,14 +34,14 @@ export function createEtopoRangeMaterial(minElevation = -11000, maxElevation = 9
       // Pass water occurrence to fragment shader
       vWaterOccurrence = waterOccurrence;
       
-      // Apply flip oceans: use absolute value of elevation for displacement
-      // When flipOceans is 1.0, oceans (negative elevation) appear as positive
-      vElevation = flipOceans > 0.5 ? abs(elevation) : elevation;
+      // Apply flip oceans: reverse sign of elevation for displacement
+      // When flipOceans is 1.0, mountains become valleys and vice versa
+      float flipSign = flipOceans > 0.5 ? -1.0 : 1.0;
+      vElevation = elevation * flipSign;
 
       // Use precomputed normals from geometry (computed at alpha=0.11)
-      // When flipOceans is enabled and elevation is negative, invert normals
-      float normalFlip = (flipOceans > 0.5 && elevation < 0.0) ? -1.0 : 1.0;
-      vNormal = normalize(normalMatrix * normal * normalFlip);
+      // When flipOceans is enabled, invert normals since displacement is reversed
+      vNormal = normalize(normalMatrix * normal * flipSign);
 
       // Compute radial displacement: r = 1 + alpha * e / maxAbsElevation
       // Depths (negative) point inward, heights (positive) point outward
