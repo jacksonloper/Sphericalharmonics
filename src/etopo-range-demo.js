@@ -220,8 +220,8 @@ worker.onmessage = (e) => {
     if (nside === currentNside && isInitialized && nside !== displayedNside) {
       console.log(`Auto-switching to nside=${nside} now that it's loaded`);
       performNsideSwitch(nside);
-    } else if (nside === 128 || nside === 256) {
-      // Hide loading indicator for background loads
+    } else if (nside !== waitingForInitialNside) {
+      // Hide loading indicator for background loads (non-initial resolutions)
       hideLoading();
     }
   } else if (type === 'error') {
@@ -388,7 +388,7 @@ function showLoading(targetNside) {
   }
   
   const currentViewText = document.getElementById('currentViewText');
-  if (currentViewText && displayedNside !== targetNside) {
+  if (currentViewText && displayedNside !== undefined && displayedNside !== targetNside) {
     currentViewText.textContent = `Currently viewing: ${getNpix(displayedNside).toLocaleString()} vertices`;
     currentViewText.style.display = 'block';
   } else if (currentViewText) {
@@ -585,6 +585,12 @@ function createHealpixDots(meshGeometry) {
  * Assumes the geometry is already cached in meshCache[nside]
  */
 function performNsideSwitch(nside) {
+  // Validate cached data exists
+  if (!meshCache[nside]) {
+    console.error(`Cannot switch to nside=${nside}: geometry not cached`);
+    return;
+  }
+  
   console.log(`Using cached geometry for nside=${nside}`);
   const cached = meshCache[nside];
   
