@@ -19,9 +19,62 @@
     canvas {
       display: block;
     }
+
+    #infoCard {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: rgba(0, 0, 0, 0.9);
+      color: white;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 16px;
+      padding: 20px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      line-height: 1.5;
+      z-index: 1000;
+      box-sizing: border-box;
+    }
+
+    #infoCard h2 {
+      margin-top: 0;
+      margin-bottom: 15px;
+      font-size: 22px;
+      font-weight: bold;
+    }
+
+    #infoCard p {
+      margin: 0 0 12px 0;
+    }
+
+    #infoCard a {
+      color: #4ecdc4;
+    }
+
+    #loadingStatus {
+      margin-top: 20px;
+      text-align: center;
+      color: #4ecdc4;
+    }
+
+    .small-text {
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
+  <div id="infoCard">
+    <h2>Earth Elevation Visualization</h2>
+    <div id="cardContent">
+      <p>Subdivide the earth into <strong id="vertexCount">49,152</strong> equal regions. How much does the elevation in each region differ from the average elevation in that region?</p>
+      <p>This visualization shows the <em>min</em>, <em>mean</em>, and <em>max</em> elevation in each region, divided equally using <a href="https://healpix.sourceforge.io/" target="_blank">HEALPix</a>. You can also flip to view deep ocean trenches.</p>
+      <p class="small-text">For more information on data sources, see <a href="https://github.com/jacksonloper/Sphericalharmonics/tree/main/public/earthtoposources" target="_blank">earthtoposources</a>.</p>
+      <div id="loadingStatus">Loading HEALPix data...</div>
+    </div>
+  </div>
   <script type="module" src="/src/etopo-range-demo.js"></script>
 </body>
 </html>
