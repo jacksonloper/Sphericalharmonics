@@ -56,45 +56,8 @@ controls.minDistance = 1.2;
 controls.maxDistance = 10;
 controls.autoRotate = false;
 
-// Info card for introduction and loading
-const infoCard = document.createElement('div');
-infoCard.id = 'infoCard';
-infoCard.style.position = 'absolute';
-infoCard.style.top = '50%';
-infoCard.style.left = '50%';
-infoCard.style.transform = 'translate(-50%, -50%)';
-infoCard.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
-infoCard.style.color = 'white';
-infoCard.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-infoCard.style.fontSize = '16px';
-infoCard.style.padding = '20px';
-infoCard.style.borderRadius = '12px';
-infoCard.style.width = '90%';
-infoCard.style.maxWidth = '500px';
-infoCard.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.5)';
-infoCard.style.lineHeight = '1.5';
-infoCard.style.zIndex = '1000';
-infoCard.style.boxSizing = 'border-box';
-
-const cardTitle = document.createElement('h2');
-cardTitle.textContent = 'Earth Elevation Visualization';
-cardTitle.style.marginTop = '0';
-cardTitle.style.marginBottom = '15px';
-cardTitle.style.fontSize = '22px';
-cardTitle.style.fontWeight = 'bold';
-
-const cardContent = document.createElement('div');
-cardContent.id = 'cardContent';
-cardContent.innerHTML = `
-  <p style="margin: 0 0 12px 0;">Using <strong id="vertexCount">${getNpix(currentNside).toLocaleString()} samples</strong> to map Earth's elevation—will the Great Lakes be visible? Mt. Denali?</p>
-  <p style="margin: 0 0 12px 0;">This visualization shows the <em>min</em> and <em>max</em> elevation in each region, divided equally using <a href="https://healpix.sourceforge.io/" target="_blank" style="color: #4ecdc4;">HEALPix</a>. You can also flip to view deep ocean trenches.</p>
-  <p style="margin: 0 0 12px 0; font-size: 14px;">For more information on data sources, see <a href="https://github.com/jacksonloper/Sphericalharmonics/tree/main/public/earthtoposources" target="_blank" style="color: #4ecdc4;">earthtoposources</a>.</p>
-  <div id="loadingStatus" style="margin-top: 20px; text-align: center; color: #4ecdc4;">Loading HEALPix data...</div>
-`;
-
-infoCard.appendChild(cardTitle);
-infoCard.appendChild(cardContent);
-document.body.appendChild(infoCard);
+// Info card for introduction and loading (already in HTML)
+const infoCard = document.getElementById('infoCard');
 
 // About button (initially hidden)
 const aboutButton = document.createElement('button');
@@ -142,16 +105,18 @@ document.body.appendChild(aboutButton);
 
 // Global state
 let healpixMesh = null; // MIN elevation mesh (solid)
+let meanHealpixMesh = null; // MEAN elevation mesh (solid)
 let maxHealpixMesh = null; // MAX elevation mesh (solid)
 let quadMesh = null;
 let innerSphere = null;
 let material = null; // Material for MIN mesh
+let meanMaterial = null; // Material for MEAN mesh
 let maxMaterial = null; // Material for MAX mesh
 let quadMaterial = null;
 let geometryData = null; // Store data for regeneration
 let alphaValue = 0.1; // Default alpha value
 let regenerateTimeout = null; // For debouncing slider updates
-let showMaxMesh = true; // Toggle for max elevation mesh (true = show max, false = show min)
+let currentMeshType = 'max'; // Toggle for which mesh to show: 'min', 'mean', or 'max'
 let flipSign = false; // Toggle for flipping elevation sign
 let loadingOverlay = null; // Loading overlay for resolution switching
 let healpixDotsPoints = null; // Points mesh for HEALPix location dots
@@ -191,8 +156,10 @@ worker.onmessage = (e) => {
     const meshGeometry = {
       positions: new Float32Array(e.data.positions),
       minNormals: new Float32Array(e.data.minNormals),
+      meanNormals: new Float32Array(e.data.meanNormals),
       maxNormals: new Float32Array(e.data.maxNormals),
       minElevations: new Float32Array(e.data.minElevations),
+      meanElevations: new Float32Array(e.data.meanElevations),
       maxElevations: new Float32Array(e.data.maxElevations),
       waterOccurrence: new Float32Array(e.data.waterOccurrence),
       triangles: new Uint32Array(e.data.triangles),
@@ -202,7 +169,7 @@ worker.onmessage = (e) => {
     const data = {
       numPixels: e.data.numPixels,
       minVals: meshGeometry.minElevations,
-      meanVals: null, // Not used in this demo
+      meanVals: meshGeometry.meanElevations,
       maxVals: meshGeometry.maxElevations,
       globalMin: e.data.globalMin,
       globalMax: e.data.globalMax,
@@ -254,6 +221,9 @@ function initializeScene(nside, meshGeometry, data) {
   
   // Create material for min elevation mesh
   material = createEtopoRangeMaterial(data.globalMin, data.globalMax, data.maxAbsElevation);
+  
+  // Create material for mean elevation mesh
+  meanMaterial = createEtopoRangeMaterial(data.globalMin, data.globalMax, data.maxAbsElevation);
   
   // Create material for max elevation mesh (fully opaque)
   maxMaterial = createEtopoRangeMaterial(data.globalMin, data.globalMax, data.maxAbsElevation);
@@ -483,11 +453,26 @@ function createMeshesFromGeometry(meshGeometry, maxAbsElevation) {
   meshMaterial.side = THREE.DoubleSide;
   
   healpixMesh = new THREE.Mesh(minGeometry, meshMaterial);
-  if (!showMaxMesh) {
+  if (currentMeshType === 'min') {
     scene.add(healpixMesh);
   }
   
   console.log(`MIN HEALPix mesh added: ${meshGeometry.numPixels} vertices, ${meshGeometry.triangles.length / 3} triangles`);
+  
+  // Create mean mesh
+  const meanGeometry = new THREE.BufferGeometry();
+  meanGeometry.setAttribute('position', new THREE.BufferAttribute(meshGeometry.positions, 3));
+  meanGeometry.setAttribute('normal', new THREE.BufferAttribute(meshGeometry.meanNormals, 3));
+  meanGeometry.setAttribute('elevation', new THREE.BufferAttribute(meshGeometry.meanElevations, 1));
+  meanGeometry.setAttribute('waterOccurrence', new THREE.BufferAttribute(meshGeometry.waterOccurrence, 1));
+  meanGeometry.setIndex(new THREE.BufferAttribute(new Uint32Array(meshGeometry.triangles), 1));
+  
+  meanHealpixMesh = new THREE.Mesh(meanGeometry, meanMaterial);
+  if (currentMeshType === 'mean') {
+    scene.add(meanHealpixMesh);
+  }
+  
+  console.log(`MEAN HEALPix mesh added: ${meshGeometry.numPixels} vertices, ${meshGeometry.triangles.length / 3} triangles`);
   
   // Create max mesh
   const maxGeometry = new THREE.BufferGeometry();
@@ -498,7 +483,7 @@ function createMeshesFromGeometry(meshGeometry, maxAbsElevation) {
   maxGeometry.setIndex(new THREE.BufferAttribute(new Uint32Array(meshGeometry.triangles), 1));
   
   maxHealpixMesh = new THREE.Mesh(maxGeometry, maxMaterial);
-  if (showMaxMesh) {
+  if (currentMeshType === 'max') {
     scene.add(maxHealpixMesh);
   }
   
@@ -618,6 +603,11 @@ function performNsideSwitch(nside) {
     if (material.uniforms.globalMax) material.uniforms.globalMax.value = cached.data.globalMax;
     if (material.uniforms.maxAbsElevation) material.uniforms.maxAbsElevation.value = cached.data.maxAbsElevation;
   }
+  if (meanMaterial && meanMaterial.uniforms) {
+    if (meanMaterial.uniforms.globalMin) meanMaterial.uniforms.globalMin.value = cached.data.globalMin;
+    if (meanMaterial.uniforms.globalMax) meanMaterial.uniforms.globalMax.value = cached.data.globalMax;
+    if (meanMaterial.uniforms.maxAbsElevation) meanMaterial.uniforms.maxAbsElevation.value = cached.data.maxAbsElevation;
+  }
   if (maxMaterial && maxMaterial.uniforms) {
     if (maxMaterial.uniforms.globalMin) maxMaterial.uniforms.globalMin.value = cached.data.globalMin;
     if (maxMaterial.uniforms.globalMax) maxMaterial.uniforms.globalMax.value = cached.data.globalMax;
@@ -672,6 +662,11 @@ function cleanupOldGeometry() {
     healpixMesh.geometry.dispose();
     // Material is reused, so don't dispose it
   }
+  if (meanHealpixMesh) {
+    scene.remove(meanHealpixMesh);
+    meanHealpixMesh.geometry.dispose();
+    // Material is reused, so don't dispose it
+  }
   if (maxHealpixMesh) {
     scene.remove(maxHealpixMesh);
     maxHealpixMesh.geometry.dispose();
@@ -698,7 +693,7 @@ function addControlPanel() {
   panel.style.flexWrap = 'wrap';
   panel.style.justifyContent = 'center';
 
-  // Radio buttons for min/max mesh selection
+  // Radio buttons for min/mean/max mesh selection
   const meshTypeGroup = document.createElement('div');
   meshTypeGroup.style.display = 'flex';
   meshTypeGroup.style.alignItems = 'center';
@@ -709,47 +704,73 @@ function addControlPanel() {
   minRadio.type = 'radio';
   minRadio.name = 'meshType';
   minRadio.id = 'minMeshRadio';
-  minRadio.checked = !showMaxMesh;
+  minRadio.checked = (currentMeshType === 'min');
   minRadio.style.cursor = 'pointer';
 
   const minLabel = document.createElement('label');
   minLabel.htmlFor = 'minMeshRadio';
-  minLabel.textContent = 'Min mesh';
+  minLabel.textContent = 'Min';
   minLabel.style.cursor = 'pointer';
+
+  // Mean mesh radio button (mean elevation)
+  const meanRadio = document.createElement('input');
+  meanRadio.type = 'radio';
+  meanRadio.name = 'meshType';
+  meanRadio.id = 'meanMeshRadio';
+  meanRadio.checked = (currentMeshType === 'mean');
+  meanRadio.style.cursor = 'pointer';
+
+  const meanLabel = document.createElement('label');
+  meanLabel.htmlFor = 'meanMeshRadio';
+  meanLabel.textContent = 'Mean';
+  meanLabel.style.cursor = 'pointer';
 
   // Max mesh radio button (max elevation)
   const maxRadio = document.createElement('input');
   maxRadio.type = 'radio';
   maxRadio.name = 'meshType';
   maxRadio.id = 'maxMeshRadio';
-  maxRadio.checked = showMaxMesh;
+  maxRadio.checked = (currentMeshType === 'max');
   maxRadio.style.cursor = 'pointer';
 
   const maxLabel = document.createElement('label');
   maxLabel.htmlFor = 'maxMeshRadio';
-  maxLabel.textContent = 'Max mesh';
+  maxLabel.textContent = 'Max';
   maxLabel.style.cursor = 'pointer';
 
   // Radio button change handlers
   const handleMeshTypeChange = () => {
-    showMaxMesh = maxRadio.checked;
-    
-    if (showMaxMesh) {
-      // Show max mesh (max elevation), hide min mesh
-      if (maxHealpixMesh && !maxHealpixMesh.parent) scene.add(maxHealpixMesh);
-      if (healpixMesh && healpixMesh.parent) scene.remove(healpixMesh);
+    if (minRadio.checked) {
+      currentMeshType = 'min';
+    } else if (meanRadio.checked) {
+      currentMeshType = 'mean';
     } else {
-      // Show min mesh (min elevation), hide max mesh
-      if (healpixMesh && !healpixMesh.parent) scene.add(healpixMesh);
-      if (maxHealpixMesh && maxHealpixMesh.parent) scene.remove(maxHealpixMesh);
+      currentMeshType = 'max';
+    }
+    
+    // Hide all meshes first
+    if (healpixMesh && healpixMesh.parent) scene.remove(healpixMesh);
+    if (meanHealpixMesh && meanHealpixMesh.parent) scene.remove(meanHealpixMesh);
+    if (maxHealpixMesh && maxHealpixMesh.parent) scene.remove(maxHealpixMesh);
+    
+    // Show the selected mesh
+    if (currentMeshType === 'min' && healpixMesh && !healpixMesh.parent) {
+      scene.add(healpixMesh);
+    } else if (currentMeshType === 'mean' && meanHealpixMesh && !meanHealpixMesh.parent) {
+      scene.add(meanHealpixMesh);
+    } else if (currentMeshType === 'max' && maxHealpixMesh && !maxHealpixMesh.parent) {
+      scene.add(maxHealpixMesh);
     }
   };
 
   minRadio.addEventListener('change', handleMeshTypeChange);
+  meanRadio.addEventListener('change', handleMeshTypeChange);
   maxRadio.addEventListener('change', handleMeshTypeChange);
 
   meshTypeGroup.appendChild(minRadio);
   meshTypeGroup.appendChild(minLabel);
+  meshTypeGroup.appendChild(meanRadio);
+  meshTypeGroup.appendChild(meanLabel);
   meshTypeGroup.appendChild(maxRadio);
   meshTypeGroup.appendChild(maxLabel);
   panel.appendChild(meshTypeGroup);
@@ -776,6 +797,9 @@ function addControlPanel() {
     // Update uniforms in materials to use absolute elevation
     if (material) {
       material.uniforms.flipOceans.value = flipSign ? 1.0 : 0.0;
+    }
+    if (meanMaterial) {
+      meanMaterial.uniforms.flipOceans.value = flipSign ? 1.0 : 0.0;
     }
     if (maxMaterial) {
       maxMaterial.uniforms.flipOceans.value = flipSign ? 1.0 : 0.0;
@@ -840,6 +864,9 @@ function addControlPanel() {
     // Update uniforms in materials to toggle colormap
     if (material) {
       material.uniforms.useWaterColormap.value = useWaterColormap;
+    }
+    if (meanMaterial) {
+      meanMaterial.uniforms.useWaterColormap.value = useWaterColormap;
     }
     if (maxMaterial) {
       maxMaterial.uniforms.useWaterColormap.value = useWaterColormap;
@@ -921,6 +948,9 @@ function addControlPanel() {
     
     if (material) {
       material.uniforms.alpha.value = newAlpha;
+    }
+    if (meanMaterial) {
+      meanMaterial.uniforms.alpha.value = newAlpha;
     }
     if (maxMaterial) {
       maxMaterial.uniforms.alpha.value = newAlpha;

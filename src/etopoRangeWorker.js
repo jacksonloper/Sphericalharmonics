@@ -31,7 +31,7 @@ function sphericalToCartesian(theta, phi, r = 1.0) {
 /**
  * Generate mesh geometry for a specific nside (returns geometry data)
  */
-function generateMeshGeometry(nside, minElevations, maxElevations, maxAbsElevation) {
+function generateMeshGeometry(nside, minElevations, meanElevations, maxElevations, maxAbsElevation) {
   const HEALPIX_BASE_FACES = 12;
   const MESH_GENERATION_ALPHA = 0.11;
   const numPixels = HEALPIX_BASE_FACES * nside * nside;
@@ -167,16 +167,69 @@ function generateMeshGeometry(nside, minElevations, maxElevations, maxAbsElevati
     }
   }
   
+  self.postMessage({ type: 'progress', nside, message: 'Step 5: Computing MEAN normals...', step: 5, total: 6 });
+  
+  // Displace vertices temporarily based on MEAN elevation
+  const displacedMeanPositions = new Float32Array(positions.length);
+  
+  for (let i = 0; i < numPixels; i++) {
+    const x = positions[i * 3];
+    const y = positions[i * 3 + 1];
+    const z = positions[i * 3 + 2];
+    
+    const elevation = meanElevations[i];
+    const r = 1.0 + alpha * elevation / maxAbsElevation;
+    
+    displacedMeanPositions[i * 3] = x * r;
+    displacedMeanPositions[i * 3 + 1] = y * r;
+    displacedMeanPositions[i * 3 + 2] = z * r;
+  }
+  
+  // Compute normals from displaced MEAN geometry
+  const meanNormals = new Float32Array(numPixels * 3);
+  
+  for (let i = 0; i < triangles.length; i += 3) {
+    const i1 = triangles[i], i2 = triangles[i + 1], i3 = triangles[i + 2];
+    
+    const ax = displacedMeanPositions[i1 * 3], ay = displacedMeanPositions[i1 * 3 + 1], az = displacedMeanPositions[i1 * 3 + 2];
+    const bx = displacedMeanPositions[i2 * 3], by = displacedMeanPositions[i2 * 3 + 1], bz = displacedMeanPositions[i2 * 3 + 2];
+    const cx = displacedMeanPositions[i3 * 3], cy = displacedMeanPositions[i3 * 3 + 1], cz = displacedMeanPositions[i3 * 3 + 2];
+    
+    const e1x = bx - ax, e1y = by - ay, e1z = bz - az;
+    const e2x = cx - ax, e2y = cy - ay, e2z = cz - az;
+    
+    const nx = e1y * e2z - e1z * e2y;
+    const ny = e1z * e2x - e1x * e2z;
+    const nz = e1x * e2y - e1y * e2x;
+    
+    meanNormals[i1 * 3] += nx; meanNormals[i1 * 3 + 1] += ny; meanNormals[i1 * 3 + 2] += nz;
+    meanNormals[i2 * 3] += nx; meanNormals[i2 * 3 + 1] += ny; meanNormals[i2 * 3 + 2] += nz;
+    meanNormals[i3 * 3] += nx; meanNormals[i3 * 3 + 1] += ny; meanNormals[i3 * 3 + 2] += nz;
+  }
+  
+  // Normalize mean normals
+  for (let i = 0; i < numPixels; i++) {
+    const x = meanNormals[i * 3], y = meanNormals[i * 3 + 1], z = meanNormals[i * 3 + 2];
+    const len = Math.sqrt(x * x + y * y + z * z);
+    if (len > 0) {
+      meanNormals[i * 3] /= len;
+      meanNormals[i * 3 + 1] /= len;
+      meanNormals[i * 3 + 2] /= len;
+    }
+  }
+  
   self.postMessage({ type: 'progress', nside, message: 'Triangulation complete!', step: 6, total: 6 });
   
-  // Note: We don't return minElevations and maxElevations because they are
+  // Note: We don't return minElevations, meanElevations and maxElevations because they are
   // already available on the main thread. Transferring them back would cause
   // the arrays on the main thread to become neutered/detached.
   return {
     positions,
     minNormals,
+    meanNormals,
     maxNormals,
     minElevations,
+    meanElevations,
     maxElevations,
     triangles: new Uint32Array(triangles),
     numPixels
@@ -257,7 +310,7 @@ async function processNside(nside) {
     self.postMessage({ type: 'status', nside, message: `Starting triangulation for nside=${nside}...` });
     
     // Generate geometry
-    const result = generateMeshGeometry(nside, minVals, maxVals, maxAbsElevation);
+    const result = generateMeshGeometry(nside, minVals, meanVals, maxVals, maxAbsElevation);
     
     const triangulationTime = performance.now() - startTime;
     
@@ -267,8 +320,10 @@ async function processNside(nside) {
       nside,
       positions: result.positions.buffer,
       minNormals: result.minNormals.buffer,
+      meanNormals: result.meanNormals.buffer,
       maxNormals: result.maxNormals.buffer,
       minElevations: result.minElevations.buffer,
+      meanElevations: result.meanElevations.buffer,
       maxElevations: result.maxElevations.buffer,
       waterOccurrence: waterVals.buffer,
       triangles: result.triangles.buffer,
@@ -280,8 +335,10 @@ async function processNside(nside) {
     }, [
       result.positions.buffer,
       result.minNormals.buffer,
+      result.meanNormals.buffer,
       result.maxNormals.buffer,
       result.minElevations.buffer,
+      result.meanElevations.buffer,
       result.maxElevations.buffer,
       waterVals.buffer,
       result.triangles.buffer
