@@ -88,6 +88,7 @@ cardContent.id = 'cardContent';
 cardContent.innerHTML = `
   <p style="margin: 0 0 12px 0;">Using <strong id="vertexCount">${getNpix(currentNside).toLocaleString()} samples</strong> to map Earth's elevation—will the Great Lakes be visible? Mt. Denali?</p>
   <p style="margin: 0 0 12px 0;">This visualization shows the <em>min</em> and <em>max</em> elevation in each region, divided equally using <a href="https://healpix.sourceforge.io/" target="_blank" style="color: #4ecdc4;">HEALPix</a>. You can also flip to view deep ocean trenches.</p>
+  <p style="margin: 0 0 12px 0; font-size: 14px;">For more information on data sources, see <a href="https://github.com/jacksonloper/Sphericalharmonics/tree/main/public/earthtoposources" target="_blank" style="color: #4ecdc4;">earthtoposources</a>.</p>
   <div id="loadingStatus" style="margin-top: 20px; text-align: center; color: #4ecdc4;">Loading HEALPix data...</div>
 `;
 
