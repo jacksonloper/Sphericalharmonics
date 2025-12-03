@@ -433,7 +433,7 @@ function getNpix(nside) {
 function updateVertexCount() {
   const vertexCountElement = document.getElementById('vertexCount');
   if (vertexCountElement) {
-    vertexCountElement.textContent = `${getNpix(currentNside).toLocaleString()} samples`;
+    vertexCountElement.textContent = getNpix(currentNside).toLocaleString();
   }
 }
 
