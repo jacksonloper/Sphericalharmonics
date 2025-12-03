@@ -64,7 +64,7 @@ function generateMeshGeometry(nside, minElevations, meanElevations, maxElevation
   
   self.postMessage({ type: 'progress', nside, message: `Generated ${triangles.length / 3} triangles`, step: 2, total: 6 });
   
-  self.postMessage({ type: 'progress', nside, message: 'Step 3: Computing MIN normals...', step: 3, total: 6 });
+  self.postMessage({ type: 'progress', nside, message: 'Step 3: Computing min normals...', step: 3, total: 6 });
   
   // Displace vertices temporarily based on MIN elevation
   const displacedMinPositions = new Float32Array(positions.length);
@@ -116,7 +116,7 @@ function generateMeshGeometry(nside, minElevations, meanElevations, maxElevation
     }
   }
   
-  self.postMessage({ type: 'progress', nside, message: 'Step 4: Computing MAX normals...', step: 4, total: 6 });
+  self.postMessage({ type: 'progress', nside, message: 'Step 4: Computing max normals...', step: 4, total: 6 });
   
   // Displace vertices temporarily based on MAX elevation
   const displacedMaxPositions = new Float32Array(positions.length);
@@ -167,7 +167,7 @@ function generateMeshGeometry(nside, minElevations, meanElevations, maxElevation
     }
   }
   
-  self.postMessage({ type: 'progress', nside, message: 'Step 5: Computing MEAN normals...', step: 5, total: 6 });
+  self.postMessage({ type: 'progress', nside, message: 'Step 5: Computing mean normals...', step: 5, total: 6 });
   
   // Displace vertices temporarily based on MEAN elevation
   const displacedMeanPositions = new Float32Array(positions.length);

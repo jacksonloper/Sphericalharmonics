@@ -457,7 +457,7 @@ function createMeshesFromGeometry(meshGeometry, maxAbsElevation) {
     scene.add(healpixMesh);
   }
   
-  console.log(`MIN HEALPix mesh added: ${meshGeometry.numPixels} vertices, ${meshGeometry.triangles.length / 3} triangles`);
+  console.log(`Min HEALPix mesh added: ${meshGeometry.numPixels} vertices, ${meshGeometry.triangles.length / 3} triangles`);
   
   // Create mean mesh
   const meanGeometry = new THREE.BufferGeometry();
@@ -472,7 +472,7 @@ function createMeshesFromGeometry(meshGeometry, maxAbsElevation) {
     scene.add(meanHealpixMesh);
   }
   
-  console.log(`MEAN HEALPix mesh added: ${meshGeometry.numPixels} vertices, ${meshGeometry.triangles.length / 3} triangles`);
+  console.log(`Mean HEALPix mesh added: ${meshGeometry.numPixels} vertices, ${meshGeometry.triangles.length / 3} triangles`);
   
   // Create max mesh
   const maxGeometry = new THREE.BufferGeometry();
@@ -487,7 +487,7 @@ function createMeshesFromGeometry(meshGeometry, maxAbsElevation) {
     scene.add(maxHealpixMesh);
   }
   
-  console.log(`MAX HEALPix mesh added: ${meshGeometry.numPixels} vertices, ${meshGeometry.triangles.length / 3} triangles`);
+  console.log(`Max HEALPix mesh added: ${meshGeometry.numPixels} vertices, ${meshGeometry.triangles.length / 3} triangles`);
   
   // Create HEALPix location dots
   createHealpixDots(meshGeometry);
@@ -655,23 +655,20 @@ function cleanupOldGeometry() {
   if (quadMesh) {
     scene.remove(quadMesh);
     quadMesh.geometry.dispose();
-    // Quad material is reused, so don't dispose it
   }
   if (healpixMesh) {
     scene.remove(healpixMesh);
     healpixMesh.geometry.dispose();
-    // Material is reused, so don't dispose it
   }
   if (meanHealpixMesh) {
     scene.remove(meanHealpixMesh);
     meanHealpixMesh.geometry.dispose();
-    // Material is reused, so don't dispose it
   }
   if (maxHealpixMesh) {
     scene.remove(maxHealpixMesh);
     maxHealpixMesh.geometry.dispose();
-    // Material is reused, so don't dispose it
   }
+  // Note: Materials are reused across resolution switches, so we don't dispose them
   cleanupHealpixDots();
 }
 
