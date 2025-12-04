@@ -140,20 +140,21 @@ worker.onmessage = (e) => {
       populationInfo.textContent = message;
     }
   } else if (type === 'complete') {
-    const { positions, indices, numPyramids, totalPopulation } = e.data;
+    const { positions, colors, indices, numPyramids, totalPopulation } = e.data;
     
     console.log(`Received geometry: ${positions.length / 3} vertices, ${indices.length / 3} triangles, ${numPyramids} pyramids`);
     
     // Create geometry
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
     geometry.computeVertexNormals();
     
-    // Create material with nice coloring
+    // Create material with vertex colors enabled
     const material = new THREE.MeshPhongMaterial({
-      color: 0x4ecdc4,
-      emissive: 0x0a2a28,
+      vertexColors: true,
+      emissive: 0x000000,
       shininess: 30,
       flatShading: false,
       side: THREE.DoubleSide

@@ -9,21 +9,45 @@ import { pix2ang_nest, corners_nest } from '@hscmap/healpix';
 import { load } from 'npyjs';
 
 /**
+ * Turbo colormap - maps value in [0, 1] to RGB
+ * Based on the Turbo colormap by Anton Mikhailov
+ */
+function turboColormap(t) {
+  // Clamp to [0, 1]
+  t = Math.max(0, Math.min(1, t));
+  
+  // Turbo colormap polynomial approximation
+  const r = Math.max(0, Math.min(1, 
+    0.13572138 + t * (4.61539260 + t * (-42.66032258 + t * (132.13108234 + t * (-152.94239396 + t * 59.28637943))))
+  ));
+  const g = Math.max(0, Math.min(1,
+    0.09140261 + t * (2.19418839 + t * (4.84296658 + t * (-14.18503333 + t * (4.27729857 + t * 2.82956604))))
+  ));
+  const b = Math.max(0, Math.min(1,
+    0.10667330 + t * (12.64194608 + t * (-60.58204836 + t * (110.36276771 + t * (-89.90310912 + t * 27.34824973))))
+  ));
+  
+  return [r, g, b];
+}
+
+/**
  * Get the 4 corners of a HEALPix pixel at a given radius
  * Uses the actual HEALPix corner calculation for precise boundaries
  */
 function getPixelCorners(nside, pixelIndex, r) {
   // Get the actual HEALPix pixel corners on the unit sphere
-  // corners_nest returns 4 vectors [x, y, z] in the order:
-  // SW, SE, NE, NW (south-west, south-east, north-east, north-west)
+  // corners_nest returns 4 vectors [x, y, z] in the HEALPix convention
+  // where z points to north pole
   const unitCorners = corners_nest(nside, pixelIndex);
   
-  // Scale each corner vector to radius r
-  // The corners are already in Cartesian coordinates matching our coordinate system
+  // Transform from HEALPix coordinates (z=north) to THREE.js coordinates (y=north)
+  // HEALPix: (x, y, z) where z points to north pole
+  // THREE.js: (x, y, z) where y points to north pole
+  // Transformation: (x_hp, y_hp, z_hp) -> (x_hp, z_hp, -y_hp)
   const corners = unitCorners.map(([x, y, z]) => [
     x * r,
-    y * r, 
-    z * r
+    z * r,      // z from HEALPix becomes y in THREE.js (north pole)
+    -y * r      // -y from HEALPix becomes z in THREE.js (for correct chirality)
   ]);
   
   return corners;
@@ -31,17 +55,25 @@ function getPixelCorners(nside, pixelIndex, r) {
 
 /**
  * Create a truncated square pyramid (frustum) from r=1 to r=r_outer
- * Returns geometry data with positions and indices
+ * Returns geometry data with positions, indices, and colors
  */
-function createTruncatedPyramid(nside, pixelIndex, r_outer) {
+function createTruncatedPyramid(nside, pixelIndex, r_outer, color) {
   // Get 4 corners at inner radius (r=1) and outer radius (r=r_outer)
   const innerCorners = getPixelCorners(nside, pixelIndex, 1.0);
   const outerCorners = getPixelCorners(nside, pixelIndex, r_outer);
   
   // 8 vertices total (4 inner + 4 outer)
   const positions = [];
-  innerCorners.forEach(c => positions.push(...c));
-  outerCorners.forEach(c => positions.push(...c));
+  const colors = [];
+  
+  innerCorners.forEach(c => {
+    positions.push(...c);
+    colors.push(...color);
+  });
+  outerCorners.forEach(c => {
+    positions.push(...c);
+    colors.push(...color);
+  });
   
   // Create 12 triangles (2 per face, 6 faces total)
   // Face indices: 0-3 are inner corners, 4-7 are outer corners
@@ -72,7 +104,11 @@ function createTruncatedPyramid(nside, pixelIndex, r_outer) {
     3, 4, 0
   ];
   
-  return { positions: new Float32Array(positions), indices: new Uint16Array(indices) };
+  return { 
+    positions: new Float32Array(positions), 
+    colors: new Float32Array(colors),
+    indices: new Uint16Array(indices) 
+  };
 }
 
 /**
@@ -135,6 +171,7 @@ async function processPopulationData() {
   // Generate geometry for all pixels
   // We'll combine all pyramids into one big geometry
   const allPositions = [];
+  const allColors = [];
   const allIndices = [];
   let vertexOffset = 0;
   
@@ -148,11 +185,17 @@ async function processPopulationData() {
     // r = (1 + 3*p/(C*A))^(1/3)
     const r_outer = Math.pow(1 + 3 * population / (C * area_32), 1/3);
     
-    // Create truncated pyramid
-    const pyramid = createTruncatedPyramid(nside_32, i, r_outer);
+    // Calculate color based on population (normalized to max)
+    // Use log scale for better visual distribution
+    const populationNormalized = Math.log(population + 1) / Math.log(maxPop + 1);
+    const color = turboColormap(populationNormalized);
     
-    // Add positions
+    // Create truncated pyramid
+    const pyramid = createTruncatedPyramid(nside_32, i, r_outer, color);
+    
+    // Add positions and colors
     allPositions.push(...pyramid.positions);
+    allColors.push(...pyramid.colors);
     
     // Add indices with offset
     for (let j = 0; j < pyramid.indices.length; j++) {
@@ -178,6 +221,7 @@ async function processPopulationData() {
   self.postMessage({
     type: 'complete',
     positions: new Float32Array(allPositions),
+    colors: new Float32Array(allColors),
     indices: new Uint32Array(allIndices),
     numPyramids: vertexOffset / 8, // Each pyramid has 8 vertices
     totalPopulation: totalPop32
