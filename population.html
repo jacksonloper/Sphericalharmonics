@@ -32,9 +32,35 @@
       border-radius: 12px;
       width: 90%;
       max-width: 600px;
+      max-height: 90vh;
+      overflow-y: auto;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
       line-height: 1.6;
       z-index: 1000;
+    }
+
+    /* Mobile optimizations */
+    @media (max-width: 768px) {
+      #infoCard {
+        font-size: 14px;
+        padding: 20px;
+        max-height: 85vh;
+      }
+
+      #infoCard h2 {
+        font-size: 20px;
+        margin-bottom: 12px;
+      }
+
+      #infoCard p {
+        margin: 0 0 10px 0;
+      }
+
+      .citation {
+        margin-top: 15px;
+        padding: 12px;
+        font-size: 12px;
+      }
     }
 
     #infoCard h2 {
