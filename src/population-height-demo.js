@@ -161,8 +161,9 @@ function initializeScene(meshGeometry, maxPopulation) {
   populationMesh.material.side = THREE.DoubleSide;
   scene.add(populationMesh);
   
-  console.log(`Population mesh added: ${meshGeometry.numPixels} vertices, ${meshGeometry.triangles.length / 3} triangles`);
+  console.log(`Population mesh added: ${meshGeometry.positions.length / 3} vertices, ${meshGeometry.triangles.length / 3} triangles`);
   console.log(`Max population per cell: ${maxPopulation.toFixed(0)}`);
+  console.log(`HEALPix cells rendered: ${meshGeometry.numPixels}`);
   
   // Update loading status and add Enter button
   const loadingStatus = document.getElementById('loadingStatus');

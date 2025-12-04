@@ -1,25 +1,21 @@
 /**
  * Population Height Material for three.js
- * Creates shader materials for visualizing population density as height displacement on HEALPix meshes
+ * Creates shader materials for visualizing population density using pre-built pyramid geometry
+ * Pyramids are already displaced to correct heights, so no vertex displacement needed
  */
 
 import * as THREE from 'three';
 
-// Fixed displacement scale for population height visualization
-const POPULATION_DISPLACEMENT_ALPHA = 0.3;
-
 /**
- * Create a material for visualizing population density as height displacement
- * Population values displace vertices radially outward from the Earth's surface
+ * Create a material for visualizing population density with pyramid geometry
+ * Pyramids are pre-built with volumes proportional to population
  *
  * @param {number} maxPopulation - Maximum population value for normalization
- * @returns {THREE.ShaderMaterial} Material with population-based height displacement and coloring
+ * @returns {THREE.ShaderMaterial} Material with population-based coloring
  */
 export function createPopulationHeightMaterial(maxPopulation = 1000000) {
   const vertexShader = `
     attribute float population;
-    uniform float alpha;
-    uniform float maxPopulation;
     varying float vPopulation;
     varying vec3 vNormal;
     varying vec3 vPosition;
@@ -31,16 +27,9 @@ export function createPopulationHeightMaterial(maxPopulation = 1000000) {
       // Use precomputed normals from geometry
       vNormal = normalize(normalMatrix * normal);
 
-      // Compute radial displacement based on population density
-      // Higher population = greater height above surface
-      float normalizedPop = population / maxPopulation;
-      float radius = 1.0 + alpha * normalizedPop;
-
-      // Displace vertex radially (positions are on unit sphere)
-      vec3 displacedPosition = position * radius;
-
-      vPosition = displacedPosition;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(displacedPosition, 1.0);
+      // Pyramids are already at correct positions, no displacement needed
+      vPosition = position;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }
   `;
 
@@ -98,8 +87,7 @@ export function createPopulationHeightMaterial(maxPopulation = 1000000) {
 
   return new THREE.ShaderMaterial({
     uniforms: {
-      maxPopulation: { value: maxPopulation },
-      alpha: { value: POPULATION_DISPLACEMENT_ALPHA }
+      maxPopulation: { value: maxPopulation }
     },
     vertexShader,
     fragmentShader,

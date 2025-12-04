@@ -70,7 +70,7 @@
     <h2>Population Density Visualization</h2>
     <div id="cardContent">
       <p>Visualizing global population density as "height" above the Earth's surface using <a href="https://healpix.sourceforge.io/" target="_blank">HEALPix</a> tessellation at nside=128 (196,608 regions).</p>
-      <p>Population data is displayed as radial displacement from the Earth's surface, with higher populations shown as greater heights. The visualization uses spherical Delaunay triangulation to create a smooth surface mesh.</p>
+      <p>Each HEALPix cell is represented as a truncated square pyramid with volume proportional to its population. This ensures accurate visual representation where the human eye naturally judges by volume rather than triangulated surface area.</p>
       <p class="small-text">Population data sources: LandScan / WorldPop datasets aggregated to HEALPix grid.</p>
       <div id="loadingStatus">Loading population data...</div>
     </div>
