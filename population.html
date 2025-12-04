@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>World Population Visualization - HEALPix 3D</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      overflow: hidden;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    #infoCard {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: rgba(0, 0, 0, 0.95);
+      color: white;
+      font-size: 16px;
+      padding: 30px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 600px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      line-height: 1.6;
+      z-index: 1000;
+    }
+
+    #infoCard h2 {
+      margin-top: 0;
+      margin-bottom: 15px;
+      font-size: 24px;
+      font-weight: bold;
+      color: #4ecdc4;
+    }
+
+    #infoCard p {
+      margin: 0 0 12px 0;
+    }
+
+    #infoCard a {
+      color: #4ecdc4;
+      text-decoration: none;
+    }
+
+    #infoCard a:hover {
+      text-decoration: underline;
+    }
+
+    #loadingStatus {
+      margin-top: 20px;
+      text-align: center;
+      color: #4ecdc4;
+      font-weight: bold;
+    }
+
+    #populationInfo {
+      margin-top: 10px;
+      text-align: center;
+      color: #888;
+      font-size: 14px;
+    }
+
+    .small-text {
+      font-size: 14px;
+      color: #aaa;
+    }
+
+    .citation {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: rgba(255, 255, 255, 0.05);
+      border-left: 3px solid #4ecdc4;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
+    .citation strong {
+      color: #4ecdc4;
+    }
+  </style>
+</head>
+<body>
+  <div id="infoCard">
+    <h2>🌍 World Population Visualization</h2>
+    <div id="cardContent">
+      <p>This visualization shows the 2024 world population distribution using 3D truncated pyramids. Each region is a <a href="https://healpix.sourceforge.io/" target="_blank">HEALPix</a> cell (nside=32), with pyramid height proportional to the population in that region.</p>
+      
+      <p><strong>Technical Details:</strong> The data is loaded at nside=128 resolution and downsampled to nside=32 by summing populations. Each pyramid extends from radius 1 (Earth's surface) to an outer radius determined by the formula: <code>r = (1 + 3p/(CA))^(1/3)</code>, where p is the population, A is the HEALPix pixel area, and C is a scaling constant chosen so the maximum radius is approximately 2.</p>
+
+      <div class="citation">
+        <strong>Data Source:</strong><br>
+        WorldPop Global Demographic Data Project - Population Distribution (2024 estimates)<br>
+        <a href="https://www.worldpop.org/" target="_blank">https://www.worldpop.org/</a><br><br>
+        <strong>Citation:</strong><br>
+        Bondarenko M., Priyatikanto R., Tejedor-Garavito N., Zhang W., McKeen T., Cunningham A., Woods T., Hilton J., Cihan D., Nosatiuk B., Brinkhoff T., Tatem A., Sorichetta A. 2025. The spatial distribution of population in 2015-2030 at a resolution of 30 arc (approximately 1km at the equator) R2025A version v1. WorldPop - School of Geography and Environmental Science, University of Southampton. DOI:10.5258/SOTON/WP00845
+      </div>
+
+      <p class="small-text">For more information on data sources and processing, see <a href="https://github.com/jacksonloper/Sphericalharmonics/tree/main/public/earthtoposources" target="_blank">earthtoposources/README.md</a>.</p>
+
+      <div id="loadingStatus">Initializing...</div>
+      <div id="populationInfo"></div>
+    </div>
+  </div>
+  <script type="module" src="/src/population-demo.js"></script>
+</body>
+</html>
