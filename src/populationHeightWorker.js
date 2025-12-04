@@ -82,11 +82,7 @@ function generateMeshGeometry(nside, populationData, maxPopulation) {
       continue;
     }
     
-    // Base of pyramid at r=1.0 (Earth surface)
-    // corners_nest already returns normalized unit vectors, so just copy them
-    const baseCorners = cornerCoords.map(c => [c[0], c[1], c[2]]);
-    
-    // Top of pyramid at displaced height
+    // Top of pyramid at displaced height (base is implicit at r=1.0)
     const height = MESH_GENERATION_ALPHA * normalizedPop;
     const topRadius = 1.0 + height;
     const topCorners = cornerCoords.map(c => [c[0] * topRadius, c[1] * topRadius, c[2] * topRadius]);
@@ -104,16 +100,19 @@ function generateMeshGeometry(nside, populationData, maxPopulation) {
       population.push(pop);
     }
     
-    // Create triangles for the pyramid (5 vertices per pyramid: 1 top center + 4 top corners)
-    // We'll use a simple top surface only - the human eye judges by the visible top area
+    // Create triangles for the pyramid top surface (5 vertices: 1 center + 4 corners)
+    // Note: We render only the top surface, not full truncated pyramids with sides
+    // The human eye judges population by the visible top area at different heights
     // This creates 4 triangles from the top center to the 4 top corners
+    // Triangle winding is counter-clockwise when viewed from outside (for correct normals)
     
     for (let i = 0; i < 4; i++) {
       const next = (i + 1) % 4;
+      // Counter-clockwise winding: center -> current -> next
       triangles.push(
         vertexOffset + 0,           // top center
-        vertexOffset + 1 + next,    // top corner i+1
-        vertexOffset + 1 + i        // top corner i
+        vertexOffset + 1 + i,       // top corner i (current)
+        vertexOffset + 1 + next     // top corner i+1 (next)
       );
     }
     
