@@ -33,6 +33,20 @@ https://global-surface-water.appspot.com/download
 
 Used for water occurrence data at HEALPix resolutions.
 
+### WorldPop Global Population
+
+**WorldPop Global Demographic Data Project** - Population Distribution (2024 estimates):
+https://www.worldpop.org/
+
+Data represents 2024 population estimates with total number of people per grid-cell at 30 arc-second resolution (approximately 1km at the equator). Random Forest-based dasymetric redistribution mapping approach. WGS84 projection.
+
+**Citation**:
+> Bondarenko M., Priyatikanto R., Tejedor-Garavito N., Zhang W., McKeen T., Cunningham A., Woods T., Hilton J., Cihan D., Nosatiuk B., Brinkhoff T., Tatem A., Sorichetta A.. 2025. The spatial distribution of population in 2015-2030 at a resolution of 30 arc (approximately 1km at the equator) R2025A version v1. WorldPop - School of Geography and Environmental Science, University of Southampton. DOI:10.5258/SOTON/WP00845
+
+Accessed December 4, 2025. Note: Dataset was in alpha version (R2025A) at time of access and may differ slightly from current version.
+
+Used for population density data at HEALPix resolutions.
+
 ---
 
 ## File Formats
@@ -79,6 +93,11 @@ Each file contains min, mean, and max elevation values for each HEALPix cell.
 Each file contains water occurrence percentages for each HEALPix cell.
 
 **Note on Polar Regions**: The Global Surface Water dataset has no data near the poles. For these regions, water vs land classification is determined using elevation above sea level from the ETOPO 2022 dataset instead of water occurrence data.
+
+### Population Data Files (HEALPix Format)
+- `population_healpix128_NESTED.npy` - Resolution 128
+
+Each file contains 2024 population estimates (number of people) for each HEALPix cell.
 
 ---
 
