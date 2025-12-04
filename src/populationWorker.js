@@ -38,7 +38,9 @@ function getPixelCorners(nside, pixelIndex, r) {
   // Create approximate square corners around the center
   // These are approximate - the actual HEALPix pixels are more complex
   const dtheta = pixelSize / 2;
-  const dphi = pixelSize / (2 * Math.sin(theta)); // Account for convergence at poles
+  // Account for convergence at poles, with safeguard for division by zero
+  const sinTheta = Math.sin(theta);
+  const dphi = sinTheta > 0.01 ? pixelSize / (2 * sinTheta) : pixelSize / 2;
   
   const corners = [
     sphericalToCartesian(theta - dtheta, phi - dphi, r),
@@ -114,6 +116,9 @@ async function processPopulationData() {
   self.postMessage({ type: 'info', message: `Total population: ${(totalPop / 1e9).toFixed(2)} billion` });
   
   // Downsample from nside=128 to nside=32
+  // In HEALPix NESTED ordering, the hierarchical structure guarantees that
+  // child pixels are stored consecutively: pixels [i*ratio, (i+1)*ratio) at higher
+  // resolution correspond exactly to pixel i at lower resolution.
   const nside_128 = 128;
   const nside_32 = 32;
   const npix_32 = 12 * nside_32 * nside_32;
