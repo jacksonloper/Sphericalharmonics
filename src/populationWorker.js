@@ -5,49 +5,26 @@
  * - Generates truncated square pyramid geometry for each pixel
  */
 
-import { pix2ang_nest } from '@hscmap/healpix';
+import { pix2ang_nest, corners_nest } from '@hscmap/healpix';
 import { load } from 'npyjs';
 
 /**
- * Convert spherical coordinates (theta, phi) to Cartesian (x, y, z)
- */
-function sphericalToCartesian(theta, phi, r = 1.0) {
-  const sinTheta = Math.sin(theta);
-  const cosTheta = Math.cos(theta);
-  const sinPhi = Math.sin(phi);
-  const cosPhi = Math.cos(phi);
-  
-  return [
-    r * sinTheta * cosPhi,
-    r * cosTheta,           // y-axis points to poles
-    -r * sinTheta * sinPhi  // Negate for correct chirality
-  ];
-}
-
-/**
  * Get the 4 corners of a HEALPix pixel at a given radius
- * This creates a square-like patch on the sphere
+ * Uses the actual HEALPix corner calculation for precise boundaries
  */
 function getPixelCorners(nside, pixelIndex, r) {
-  // Get center of pixel
-  const { theta, phi } = pix2ang_nest(nside, pixelIndex);
+  // Get the actual HEALPix pixel corners on the unit sphere
+  // corners_nest returns 4 vectors [x, y, z] in the order:
+  // SW, SE, NE, NW (south-west, south-east, north-east, north-west)
+  const unitCorners = corners_nest(nside, pixelIndex);
   
-  // HEALPix pixel angular size
-  const pixelSize = Math.sqrt(4 * Math.PI / (12 * nside * nside));
-  
-  // Create approximate square corners around the center
-  // These are approximate - the actual HEALPix pixels are more complex
-  const dtheta = pixelSize / 2;
-  // Account for convergence at poles, with safeguard for division by zero
-  const sinTheta = Math.sin(theta);
-  const dphi = sinTheta > 0.01 ? pixelSize / (2 * sinTheta) : pixelSize / 2;
-  
-  const corners = [
-    sphericalToCartesian(theta - dtheta, phi - dphi, r),
-    sphericalToCartesian(theta - dtheta, phi + dphi, r),
-    sphericalToCartesian(theta + dtheta, phi + dphi, r),
-    sphericalToCartesian(theta + dtheta, phi - dphi, r)
-  ];
+  // Scale each corner vector to radius r
+  // The corners are already in Cartesian coordinates matching our coordinate system
+  const corners = unitCorners.map(([x, y, z]) => [
+    x * r,
+    y * r, 
+    z * r
+  ]);
   
   return corners;
 }
