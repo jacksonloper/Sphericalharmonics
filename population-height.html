@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Population Height - HEALPix Visualization</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      overflow: hidden;
+      font-family: monospace;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    #infoCard {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: rgba(0, 0, 0, 0.9);
+      color: white;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 16px;
+      padding: 20px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      line-height: 1.5;
+      z-index: 1000;
+      box-sizing: border-box;
+    }
+
+    #infoCard h2 {
+      margin-top: 0;
+      margin-bottom: 15px;
+      font-size: 22px;
+      font-weight: bold;
+    }
+
+    #infoCard p {
+      margin: 0 0 12px 0;
+    }
+
+    #infoCard a {
+      color: #4ecdc4;
+    }
+
+    #loadingStatus {
+      margin-top: 20px;
+      text-align: center;
+      color: #4ecdc4;
+    }
+
+    .small-text {
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div id="infoCard">
+    <h2>Population Density Visualization</h2>
+    <div id="cardContent">
+      <p>Visualizing global population density as "height" above the Earth's surface using <a href="https://healpix.sourceforge.io/" target="_blank">HEALPix</a> tessellation at nside=128 (196,608 regions).</p>
+      <p>Population data is displayed as radial displacement from the Earth's surface, with higher populations shown as greater heights. The visualization uses spherical Delaunay triangulation to create a smooth surface mesh.</p>
+      <p class="small-text">Population data sources: LandScan / WorldPop datasets aggregated to HEALPix grid.</p>
+      <div id="loadingStatus">Loading population data...</div>
+    </div>
+  </div>
+  <script type="module" src="/src/population-height-demo.js"></script>
+</body>
+</html>

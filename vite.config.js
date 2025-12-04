@@ -12,7 +12,8 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         shflow: resolve(__dirname, 'shflow.html'),
-        etopoRange: resolve(__dirname, 'etopo-range.html')
+        etopoRange: resolve(__dirname, 'etopo-range.html'),
+        populationHeight: resolve(__dirname, 'population-height.html')
       },
       output: {
         manualChunks: undefined
