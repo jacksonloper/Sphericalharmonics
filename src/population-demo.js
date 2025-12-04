@@ -45,16 +45,61 @@ const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
 directionalLight2.position.set(-5, -5, -5);
 scene.add(directionalLight2);
 
-// Add a wireframe sphere at r=1 for reference
-const sphereGeometry = new THREE.SphereGeometry(1, 64, 32);
-const sphereMaterial = new THREE.MeshBasicMaterial({
-  color: 0x333333,
-  wireframe: true,
-  transparent: true,
-  opacity: 0.15
-});
-const referenceSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-scene.add(referenceSphere);
+// Add lat/lon grid lines at r=1 for reference
+function createLatLonGrid() {
+  const gridGroup = new THREE.Group();
+  const radius = 1.0;
+  const segments = 64;
+  
+  // Material for grid lines
+  const lineMaterial = new THREE.LineBasicMaterial({
+    color: 0x333333,
+    transparent: true,
+    opacity: 0.15
+  });
+  
+  // Create latitude lines (parallels)
+  for (let lat = -80; lat <= 80; lat += 20) {
+    const theta = (90 - lat) * Math.PI / 180; // Convert latitude to colatitude in radians
+    const r = radius * Math.sin(theta);
+    const y = radius * Math.cos(theta);
+    
+    const points = [];
+    for (let i = 0; i <= segments; i++) {
+      const phi = (i / segments) * 2 * Math.PI;
+      const x = r * Math.cos(phi);
+      const z = -r * Math.sin(phi);
+      points.push(new THREE.Vector3(x, y, z));
+    }
+    
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const line = new THREE.Line(geometry, lineMaterial);
+    gridGroup.add(line);
+  }
+  
+  // Create longitude lines (meridians)
+  for (let lon = 0; lon < 180; lon += 20) {
+    const points = [];
+    for (let i = 0; i <= segments; i++) {
+      const theta = (i / segments) * Math.PI; // 0 to PI (north to south pole)
+      const phi = lon * Math.PI / 180;
+      
+      const x = radius * Math.sin(theta) * Math.cos(phi);
+      const y = radius * Math.cos(theta);
+      const z = -radius * Math.sin(theta) * Math.sin(phi);
+      points.push(new THREE.Vector3(x, y, z));
+    }
+    
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const line = new THREE.Line(geometry, lineMaterial);
+    gridGroup.add(line);
+  }
+  
+  return gridGroup;
+}
+
+const referenceGrid = createLatLonGrid();
+scene.add(referenceGrid);
 
 // Info card
 const infoCard = document.getElementById('infoCard');
