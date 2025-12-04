@@ -5,6 +5,9 @@
 
 import * as THREE from 'three';
 
+// Fixed displacement scale for population height visualization
+const POPULATION_DISPLACEMENT_ALPHA = 0.3;
+
 /**
  * Create a material for visualizing population density as height displacement
  * Population values displace vertices radially outward from the Earth's surface
@@ -96,7 +99,7 @@ export function createPopulationHeightMaterial(maxPopulation = 1000000) {
   return new THREE.ShaderMaterial({
     uniforms: {
       maxPopulation: { value: maxPopulation },
-      alpha: { value: 0.3 }  // Fixed displacement scale
+      alpha: { value: POPULATION_DISPLACEMENT_ALPHA }
     },
     vertexShader,
     fragmentShader,

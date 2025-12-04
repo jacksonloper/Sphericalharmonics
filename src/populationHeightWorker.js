@@ -10,6 +10,9 @@ import { pix2ang_nest } from '@hscmap/healpix';
 // Import npyjs for NPY file parsing
 import { load } from 'npyjs';
 
+// Data path constant
+const DATA_PATH = 'earthtoposources';
+
 /**
  * Convert spherical coordinates (theta, phi) to Cartesian (x, y, z)
  * with optional radial displacement
@@ -139,7 +142,7 @@ async function processPopulationData() {
     self.postMessage({ type: 'status', message: `Loading population data for nside=${nside}...` });
     
     // Load population data using npyjs
-    const filename = `${self.location.origin}/earthtoposources/population_healpix${nside}_NESTED.npy`;
+    const filename = `${self.location.origin}/${DATA_PATH}/population_healpix${nside}_NESTED.npy`;
     const npyData = await load(filename);
     
     self.postMessage({ type: 'status', message: `Population data loaded for nside=${nside}` });
