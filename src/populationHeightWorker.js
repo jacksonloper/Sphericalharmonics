@@ -93,14 +93,12 @@ function generateMeshGeometry(nside, populationData, maxPopulation) {
     
     // Create top corners by extending each corner radially outward
     // This creates a proper box-like frustum perpendicular to the sphere
-    const topCorners = cornerCoords.map(c => {
-      const len = Math.sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
-      return [
-        c[0] / len * topRadius,
-        c[1] / len * topRadius,
-        c[2] / len * topRadius
-      ];
-    });
+    // corners_nest() returns unit vectors, so just multiply by topRadius
+    const topCorners = cornerCoords.map(c => [
+      c[0] * topRadius,
+      c[1] * topRadius,
+      c[2] * topRadius
+    ]);
     
     // Add base corners (indices 0-3)
     for (let i = 0; i < 4; i++) {
@@ -114,9 +112,9 @@ function generateMeshGeometry(nside, populationData, maxPopulation) {
       population.push(pop);
     }
     
-    // Create triangles for the full frustum (12 triangles total)
+    // Create triangles for the full frustum (10 triangles total)
     // 4 side faces (2 triangles each = 8 triangles)
-    // 1 top face (4 triangles from center - but we'll use 2 triangles for a quad)
+    // 1 top face (2 triangles for a quad)
     // We skip the base since it's on the sphere surface
     
     // Side faces: 4 quads, each split into 2 triangles
