@@ -121,9 +121,9 @@
   <div id="infoCard">
     <h2>🌍 World Population Visualization</h2>
     <div id="cardContent">
-      <p>This visualization shows the 2024 world population distribution using 3D truncated pyramids. Each region is a <a href="https://healpix.sourceforge.io/" target="_blank">HEALPix</a> cell (nside=32), with pyramid height proportional to the population in that region.</p>
+      <p>This visualization shows the 2024 world population distribution using 3D truncated pyramids. Each region is a <a href="https://healpix.sourceforge.io/" target="_blank">HEALPix</a> cell (nside=64), with pyramid height proportional to the population in that region.</p>
       
-      <p><strong>Technical Details:</strong> The data is loaded at nside=128 resolution and downsampled to nside=32 by summing populations. Each pyramid extends from radius 1 (Earth's surface) to an outer radius determined by the formula: <code>r = (1 + 3p/(CA))^(1/3)</code>, where p is the population, A is the HEALPix pixel area, and C is a scaling constant chosen so the maximum radius is approximately 2.</p>
+      <p><strong>Technical Details:</strong> The data is loaded at nside=128 resolution and downsampled to nside=64 by summing populations. Each pyramid extends from radius 1 (Earth's surface) to an outer radius determined by the formula: <code>r = (1 + 3p/(CA))^(1/3)</code>, where p is the population, A is the HEALPix pixel area, and C is a scaling constant chosen so the maximum radius is approximately 2.</p>
 
       <div class="citation">
         <strong>Data Source:</strong><br>

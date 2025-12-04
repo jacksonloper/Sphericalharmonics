@@ -55,23 +55,30 @@ function getPixelCorners(nside, pixelIndex, r) {
 
 /**
  * Create a truncated square pyramid (frustum) from r=1 to r=r_outer
- * Returns geometry data with positions, indices, and colors
+ * Returns geometry data with positions (at r=1), radiusTarget, indices, and colors
+ * The shader will use radiusTarget to adjust the height based on a relief uniform
  */
 function createTruncatedPyramid(nside, pixelIndex, r_outer, color) {
-  // Get 4 corners at inner radius (r=1) and outer radius (r=r_outer)
-  const innerCorners = getPixelCorners(nside, pixelIndex, 1.0);
-  const outerCorners = getPixelCorners(nside, pixelIndex, r_outer);
+  // Get 4 corners at base radius (r=1) - this is where all vertices start
+  const baseCorners = getPixelCorners(nside, pixelIndex, 1.0);
   
   // 8 vertices total (4 inner + 4 outer)
+  // All positions are stored at r=1, the shader will displace them
   const positions = [];
+  const radiusTargets = [];  // Target radius for each vertex
   const colors = [];
   
-  innerCorners.forEach(c => {
+  // Inner corners stay at r=1
+  baseCorners.forEach(c => {
     positions.push(...c);
+    radiusTargets.push(1.0);  // Inner radius is always 1
     colors.push(...color);
   });
-  outerCorners.forEach(c => {
+  
+  // Outer corners start at r=1 but have target of r_outer
+  baseCorners.forEach(c => {
     positions.push(...c);
+    radiusTargets.push(r_outer);  // Outer radius is r_outer
     colors.push(...color);
   });
   
@@ -106,6 +113,7 @@ function createTruncatedPyramid(nside, pixelIndex, r_outer, color) {
   
   return { 
     positions: new Float32Array(positions), 
+    radiusTargets: new Float32Array(radiusTargets),
     colors: new Float32Array(colors),
     indices: new Uint16Array(indices) 
   };
@@ -128,38 +136,38 @@ async function processPopulationData() {
   const totalPop = pop_128.reduce((sum, val) => sum + val, 0);
   self.postMessage({ type: 'info', message: `Total population: ${(totalPop / 1e9).toFixed(2)} billion` });
   
-  // Downsample from nside=128 to nside=32
+  // Downsample from nside=128 to nside=64
   // In HEALPix NESTED ordering, the hierarchical structure guarantees that
   // child pixels are stored consecutively: pixels [i*ratio, (i+1)*ratio) at higher
   // resolution correspond exactly to pixel i at lower resolution.
   const nside_128 = 128;
-  const nside_32 = 32;
-  const npix_32 = 12 * nside_32 * nside_32;
-  const ratio = (nside_128 / nside_32) ** 2; // 16 pixels per nside32 pixel
+  const nside_64 = 64;
+  const npix_64 = 12 * nside_64 * nside_64;
+  const ratio = (nside_128 / nside_64) ** 2; // 4 pixels per nside64 pixel
   
-  self.postMessage({ type: 'progress', message: `Downsampling to nside=32 (${npix_32} pixels)...`, step: 3, total: 5 });
+  self.postMessage({ type: 'progress', message: `Downsampling to nside=64 (${npix_64} pixels)...`, step: 3, total: 5 });
   
-  const pop_32 = new Float32Array(npix_32);
-  for (let i = 0; i < npix_32; i++) {
+  const pop_64 = new Float32Array(npix_64);
+  for (let i = 0; i < npix_64; i++) {
     const startIdx = i * ratio;
     const endIdx = startIdx + ratio;
     let sum = 0;
     for (let j = startIdx; j < endIdx; j++) {
       sum += pop_128[j];
     }
-    pop_32[i] = sum;
+    pop_64[i] = sum;
   }
   
   // Sanity check
-  const totalPop32 = pop_32.reduce((sum, val) => sum + val, 0);
-  self.postMessage({ type: 'info', message: `Downsampled population: ${(totalPop32 / 1e9).toFixed(2)} billion` });
+  const totalPop64 = pop_64.reduce((sum, val) => sum + val, 0);
+  self.postMessage({ type: 'info', message: `Downsampled population: ${(totalPop64 / 1e9).toFixed(2)} billion` });
   
   // Calculate scaling constant C
   // Using cubic formula: r = (1 + 3*p/(C*A))^(1/3)
   // We want max r ≈ 2, so C = 3*p_max / (7*A)
-  const maxPop = Math.max(...pop_32);
-  const area_32 = 4 * Math.PI / npix_32; // HEALPix pixel area on unit sphere
-  const C = 3 * maxPop / (7 * area_32);
+  const maxPop = Math.max(...pop_64);
+  const area_64 = 4 * Math.PI / npix_64; // HEALPix pixel area on unit sphere
+  const C = 3 * maxPop / (7 * area_64);
   
   self.postMessage({ 
     type: 'info', 
@@ -171,19 +179,20 @@ async function processPopulationData() {
   // Generate geometry for all pixels
   // We'll combine all pyramids into one big geometry
   const allPositions = [];
+  const allRadiusTargets = [];
   const allColors = [];
   const allIndices = [];
   let vertexOffset = 0;
   
-  for (let i = 0; i < npix_32; i++) {
-    const population = pop_32[i];
+  for (let i = 0; i < npix_64; i++) {
+    const population = pop_64[i];
     
     // Skip pixels with no population
     if (population <= 0) continue;
     
     // Calculate outer radius using cubic formula
     // r = (1 + 3*p/(C*A))^(1/3)
-    const r_outer = Math.pow(1 + 3 * population / (C * area_32), 1/3);
+    const r_outer = Math.pow(1 + 3 * population / (C * area_64), 1/3);
     
     // Calculate color based on population (normalized to max)
     // Use log scale for better visual distribution
@@ -191,10 +200,11 @@ async function processPopulationData() {
     const color = turboColormap(populationNormalized);
     
     // Create truncated pyramid
-    const pyramid = createTruncatedPyramid(nside_32, i, r_outer, color);
+    const pyramid = createTruncatedPyramid(nside_64, i, r_outer, color);
     
-    // Add positions and colors
+    // Add positions, radiusTargets, and colors
     allPositions.push(...pyramid.positions);
+    allRadiusTargets.push(...pyramid.radiusTargets);
     allColors.push(...pyramid.colors);
     
     // Add indices with offset
@@ -208,7 +218,7 @@ async function processPopulationData() {
     if (i % 1000 === 0) {
       self.postMessage({ 
         type: 'progress', 
-        message: `Generated ${i}/${npix_32} pyramids...`, 
+        message: `Generated ${i}/${npix_64} pyramids...`, 
         step: 4, 
         total: 5 
       });
@@ -221,10 +231,11 @@ async function processPopulationData() {
   self.postMessage({
     type: 'complete',
     positions: new Float32Array(allPositions),
+    radiusTargets: new Float32Array(allRadiusTargets),
     colors: new Float32Array(allColors),
     indices: new Uint32Array(allIndices),
     numPyramids: vertexOffset / 8, // Each pyramid has 8 vertices
-    totalPopulation: totalPop32
+    totalPopulation: totalPop64
   });
 }
 

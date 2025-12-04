@@ -120,9 +120,65 @@ function createEnterButton() {
   btn.addEventListener('click', () => {
     infoCard.style.display = 'none';
     aboutButton.style.display = 'block';
+    // Show relief slider when entering
+    const reliefControl = document.getElementById('reliefControl');
+    if (reliefControl) {
+      reliefControl.style.display = 'flex';
+    }
   });
   
   return btn;
+}
+
+// Create relief slider control
+function createReliefSlider() {
+  const reliefControl = document.createElement('div');
+  reliefControl.id = 'reliefControl';
+  reliefControl.style.position = 'absolute';
+  reliefControl.style.top = '70px';
+  reliefControl.style.left = '15px';
+  reliefControl.style.display = 'none';  // Hidden initially
+  reliefControl.style.flexDirection = 'row';
+  reliefControl.style.alignItems = 'center';
+  reliefControl.style.gap = '10px';
+  reliefControl.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+  reliefControl.style.color = 'white';
+  reliefControl.style.padding = '10px 15px';
+  reliefControl.style.borderRadius = '6px';
+  reliefControl.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+  reliefControl.style.fontSize = '14px';
+  reliefControl.style.zIndex = '1000';
+  
+  const label = document.createElement('span');
+  label.textContent = 'Relief:';
+  label.style.minWidth = '50px';
+  
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = '0';
+  slider.max = '100';
+  slider.value = '100';
+  slider.style.width = '150px';
+  slider.style.cursor = 'pointer';
+  
+  const valueDisplay = document.createElement('span');
+  valueDisplay.textContent = '1.00';
+  valueDisplay.style.minWidth = '40px';
+  valueDisplay.style.textAlign = 'right';
+  
+  slider.addEventListener('input', (e) => {
+    const value = parseFloat(e.target.value) / 100;
+    valueDisplay.textContent = value.toFixed(2);
+    
+    if (window.populationMaterial) {
+      window.populationMaterial.uniforms.relief.value = value;
+    }
+  });
+  
+  reliefControl.appendChild(label);
+  reliefControl.appendChild(slider);
+  reliefControl.appendChild(valueDisplay);
+  document.body.appendChild(reliefControl);
 }
 
 // Start the worker
@@ -140,29 +196,73 @@ worker.onmessage = (e) => {
       populationInfo.textContent = message;
     }
   } else if (type === 'complete') {
-    const { positions, colors, indices, numPyramids, totalPopulation } = e.data;
+    const { positions, radiusTargets, colors, indices, numPyramids, totalPopulation } = e.data;
     
     console.log(`Received geometry: ${positions.length / 3} vertices, ${indices.length / 3} triangles, ${numPyramids} pyramids`);
     
     // Create geometry
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('radiusTarget', new THREE.BufferAttribute(radiusTargets, 1));
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
     geometry.computeVertexNormals();
     
-    // Create material with vertex colors enabled
-    const material = new THREE.MeshPhongMaterial({
-      vertexColors: true,
-      emissive: 0x000000,
-      shininess: 30,
-      flatShading: false,
+    // Create custom shader material with relief control
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        relief: { value: 1.0 }  // 0.0 = flat (all at r=1), 1.0 = full height
+      },
+      vertexShader: `
+        attribute float radiusTarget;
+        attribute vec3 color;
+        uniform float relief;
+        varying vec3 vColor;
+        varying vec3 vNormal;
+        
+        void main() {
+          vColor = color;
+          
+          // Compute actual radius based on relief slider
+          // relief=0: radius=1 (flat), relief=1: radius=radiusTarget (full height)
+          float radius = 1.0 + relief * (radiusTarget - 1.0);
+          
+          // Displace vertex radially (positions are normalized to unit sphere)
+          vec3 displacedPosition = normalize(position) * radius;
+          
+          // Transform normal (keep it fixed, don't adjust with relief)
+          vNormal = normalize(normalMatrix * normal);
+          
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(displacedPosition, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vColor;
+        varying vec3 vNormal;
+        
+        void main() {
+          // Simple lighting
+          vec3 light1 = normalize(vec3(1.0, 1.0, 1.0));
+          vec3 light2 = normalize(vec3(-1.0, -0.5, -0.5));
+          float diffuse1 = max(dot(vNormal, light1), 0.0) * 0.6;
+          float diffuse2 = max(dot(vNormal, light2), 0.0) * 0.3;
+          float ambient = 0.4;
+          
+          float lighting = diffuse1 + diffuse2 + ambient;
+          vec3 finalColor = vColor * lighting;
+          
+          gl_FragColor = vec4(finalColor, 1.0);
+        }
+      `,
       side: THREE.DoubleSide
     });
     
     // Create mesh and add to scene
     const mesh = new THREE.Mesh(geometry, material);
     scene.add(mesh);
+    
+    // Store material reference for relief slider
+    window.populationMaterial = material;
     
     // Update info card
     loadingStatus.textContent = `Loaded! ${numPyramids.toLocaleString()} populated regions`;
@@ -171,6 +271,9 @@ worker.onmessage = (e) => {
     // Add enter button
     const enterBtn = createEnterButton();
     infoCard.appendChild(enterBtn);
+    
+    // Create relief slider (hidden initially, shown after Enter)
+    createReliefSlider();
     
     console.log('Population visualization loaded successfully!');
   } else if (type === 'error') {
