@@ -342,7 +342,7 @@ class DustParticleSystem {
   constructor(populationData, nside) {
     this.populationData = populationData;
     this.nside = nside;
-    this.maxParticles = 300;
+    this.maxParticles = 600;
     this.particles = [];
     this.spawnTimer = 0;
     this.spawnInterval = 100; // Spawn every 100ms (1/10th second)
