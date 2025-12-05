@@ -419,8 +419,9 @@ class DustParticleSystem {
       const theta = angResult.theta;
       const phi = angResult.phi;
       
-      // Convert to Cartesian with random height between 1 and 1+relief
-      const r = 1.0 + Math.random() * relief;
+      // Convert to Cartesian with random height between 1.0 and 1.0 + relief*0.25
+      // (relief=0 → r=1.0, relief=1.0 → r up to 1.25)
+      const r = 1.0 + Math.random() * (relief * 0.25);
       const x = r * Math.sin(theta) * Math.cos(phi);
       const z = r * Math.sin(theta) * Math.sin(phi);
       const y = r * Math.cos(theta); // HEALPix z -> THREE y
@@ -490,8 +491,9 @@ class DustParticleSystem {
     // Get relief value for height calculation
     const relief = window.populationMaterial ? window.populationMaterial.uniforms.relief.value : 1.0;
     
-    // Convert to Cartesian with random height between 1 and 1+relief
-    const r = 1.0 + Math.random() * relief;
+    // Convert to Cartesian with random height between 1.0 and 1.0 + relief*0.25
+    // (relief=0 → r=1.0, relief=1.0 → r up to 1.25)
+    const r = 1.0 + Math.random() * (relief * 0.25);
     const x = r * Math.sin(theta) * Math.cos(phi);
     const z = r * Math.sin(theta) * Math.sin(phi);
     const y = r * Math.cos(theta); // HEALPix z -> THREE y
