@@ -34,7 +34,7 @@ controls.maxDistance = 10;
 controls.autoRotate = false;
 
 // Lighting
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambientLight);
 
 const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.6);
@@ -44,6 +44,10 @@ scene.add(directionalLight1);
 const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
 directionalLight2.position.set(-5, -5, -5);
 scene.add(directionalLight2);
+
+const directionalLight3 = new THREE.DirectionalLight(0xffffff, 0.4);
+directionalLight3.position.set(-5, 3, 5);
+scene.add(directionalLight3);
 
 // Add lat/lon grid lines at r=1 for reference
 function createLatLonGrid() {
