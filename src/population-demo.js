@@ -341,7 +341,7 @@ class DustParticleSystem {
   constructor(populationData, nside) {
     this.populationData = populationData;
     this.nside = nside;
-    this.numParticles = 1000;
+    this.numParticles = 1;
     this.particles = [];
     
     // Create particle geometry and material
