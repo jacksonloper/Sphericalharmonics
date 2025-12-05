@@ -342,14 +342,17 @@ class DustParticleSystem {
   constructor(populationData, nside) {
     this.populationData = populationData;
     this.nside = nside;
-    this.numParticles = 1;
+    this.maxParticles = 100;
+    this.activeParticles = 0; // Start with 0 particles
     this.particles = [];
+    this.spawnTimer = 0;
+    this.spawnInterval = 100; // Spawn every 100ms (1/10th second)
     
-    // Create particle geometry and material
+    // Create particle geometry and material with max capacity
     this.geometry = new THREE.BufferGeometry();
-    this.positions = new Float32Array(this.numParticles * 3);
-    this.colors = new Float32Array(this.numParticles * 3);
-    this.sizes = new Float32Array(this.numParticles);
+    this.positions = new Float32Array(this.maxParticles * 3);
+    this.colors = new Float32Array(this.maxParticles * 3);
+    this.sizes = new Float32Array(this.maxParticles);
     
     // Particle material with glow effect
     this.material = new THREE.ShaderMaterial({
@@ -389,12 +392,20 @@ class DustParticleSystem {
       depthWrite: false
     });
     
-    // Initialize particles
-    this.initializeParticles();
+    // Initialize cumulative distribution for sampling
+    this.initializeCumulativeDist();
+    
+    // Initialize particles array with nulls
+    for (let i = 0; i < this.maxParticles; i++) {
+      this.particles.push(null);
+    }
     
     this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
     this.geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
     this.geometry.setAttribute('size', new THREE.BufferAttribute(this.sizes, 1));
+    
+    // Set draw range to 0 initially (no particles to draw)
+    this.geometry.setDrawRange(0, 0);
     
     this.points = new THREE.Points(this.geometry, this.material);
     this.points.visible = false;
@@ -402,7 +413,7 @@ class DustParticleSystem {
     window.dustParticles = this.points;
   }
   
-  initializeParticles() {
+  initializeCumulativeDist() {
     // Create cumulative distribution for sampling
     this.totalPopulation = this.populationData.reduce((sum, p) => sum + p, 0);
     this.cumulativeDist = [];
@@ -411,53 +422,74 @@ class DustParticleSystem {
       cumSum += this.populationData[i];
       this.cumulativeDist.push(cumSum);
     }
+  }
+  
+  spawnParticle() {
+    // Sample pixel index weighted by population
+    const rand = Math.random() * this.totalPopulation;
+    let pixelIndex = 0;
+    for (let j = 0; j < this.cumulativeDist.length; j++) {
+      if (rand < this.cumulativeDist[j]) {
+        pixelIndex = j;
+        break;
+      }
+    }
     
-    // Initialize each particle
-    for (let i = 0; i < this.numParticles; i++) {
-      // Sample pixel index weighted by population
-      const rand = Math.random() * this.totalPopulation;
-      let pixelIndex = 0;
-      for (let j = 0; j < this.cumulativeDist.length; j++) {
-        if (rand < this.cumulativeDist[j]) {
-          pixelIndex = j;
+    // Get pixel position using HEALPix
+    const angResult = pix2ang_nest(this.nside, pixelIndex);
+    const theta = angResult.theta;
+    const phi = angResult.phi;
+    
+    // Convert to Cartesian (starting at radius ~1.05)
+    const r = 1.05 + Math.random() * 0.1;
+    const x = r * Math.sin(theta) * Math.cos(phi);
+    const z = r * Math.sin(theta) * Math.sin(phi);
+    const y = r * Math.cos(theta); // HEALPix z -> THREE y
+    
+    // Find slot for new particle
+    let slotIndex = -1;
+    if (this.activeParticles < this.maxParticles) {
+      // Find first empty slot
+      for (let i = 0; i < this.maxParticles; i++) {
+        if (this.particles[i] === null) {
+          slotIndex = i;
           break;
         }
       }
-      
-      // Get pixel position using HEALPix
-      const angResult = pix2ang_nest(this.nside, pixelIndex);
-      const theta = angResult.theta;
-      const phi = angResult.phi;
-      
-      // Convert to Cartesian (starting at radius ~1.05)
-      const r = 1.05 + Math.random() * 0.1;
-      const x = r * Math.sin(theta) * Math.cos(phi);
-      const z = r * Math.sin(theta) * Math.sin(phi);
-      const y = r * Math.cos(theta); // HEALPix z -> THREE y
-      
-      // Store particle state
-      this.particles.push({
-        position: new THREE.Vector3(x, y, -z), // Transform to THREE.js coords
-        velocity: new THREE.Vector3(0, 0, 0),
-        birthTime: Math.random() * 5000, // Stagger initial births
-        age: 0,
-        lifetime: 3 + Math.random() * 2 // Live for 3-5 seconds
-      });
-      
-      // Set initial position
-      const idx = i * 3;
-      this.positions[idx] = x;
-      this.positions[idx + 1] = y;
-      this.positions[idx + 2] = -z;
-      
-      // Set color (faint glow)
-      this.colors[idx] = 0.7 + Math.random() * 0.3;
-      this.colors[idx + 1] = 0.6 + Math.random() * 0.2;
-      this.colors[idx + 2] = 0.5 + Math.random() * 0.3;
-      
-      // Set size (1/16 of original size - reduced by 4x again)
-      this.sizes[i] = 0.625 + Math.random() * 0.3125;
+    } else {
+      // Delete a random particle
+      slotIndex = Math.floor(Math.random() * this.maxParticles);
     }
+    
+    // Create new particle
+    this.particles[slotIndex] = {
+      position: new THREE.Vector3(x, y, -z), // Transform to THREE.js coords
+      velocity: new THREE.Vector3(0, 0, 0),
+      age: 0,
+      lifetime: 3 + Math.random() * 2 // Live for 3-5 seconds
+    };
+    
+    // Update count
+    if (slotIndex >= this.activeParticles) {
+      this.activeParticles = slotIndex + 1;
+    }
+    
+    // Set initial position in buffer
+    const idx = slotIndex * 3;
+    this.positions[idx] = x;
+    this.positions[idx + 1] = y;
+    this.positions[idx + 2] = -z;
+    
+    // Set random color
+    this.colors[idx] = Math.random();
+    this.colors[idx + 1] = Math.random();
+    this.colors[idx + 2] = Math.random();
+    
+    // Set size (1/16 of original size - reduced by 4x again)
+    this.sizes[slotIndex] = 0.625 + Math.random() * 0.3125;
+    
+    // Update draw range
+    this.geometry.setDrawRange(0, this.activeParticles);
   }
   
   update(deltaTime) {
@@ -466,35 +498,32 @@ class DustParticleSystem {
     const sigma = 0.3; // Noise intensity
     const minRadius = 1.01; // Keep outside Earth sphere
     
-    for (let i = 0; i < this.numParticles; i++) {
+    // Handle spawning
+    this.spawnTimer += deltaTime;
+    if (this.spawnTimer >= this.spawnInterval) {
+      this.spawnParticle();
+      this.spawnTimer -= this.spawnInterval;
+    }
+    
+    // Update existing particles
+    for (let i = 0; i < this.maxParticles; i++) {
       const particle = this.particles[i];
+      if (particle === null) continue;
+      
       particle.age += deltaTime;
       
-      // Respawn if dead or past birth time
+      // Check if particle should die
       if (particle.age > particle.lifetime * 1000) {
-        // Respawn at new random location weighted by population
-        const rand = Math.random() * this.totalPopulation;
-        let pixelIndex = 0;
-        for (let j = 0; j < this.cumulativeDist.length; j++) {
-          if (rand < this.cumulativeDist[j]) {
-            pixelIndex = j;
-            break;
+        this.particles[i] = null;
+        // Recalculate active particles count
+        this.activeParticles = 0;
+        for (let j = 0; j < this.maxParticles; j++) {
+          if (this.particles[j] !== null) {
+            this.activeParticles = j + 1;
           }
         }
-        
-        const angResult = pix2ang_nest(this.nside, pixelIndex);
-        const theta_hp = angResult.theta;
-        const phi_hp = angResult.phi;
-        
-        const r = 1.05 + Math.random() * 0.1;
-        const x = r * Math.sin(theta_hp) * Math.cos(phi_hp);
-        const z = r * Math.sin(theta_hp) * Math.sin(phi_hp);
-        const y = r * Math.cos(theta_hp);
-        
-        particle.position.set(x, y, -z);
-        particle.velocity.set(0, 0, 0);
-        particle.age = 0;
-        particle.lifetime = 3 + Math.random() * 2;
+        this.geometry.setDrawRange(0, this.activeParticles);
+        continue;
       }
       
       // OU process for velocity
@@ -535,6 +564,7 @@ class DustParticleSystem {
     }
     
     this.geometry.attributes.position.needsUpdate = true;
+    this.geometry.attributes.color.needsUpdate = true;
     this.material.uniforms.time.value += deltaTime;
   }
 }
