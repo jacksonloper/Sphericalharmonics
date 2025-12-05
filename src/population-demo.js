@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import PopulationWorker from './populationWorker.js?worker';
+import { pix2ang_nest } from '@hscmap/healpix';
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -32,6 +33,9 @@ controls.dampingFactor = 0.05;
 controls.minDistance = 1.5;
 controls.maxDistance = 10;
 controls.autoRotate = false;
+
+// Visualization mode state
+let visualizationMode = 'pyramids'; // 'pyramids' or 'dust'
 
 // Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -169,10 +173,14 @@ function createEnterButton() {
   btn.addEventListener('click', () => {
     infoCard.style.display = 'none';
     aboutButton.style.display = 'block';
-    // Show relief slider when entering
+    // Show relief slider and mode control when entering
     const reliefControl = document.getElementById('reliefControl');
     if (reliefControl) {
       reliefControl.style.display = 'flex';
+    }
+    const modeControl = document.getElementById('modeControl');
+    if (modeControl) {
+      modeControl.style.display = 'flex';
     }
   });
   
@@ -229,6 +237,304 @@ function createReliefSlider() {
   reliefControl.appendChild(valueDisplay);
   document.body.appendChild(reliefControl);
 }
+
+// Create mode toggle control
+function createModeToggle() {
+  const modeControl = document.createElement('div');
+  modeControl.id = 'modeControl';
+  modeControl.style.position = 'absolute';
+  modeControl.style.bottom = '15px';
+  modeControl.style.left = '15px';
+  modeControl.style.display = 'none';  // Hidden initially
+  modeControl.style.flexDirection = 'row';
+  modeControl.style.alignItems = 'center';
+  modeControl.style.gap = '15px';
+  modeControl.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+  modeControl.style.color = 'white';
+  modeControl.style.padding = '10px 15px';
+  modeControl.style.borderRadius = '6px';
+  modeControl.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+  modeControl.style.fontSize = '14px';
+  modeControl.style.zIndex = '1000';
+  
+  const label = document.createElement('span');
+  label.textContent = 'Mode:';
+  
+  const pyramidsOption = document.createElement('label');
+  pyramidsOption.style.display = 'flex';
+  pyramidsOption.style.alignItems = 'center';
+  pyramidsOption.style.gap = '5px';
+  pyramidsOption.style.cursor = 'pointer';
+  
+  const pyramidsRadio = document.createElement('input');
+  pyramidsRadio.type = 'radio';
+  pyramidsRadio.name = 'vizMode';
+  pyramidsRadio.value = 'pyramids';
+  pyramidsRadio.checked = true;
+  pyramidsRadio.style.cursor = 'pointer';
+  
+  const pyramidsLabel = document.createElement('span');
+  pyramidsLabel.textContent = 'Pyramids';
+  
+  pyramidsOption.appendChild(pyramidsRadio);
+  pyramidsOption.appendChild(pyramidsLabel);
+  
+  const dustOption = document.createElement('label');
+  dustOption.style.display = 'flex';
+  dustOption.style.alignItems = 'center';
+  dustOption.style.gap = '5px';
+  dustOption.style.cursor = 'pointer';
+  
+  const dustRadio = document.createElement('input');
+  dustRadio.type = 'radio';
+  dustRadio.name = 'vizMode';
+  dustRadio.value = 'dust';
+  dustRadio.style.cursor = 'pointer';
+  
+  const dustLabel = document.createElement('span');
+  dustLabel.textContent = 'Dust';
+  
+  dustOption.appendChild(dustRadio);
+  dustOption.appendChild(dustLabel);
+  
+  // Handle mode change
+  const handleModeChange = (e) => {
+    visualizationMode = e.target.value;
+    if (visualizationMode === 'pyramids') {
+      if (window.populationMesh) window.populationMesh.visible = true;
+      if (window.dustParticles) window.dustParticles.visible = false;
+      if (window.earthSphere) window.earthSphere.visible = false;
+      referenceGrid.visible = true;
+    } else {
+      if (window.populationMesh) window.populationMesh.visible = false;
+      if (window.dustParticles) window.dustParticles.visible = true;
+      if (window.earthSphere) window.earthSphere.visible = true;
+      referenceGrid.visible = false;
+    }
+  };
+  
+  pyramidsRadio.addEventListener('change', handleModeChange);
+  dustRadio.addEventListener('change', handleModeChange);
+  
+  modeControl.appendChild(label);
+  modeControl.appendChild(pyramidsOption);
+  modeControl.appendChild(dustOption);
+  document.body.appendChild(modeControl);
+}
+
+// Create dark Earth sphere
+function createEarthSphere() {
+  const geometry = new THREE.SphereGeometry(0.99, 64, 64);
+  const material = new THREE.MeshBasicMaterial({
+    color: 0x0a0a1a,
+    side: THREE.FrontSide
+  });
+  const sphere = new THREE.Mesh(geometry, material);
+  sphere.visible = false;
+  scene.add(sphere);
+  window.earthSphere = sphere;
+  return sphere;
+}
+
+// Dust particle system
+class DustParticleSystem {
+  constructor(populationData, nside) {
+    this.populationData = populationData;
+    this.nside = nside;
+    this.numParticles = 1000;
+    this.particles = [];
+    
+    // Create particle geometry and material
+    this.geometry = new THREE.BufferGeometry();
+    this.positions = new Float32Array(this.numParticles * 3);
+    this.colors = new Float32Array(this.numParticles * 3);
+    this.sizes = new Float32Array(this.numParticles);
+    
+    // Particle material with glow effect
+    this.material = new THREE.ShaderMaterial({
+      uniforms: {
+        time: { value: 0 }
+      },
+      vertexShader: `
+        attribute float size;
+        attribute vec3 color;
+        varying vec3 vColor;
+        
+        void main() {
+          vColor = color;
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = size * (300.0 / -mvPosition.z);
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vColor;
+        
+        void main() {
+          // Create circular particle with glow
+          vec2 center = gl_PointCoord - vec2(0.5);
+          float dist = length(center);
+          
+          // Soft glow with falloff
+          float alpha = smoothstep(0.5, 0.0, dist);
+          alpha = pow(alpha, 2.0) * 0.6;
+          
+          gl_FragColor = vec4(vColor, alpha);
+        }
+      `,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthTest: true,
+      depthWrite: false
+    });
+    
+    // Initialize particles
+    this.initializeParticles();
+    
+    this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
+    this.geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
+    this.geometry.setAttribute('size', new THREE.BufferAttribute(this.sizes, 1));
+    
+    this.points = new THREE.Points(this.geometry, this.material);
+    this.points.visible = false;
+    scene.add(this.points);
+    window.dustParticles = this.points;
+  }
+  
+  initializeParticles() {
+    // Create cumulative distribution for sampling
+    const totalPop = this.populationData.reduce((sum, p) => sum + p, 0);
+    const cumulativeDist = [];
+    let cumSum = 0;
+    for (let i = 0; i < this.populationData.length; i++) {
+      cumSum += this.populationData[i];
+      cumulativeDist.push(cumSum);
+    }
+    
+    // Initialize each particle
+    for (let i = 0; i < this.numParticles; i++) {
+      // Sample pixel index weighted by population
+      const rand = Math.random() * totalPop;
+      let pixelIndex = 0;
+      for (let j = 0; j < cumulativeDist.length; j++) {
+        if (rand < cumulativeDist[j]) {
+          pixelIndex = j;
+          break;
+        }
+      }
+      
+      // Get pixel position using HEALPix
+      const angResult = pix2ang_nest(this.nside, pixelIndex);
+      const theta = angResult.theta;
+      const phi = angResult.phi;
+      
+      // Convert to Cartesian (starting at radius ~1.05)
+      const r = 1.05 + Math.random() * 0.1;
+      const x = r * Math.sin(theta) * Math.cos(phi);
+      const z = r * Math.sin(theta) * Math.sin(phi); // Note: HEALPix z -> THREE y
+      const y = r * Math.cos(theta);
+      
+      // Store particle state
+      this.particles.push({
+        position: new THREE.Vector3(x, y, -z), // Transform to THREE.js coords
+        velocity: new THREE.Vector3(0, 0, 0),
+        birthTime: Math.random() * 5000, // Stagger initial births
+        age: 0,
+        lifetime: 3 + Math.random() * 2 // Live for 3-5 seconds
+      });
+      
+      // Set initial position
+      const idx = i * 3;
+      this.positions[idx] = x;
+      this.positions[idx + 1] = y;
+      this.positions[idx + 2] = -z;
+      
+      // Set color (faint glow)
+      this.colors[idx] = 0.7 + Math.random() * 0.3;
+      this.colors[idx + 1] = 0.6 + Math.random() * 0.2;
+      this.colors[idx + 2] = 0.5 + Math.random() * 0.3;
+      
+      // Set size
+      this.sizes[i] = 10 + Math.random() * 5;
+    }
+  }
+  
+  update(deltaTime) {
+    const dt = deltaTime / 1000; // Convert to seconds
+    const theta = 1.5; // Mean reversion strength
+    const sigma = 0.3; // Noise intensity
+    const minRadius = 1.01; // Keep outside Earth sphere
+    
+    for (let i = 0; i < this.numParticles; i++) {
+      const particle = this.particles[i];
+      particle.age += deltaTime;
+      
+      // Respawn if dead or past birth time
+      if (particle.age > particle.lifetime * 1000) {
+        // Respawn at new random location
+        const rand = Math.random();
+        let pixelIndex = 0;
+        // Simple uniform respawn for now (can improve with proper weighted sampling)
+        pixelIndex = Math.floor(Math.random() * this.populationData.length);
+        
+        const angResult = pix2ang_nest(this.nside, pixelIndex);
+        const theta_hp = angResult.theta;
+        const phi_hp = angResult.phi;
+        
+        const r = 1.05 + Math.random() * 0.1;
+        const x = r * Math.sin(theta_hp) * Math.cos(phi_hp);
+        const z = r * Math.sin(theta_hp) * Math.sin(phi_hp);
+        const y = r * Math.cos(theta_hp);
+        
+        particle.position.set(x, y, -z);
+        particle.velocity.set(0, 0, 0);
+        particle.age = 0;
+        particle.lifetime = 3 + Math.random() * 2;
+      }
+      
+      // OU process for velocity
+      const noise = new THREE.Vector3(
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 2
+      );
+      
+      particle.velocity.x += (-theta * particle.velocity.x * dt + sigma * noise.x * Math.sqrt(dt));
+      particle.velocity.y += (-theta * particle.velocity.y * dt + sigma * noise.y * Math.sqrt(dt));
+      particle.velocity.z += (-theta * particle.velocity.z * dt + sigma * noise.z * Math.sqrt(dt));
+      
+      // Update position
+      particle.position.x += particle.velocity.x * dt;
+      particle.position.y += particle.velocity.y * dt;
+      particle.position.z += particle.velocity.z * dt;
+      
+      // Reflecting dynamics to keep outside sphere
+      const radius = particle.position.length();
+      if (radius < minRadius) {
+        // Reflect position and velocity
+        const normal = particle.position.clone().normalize();
+        particle.position.copy(normal.multiplyScalar(minRadius));
+        
+        // Reflect velocity
+        const velocityDotNormal = particle.velocity.dot(normal);
+        if (velocityDotNormal < 0) {
+          particle.velocity.sub(normal.multiplyScalar(2 * velocityDotNormal));
+        }
+      }
+      
+      // Update buffer
+      const idx = i * 3;
+      this.positions[idx] = particle.position.x;
+      this.positions[idx + 1] = particle.position.y;
+      this.positions[idx + 2] = particle.position.z;
+    }
+    
+    this.geometry.attributes.position.needsUpdate = true;
+    this.material.uniforms.time.value += deltaTime;
+  }
+}
+
+let dustSystem = null;
 
 // Start the worker
 const worker = new PopulationWorker();
@@ -310,8 +616,24 @@ worker.onmessage = (e) => {
     const mesh = new THREE.Mesh(geometry, material);
     scene.add(mesh);
     
+    // Store mesh reference for mode toggle
+    window.populationMesh = mesh;
+    
     // Store material reference for relief slider
     window.populationMaterial = material;
+    
+    // Store population data for dust system (need to request it from worker)
+    // We'll use the data that was sent
+    window.populationData = e.data.populationData || null;
+    window.nside = e.data.nside || 64;
+    
+    // Create Earth sphere (hidden initially)
+    createEarthSphere();
+    
+    // Create dust particle system if we have population data
+    if (window.populationData) {
+      dustSystem = new DustParticleSystem(window.populationData, window.nside);
+    }
     
     // Update info card
     loadingStatus.textContent = `Loaded! ${numPyramids.toLocaleString()} populated regions`;
@@ -323,6 +645,9 @@ worker.onmessage = (e) => {
     
     // Create relief slider (hidden initially, shown after Enter)
     createReliefSlider();
+    
+    // Create mode toggle (hidden initially, shown after Enter)
+    createModeToggle();
     
     console.log('Population visualization loaded successfully!');
   } else if (type === 'error') {
@@ -339,8 +664,19 @@ window.addEventListener('resize', () => {
 });
 
 // Animation loop
+let lastTime = Date.now();
 function animate() {
   requestAnimationFrame(animate);
+  
+  const currentTime = Date.now();
+  const deltaTime = currentTime - lastTime;
+  lastTime = currentTime;
+  
+  // Update dust system if in dust mode
+  if (dustSystem && visualizationMode === 'dust') {
+    dustSystem.update(deltaTime);
+  }
+  
   controls.update();
   renderer.render(scene, camera);
 }
