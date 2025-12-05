@@ -325,8 +325,9 @@ function createModeToggle() {
 // Create dark Earth sphere
 function createEarthSphere() {
   const geometry = new THREE.SphereGeometry(0.99, 64, 64);
-  const material = new THREE.MeshBasicMaterial({
-    color: 0x0a0a1a,
+  const material = new THREE.MeshPhongMaterial({
+    color: 0x1a1a2e,
+    shininess: 5,
     side: THREE.FrontSide
   });
   const sphere = new THREE.Mesh(geometry, material);
@@ -454,8 +455,8 @@ class DustParticleSystem {
       this.colors[idx + 1] = 0.6 + Math.random() * 0.2;
       this.colors[idx + 2] = 0.5 + Math.random() * 0.3;
       
-      // Set size
-      this.sizes[i] = 10 + Math.random() * 5;
+      // Set size (1/4 of original size)
+      this.sizes[i] = 2.5 + Math.random() * 1.25;
     }
   }
   
