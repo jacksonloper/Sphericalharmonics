@@ -399,28 +399,48 @@ class DustParticleSystem {
     // Initialize cumulative distribution for sampling
     this.initializeCumulativeDist();
     
-    // Initialize all particles with zero brightness (invisible)
+    // Initialize all particles immediately with full brightness
     for (let i = 0; i < this.maxParticles; i++) {
+      // Sample pixel index weighted by population for center location
+      const rand = Math.random() * this.totalPopulation;
+      let pixelIndex = 0;
+      for (let j = 0; j < this.cumulativeDist.length; j++) {
+        if (rand < this.cumulativeDist[j]) {
+          pixelIndex = j;
+          break;
+        }
+      }
+      
+      // Get pixel position using HEALPix
+      const angResult = pix2ang_nest(this.nside, pixelIndex);
+      const theta = angResult.theta;
+      const phi = angResult.phi;
+      
+      // Convert to Cartesian (center at radius ~1.05)
+      const r = 1.05 + Math.random() * 0.1;
+      const x = r * Math.sin(theta) * Math.cos(phi);
+      const z = r * Math.sin(theta) * Math.sin(phi);
+      const y = r * Math.cos(theta); // HEALPix z -> THREE y
+      
       this.particles.push({
-        position: new THREE.Vector3(0, 0, 0),
-        velocity: new THREE.Vector3(0, 0, 0),
-        age: 0,
-        lifetime: 0,
-        active: false
+        center: new THREE.Vector3(x, y, -z), // Center position that OU wanders around
+        position: new THREE.Vector3(x, y, -z), // Current position
+        velocity: new THREE.Vector3(0, 0, 0)
       });
       
-      // Set initial values
+      // Set initial position in buffer
       const idx = i * 3;
-      this.positions[idx] = 0;
-      this.positions[idx + 1] = 0;
-      this.positions[idx + 2] = 0;
+      this.positions[idx] = x;
+      this.positions[idx + 1] = y;
+      this.positions[idx + 2] = -z;
       
-      this.colors[idx] = 0;
-      this.colors[idx + 1] = 0;
-      this.colors[idx + 2] = 0;
+      // Set random color
+      this.colors[idx] = Math.random();
+      this.colors[idx + 1] = Math.random();
+      this.colors[idx + 2] = Math.random();
       
       this.sizes[i] = 0.208 + Math.random() * 0.104; // 1/3 of previous size
-      this.brightness[i] = 0; // Start invisible
+      this.brightness[i] = 1.0; // Start visible
     }
     
     this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
@@ -445,11 +465,11 @@ class DustParticleSystem {
     }
   }
   
-  spawnParticle() {
-    // Pick a random index
+  updateParticleCenter() {
+    // Pick a random particle
     const slotIndex = Math.floor(Math.random() * this.maxParticles);
     
-    // Sample pixel index weighted by population
+    // Sample new pixel index weighted by population
     const rand = Math.random() * this.totalPopulation;
     let pixelIndex = 0;
     for (let j = 0; j < this.cumulativeDist.length; j++) {
@@ -464,32 +484,20 @@ class DustParticleSystem {
     const theta = angResult.theta;
     const phi = angResult.phi;
     
-    // Convert to Cartesian (starting at radius ~1.05)
+    // Convert to Cartesian (center at radius ~1.05)
     const r = 1.05 + Math.random() * 0.1;
     const x = r * Math.sin(theta) * Math.cos(phi);
     const z = r * Math.sin(theta) * Math.sin(phi);
     const y = r * Math.cos(theta); // HEALPix z -> THREE y
     
-    // Update particle
-    this.particles[slotIndex].position.set(x, y, -z);
-    this.particles[slotIndex].velocity.set(0, 0, 0);
-    this.particles[slotIndex].age = 0;
-    this.particles[slotIndex].lifetime = 3 + Math.random() * 2; // Live for 3-5 seconds
-    this.particles[slotIndex].active = true;
+    // Update particle's center location
+    this.particles[slotIndex].center.set(x, y, -z);
     
-    // Set position in buffer
+    // Also set new random color
     const idx = slotIndex * 3;
-    this.positions[idx] = x;
-    this.positions[idx + 1] = y;
-    this.positions[idx + 2] = -z;
-    
-    // Set random color
     this.colors[idx] = Math.random();
     this.colors[idx + 1] = Math.random();
     this.colors[idx + 2] = Math.random();
-    
-    // Set brightness to 1 (visible)
-    this.brightness[slotIndex] = 1.0;
   }
   
   update(deltaTime) {
@@ -498,37 +506,31 @@ class DustParticleSystem {
     const sigma = 0.15; // Noise intensity (halved to make particles wander half as far)
     const minRadius = 1.01; // Keep outside Earth sphere
     
-    // Handle spawning
+    // Handle center updates
     this.spawnTimer += deltaTime;
     if (this.spawnTimer >= this.spawnInterval) {
-      this.spawnParticle();
+      this.updateParticleCenter();
       this.spawnTimer -= this.spawnInterval;
     }
     
-    // Update existing particles
+    // Update all particles
     for (let i = 0; i < this.maxParticles; i++) {
       const particle = this.particles[i];
-      if (!particle.active) continue;
       
-      particle.age += deltaTime;
-      
-      // Check if particle should die
-      if (particle.age > particle.lifetime * 1000) {
-        particle.active = false;
-        this.brightness[i] = 0; // Make invisible
-        continue;
-      }
-      
-      // OU process for velocity
+      // OU process: velocity drifts toward zero, but position drifts toward center
       const noise = new THREE.Vector3(
         (Math.random() - 0.5) * 2,
         (Math.random() - 0.5) * 2,
         (Math.random() - 0.5) * 2
       );
       
-      particle.velocity.x += (-theta * particle.velocity.x * dt + sigma * noise.x * Math.sqrt(dt));
-      particle.velocity.y += (-theta * particle.velocity.y * dt + sigma * noise.y * Math.sqrt(dt));
-      particle.velocity.z += (-theta * particle.velocity.z * dt + sigma * noise.z * Math.sqrt(dt));
+      // Calculate displacement from center
+      const displacement = new THREE.Vector3().subVectors(particle.position, particle.center);
+      
+      // OU dynamics: pull toward center and add noise
+      particle.velocity.x += (-theta * displacement.x * dt + sigma * noise.x * Math.sqrt(dt));
+      particle.velocity.y += (-theta * displacement.y * dt + sigma * noise.y * Math.sqrt(dt));
+      particle.velocity.z += (-theta * displacement.z * dt + sigma * noise.z * Math.sqrt(dt));
       
       // Update position
       particle.position.x += particle.velocity.x * dt;
@@ -558,7 +560,6 @@ class DustParticleSystem {
     
     this.geometry.attributes.position.needsUpdate = true;
     this.geometry.attributes.color.needsUpdate = true;
-    this.geometry.attributes.brightness.needsUpdate = true;
     this.material.uniforms.time.value += deltaTime;
   }
 }
