@@ -455,8 +455,8 @@ class DustParticleSystem {
       this.colors[idx + 1] = 0.6 + Math.random() * 0.2;
       this.colors[idx + 2] = 0.5 + Math.random() * 0.3;
       
-      // Set size (1/4 of original size)
-      this.sizes[i] = 2.5 + Math.random() * 1.25;
+      // Set size (1/16 of original size - reduced by 4x again)
+      this.sizes[i] = 0.625 + Math.random() * 0.3125;
     }
   }
   
