@@ -178,6 +178,10 @@ function createEnterButton() {
     if (reliefControl) {
       reliefControl.style.display = 'flex';
     }
+    const sizeControl = document.getElementById('sizeControl');
+    if (sizeControl) {
+      sizeControl.style.display = 'flex';
+    }
     const modeControl = document.getElementById('modeControl');
     if (modeControl) {
       modeControl.style.display = 'flex';
@@ -236,6 +240,57 @@ function createReliefSlider() {
   reliefControl.appendChild(slider);
   reliefControl.appendChild(valueDisplay);
   document.body.appendChild(reliefControl);
+}
+
+// Create mote size slider control
+function createMoteSizeSlider() {
+  const sizeControl = document.createElement('div');
+  sizeControl.id = 'sizeControl';
+  sizeControl.style.position = 'absolute';
+  sizeControl.style.top = '125px';
+  sizeControl.style.left = '15px';
+  sizeControl.style.display = 'none';  // Hidden initially
+  sizeControl.style.flexDirection = 'row';
+  sizeControl.style.alignItems = 'center';
+  sizeControl.style.gap = '10px';
+  sizeControl.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+  sizeControl.style.color = 'white';
+  sizeControl.style.padding = '10px 15px';
+  sizeControl.style.borderRadius = '6px';
+  sizeControl.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+  sizeControl.style.fontSize = '14px';
+  sizeControl.style.zIndex = '1000';
+  
+  const label = document.createElement('span');
+  label.textContent = 'Mote size:';
+  label.style.minWidth = '75px';
+  
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = '10';
+  slider.max = '100';
+  slider.value = '50';  // Default to middle (0.208 * 1.0)
+  slider.style.width = '150px';
+  slider.style.cursor = 'pointer';
+  
+  const valueDisplay = document.createElement('span');
+  valueDisplay.textContent = '1.00';
+  valueDisplay.style.minWidth = '40px';
+  valueDisplay.style.textAlign = 'right';
+  
+  slider.addEventListener('input', (e) => {
+    const multiplier = parseFloat(e.target.value) / 50;  // 50 = 1.0x
+    valueDisplay.textContent = multiplier.toFixed(2);
+    
+    if (window.dustParticleSystem) {
+      window.dustParticleSystem.setMoteSize(multiplier);
+    }
+  });
+  
+  sizeControl.appendChild(label);
+  sizeControl.appendChild(slider);
+  sizeControl.appendChild(valueDisplay);
+  document.body.appendChild(sizeControl);
 }
 
 // Create mode toggle control
@@ -590,6 +645,15 @@ class DustParticleSystem {
     this.geometry.attributes.color.needsUpdate = true;
     this.material.uniforms.time.value += deltaTime;
   }
+  
+  setMoteSize(multiplier) {
+    // Update all particle sizes
+    const baseSize = 0.208; // Base size
+    for (let i = 0; i < this.maxParticles; i++) {
+      this.sizes[i] = baseSize * multiplier;
+    }
+    this.geometry.attributes.size.needsUpdate = true;
+  }
 }
 
 let dustSystem = null;
@@ -691,6 +755,7 @@ worker.onmessage = (e) => {
     // Create dust particle system if we have population data
     if (window.populationData) {
       dustSystem = new DustParticleSystem(window.populationData, window.nside);
+      window.dustParticleSystem = dustSystem; // Make accessible for size slider
     }
     
     // Update info card
@@ -703,6 +768,9 @@ worker.onmessage = (e) => {
     
     // Create relief slider (hidden initially, shown after Enter)
     createReliefSlider();
+    
+    // Create mote size slider (hidden initially, shown after Enter)
+    createMoteSizeSlider();
     
     // Create mode toggle (hidden initially, shown after Enter)
     createModeToggle();
