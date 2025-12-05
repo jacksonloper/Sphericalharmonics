@@ -235,7 +235,9 @@ async function processPopulationData() {
     colors: new Float32Array(allColors),
     indices: new Uint32Array(allIndices),
     numPyramids: vertexOffset / 8, // Each pyramid has 8 vertices
-    totalPopulation: totalPop64
+    totalPopulation: totalPop64,
+    populationData: Array.from(pop_64), // Send population data for dust system
+    nside: nside_64
   });
 }
 
