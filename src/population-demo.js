@@ -324,7 +324,7 @@ function createModeToggle() {
 
 // Create dark Earth sphere
 function createEarthSphere() {
-  const geometry = new THREE.SphereGeometry(1.0, 64, 64);
+  const geometry = new THREE.SphereGeometry(0.825, 64, 64);
   const material = new THREE.MeshPhongMaterial({
     color: 0x1a1a2e,
     shininess: 5,
@@ -371,8 +371,11 @@ class DustParticleSystem {
         void main() {
           vColor = color;
           vBrightness = brightness;
-          // Apply relief scaling to position
-          vec3 scaledPosition = position * (relief + 1.0);
+          // Apply relief scaling: relief * clamp(trueradius - 1, 0, inf) + 1
+          float trueRadius = length(position);
+          float heightAboveOne = max(trueRadius - 1.0, 0.0);
+          float scaleFactor = relief * heightAboveOne + 1.0;
+          vec3 scaledPosition = position * (scaleFactor / trueRadius);
           vec4 mvPosition = modelViewMatrix * vec4(scaledPosition, 1.0);
           gl_PointSize = size * (300.0 / -mvPosition.z);
           gl_Position = projectionMatrix * mvPosition;
