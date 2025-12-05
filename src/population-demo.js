@@ -403,21 +403,21 @@ class DustParticleSystem {
   
   initializeParticles() {
     // Create cumulative distribution for sampling
-    const totalPop = this.populationData.reduce((sum, p) => sum + p, 0);
-    const cumulativeDist = [];
+    this.totalPopulation = this.populationData.reduce((sum, p) => sum + p, 0);
+    this.cumulativeDist = [];
     let cumSum = 0;
     for (let i = 0; i < this.populationData.length; i++) {
       cumSum += this.populationData[i];
-      cumulativeDist.push(cumSum);
+      this.cumulativeDist.push(cumSum);
     }
     
     // Initialize each particle
     for (let i = 0; i < this.numParticles; i++) {
       // Sample pixel index weighted by population
-      const rand = Math.random() * totalPop;
+      const rand = Math.random() * this.totalPopulation;
       let pixelIndex = 0;
-      for (let j = 0; j < cumulativeDist.length; j++) {
-        if (rand < cumulativeDist[j]) {
+      for (let j = 0; j < this.cumulativeDist.length; j++) {
+        if (rand < this.cumulativeDist[j]) {
           pixelIndex = j;
           break;
         }
@@ -431,8 +431,8 @@ class DustParticleSystem {
       // Convert to Cartesian (starting at radius ~1.05)
       const r = 1.05 + Math.random() * 0.1;
       const x = r * Math.sin(theta) * Math.cos(phi);
-      const z = r * Math.sin(theta) * Math.sin(phi); // Note: HEALPix z -> THREE y
-      const y = r * Math.cos(theta);
+      const z = r * Math.sin(theta) * Math.sin(phi);
+      const y = r * Math.cos(theta); // HEALPix z -> THREE y
       
       // Store particle state
       this.particles.push({
@@ -471,11 +471,15 @@ class DustParticleSystem {
       
       // Respawn if dead or past birth time
       if (particle.age > particle.lifetime * 1000) {
-        // Respawn at new random location
-        const rand = Math.random();
+        // Respawn at new random location weighted by population
+        const rand = Math.random() * this.totalPopulation;
         let pixelIndex = 0;
-        // Simple uniform respawn for now (can improve with proper weighted sampling)
-        pixelIndex = Math.floor(Math.random() * this.populationData.length);
+        for (let j = 0; j < this.cumulativeDist.length; j++) {
+          if (rand < this.cumulativeDist[j]) {
+            pixelIndex = j;
+            break;
+          }
+        }
         
         const angResult = pix2ang_nest(this.nside, pixelIndex);
         const theta_hp = angResult.theta;
@@ -511,11 +515,11 @@ class DustParticleSystem {
       // Reflecting dynamics to keep outside sphere
       const radius = particle.position.length();
       if (radius < minRadius) {
-        // Reflect position and velocity
+        // Reflect position - normal is unit vector pointing outward
         const normal = particle.position.clone().normalize();
-        particle.position.copy(normal.multiplyScalar(minRadius));
+        particle.position.copy(normal.clone().multiplyScalar(minRadius));
         
-        // Reflect velocity
+        // Reflect velocity - need fresh normal since multiplyScalar modifies it
         const velocityDotNormal = particle.velocity.dot(normal);
         if (velocityDotNormal < 0) {
           particle.velocity.sub(normal.multiplyScalar(2 * velocityDotNormal));
