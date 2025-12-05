@@ -429,7 +429,8 @@ class DustParticleSystem {
       
       this.particles.push({
         center: new THREE.Vector3(x, y, -z), // Center position that OU wanders around
-        position: new THREE.Vector3(x, y, -z) // Current position
+        position: new THREE.Vector3(x, y, -z), // Current position
+        velocity: new THREE.Vector3(0, 0, 0) // Velocity for underdamped Langevin
       });
       
       // Set initial position in buffer
@@ -506,8 +507,8 @@ class DustParticleSystem {
   
   update(deltaTime) {
     const dt = deltaTime / 4000; // Convert to seconds and slow down by factor of 4
-    const theta = 3.0; // Mean reversion strength (doubled to make particles wander half as far)
-    const sigma = 0.15; // Noise intensity (halved to make particles wander half as far)
+    const gamma = 2.0; // Damping coefficient
+    const sigma = 0.3; // Noise intensity
     const minRadius = 1.01; // Keep outside Earth sphere
     
     // Update relief uniform from pyramid material
@@ -522,7 +523,7 @@ class DustParticleSystem {
       this.spawnTimer -= this.spawnInterval;
     }
     
-    // Update all particles
+    // Update all particles with underdamped Langevin dynamics
     for (let i = 0; i < this.maxParticles; i++) {
       const particle = this.particles[i];
       
@@ -535,11 +536,29 @@ class DustParticleSystem {
       
       // Calculate displacement from center
       const displacement = new THREE.Vector3().subVectors(particle.position, particle.center);
+      const r = displacement.length();
       
-      // Raw OU process: position += -theta * (position - center) * dt + sigma * noise * sqrt(dt)
-      particle.position.x += -theta * displacement.x * dt + sigma * noise.x * Math.sqrt(dt);
-      particle.position.y += -theta * displacement.y * dt + sigma * noise.y * Math.sqrt(dt);
-      particle.position.z += -theta * displacement.z * dt + sigma * noise.z * Math.sqrt(dt);
+      // Bounded force: f(r) = 2r/(1+r)^2, derived from potential V(r) = r^2/(1+r)
+      // Force direction: -displacement/r (toward center)
+      let forceScale = 0;
+      if (r > 0.0001) {
+        forceScale = 2.0 * r / Math.pow(1.0 + r, 2);
+      }
+      const force = new THREE.Vector3(
+        -forceScale * displacement.x / (r + 0.0001),
+        -forceScale * displacement.y / (r + 0.0001),
+        -forceScale * displacement.z / (r + 0.0001)
+      );
+      
+      // Underdamped Langevin: dv = (force - gamma*v)*dt + sigma*noise*sqrt(dt)
+      particle.velocity.x += (force.x - gamma * particle.velocity.x) * dt + sigma * noise.x * Math.sqrt(dt);
+      particle.velocity.y += (force.y - gamma * particle.velocity.y) * dt + sigma * noise.y * Math.sqrt(dt);
+      particle.velocity.z += (force.z - gamma * particle.velocity.z) * dt + sigma * noise.z * Math.sqrt(dt);
+      
+      // Update position: dx = v*dt
+      particle.position.x += particle.velocity.x * dt;
+      particle.position.y += particle.velocity.y * dt;
+      particle.position.z += particle.velocity.z * dt;
       
       // Reflecting dynamics to keep outside sphere
       const radius = particle.position.length();
@@ -547,6 +566,12 @@ class DustParticleSystem {
         // Reflect position - normal is unit vector pointing outward
         const normal = particle.position.clone().normalize();
         particle.position.copy(normal.clone().multiplyScalar(minRadius));
+        
+        // Reflect velocity
+        const velocityDotNormal = particle.velocity.dot(normal);
+        if (velocityDotNormal < 0) {
+          particle.velocity.sub(normal.multiplyScalar(2 * velocityDotNormal));
+        }
       }
       
       // Update buffer
