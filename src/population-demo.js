@@ -428,8 +428,7 @@ class DustParticleSystem {
       
       this.particles.push({
         center: new THREE.Vector3(x, y, -z), // Center position that OU wanders around
-        position: new THREE.Vector3(x, y, -z), // Current position
-        velocity: new THREE.Vector3(0, 0, 0)
+        position: new THREE.Vector3(x, y, -z) // Current position
       });
       
       // Set initial position in buffer
@@ -525,7 +524,7 @@ class DustParticleSystem {
     for (let i = 0; i < this.maxParticles; i++) {
       const particle = this.particles[i];
       
-      // OU process: velocity drifts toward zero, but position drifts toward center
+      // Generate noise
       const noise = new THREE.Vector3(
         (Math.random() - 0.5) * 2,
         (Math.random() - 0.5) * 2,
@@ -535,15 +534,10 @@ class DustParticleSystem {
       // Calculate displacement from center
       const displacement = new THREE.Vector3().subVectors(particle.position, particle.center);
       
-      // OU dynamics: pull toward center and add noise
-      particle.velocity.x += (-theta * displacement.x * dt + sigma * noise.x * Math.sqrt(dt));
-      particle.velocity.y += (-theta * displacement.y * dt + sigma * noise.y * Math.sqrt(dt));
-      particle.velocity.z += (-theta * displacement.z * dt + sigma * noise.z * Math.sqrt(dt));
-      
-      // Update position
-      particle.position.x += particle.velocity.x * dt;
-      particle.position.y += particle.velocity.y * dt;
-      particle.position.z += particle.velocity.z * dt;
+      // Raw OU process: position += -theta * (position - center) * dt + sigma * noise * sqrt(dt)
+      particle.position.x += -theta * displacement.x * dt + sigma * noise.x * Math.sqrt(dt);
+      particle.position.y += -theta * displacement.y * dt + sigma * noise.y * Math.sqrt(dt);
+      particle.position.z += -theta * displacement.z * dt + sigma * noise.z * Math.sqrt(dt);
       
       // Reflecting dynamics to keep outside sphere
       const radius = particle.position.length();
@@ -551,12 +545,6 @@ class DustParticleSystem {
         // Reflect position - normal is unit vector pointing outward
         const normal = particle.position.clone().normalize();
         particle.position.copy(normal.clone().multiplyScalar(minRadius));
-        
-        // Reflect velocity - need fresh normal since multiplyScalar modifies it
-        const velocityDotNormal = particle.velocity.dot(normal);
-        if (velocityDotNormal < 0) {
-          particle.velocity.sub(normal.multiplyScalar(2 * velocityDotNormal));
-        }
       }
       
       // Update buffer
