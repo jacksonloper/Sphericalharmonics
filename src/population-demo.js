@@ -343,7 +343,6 @@ class DustParticleSystem {
     this.populationData = populationData;
     this.nside = nside;
     this.maxParticles = 100;
-    this.activeParticles = 0; // Start with 0 particles
     this.particles = [];
     this.spawnTimer = 0;
     this.spawnInterval = 100; // Spawn every 100ms (1/10th second)
@@ -353,6 +352,7 @@ class DustParticleSystem {
     this.positions = new Float32Array(this.maxParticles * 3);
     this.colors = new Float32Array(this.maxParticles * 3);
     this.sizes = new Float32Array(this.maxParticles);
+    this.brightness = new Float32Array(this.maxParticles); // New: brightness per particle
     
     // Particle material with glow effect
     this.material = new THREE.ShaderMaterial({
@@ -362,10 +362,13 @@ class DustParticleSystem {
       vertexShader: `
         attribute float size;
         attribute vec3 color;
+        attribute float brightness;
         varying vec3 vColor;
+        varying float vBrightness;
         
         void main() {
           vColor = color;
+          vBrightness = brightness;
           vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
           gl_PointSize = size * (300.0 / -mvPosition.z);
           gl_Position = projectionMatrix * mvPosition;
@@ -373,6 +376,7 @@ class DustParticleSystem {
       `,
       fragmentShader: `
         varying vec3 vColor;
+        varying float vBrightness;
         
         void main() {
           // Create circular particle with glow
@@ -381,7 +385,7 @@ class DustParticleSystem {
           
           // Soft glow with falloff
           float alpha = smoothstep(0.5, 0.0, dist);
-          alpha = pow(alpha, 2.0) * 0.6;
+          alpha = pow(alpha, 2.0) * 0.6 * vBrightness;
           
           gl_FragColor = vec4(vColor, alpha);
         }
@@ -395,17 +399,34 @@ class DustParticleSystem {
     // Initialize cumulative distribution for sampling
     this.initializeCumulativeDist();
     
-    // Initialize particles array with nulls
+    // Initialize all particles with zero brightness (invisible)
     for (let i = 0; i < this.maxParticles; i++) {
-      this.particles.push(null);
+      this.particles.push({
+        position: new THREE.Vector3(0, 0, 0),
+        velocity: new THREE.Vector3(0, 0, 0),
+        age: 0,
+        lifetime: 0,
+        active: false
+      });
+      
+      // Set initial values
+      const idx = i * 3;
+      this.positions[idx] = 0;
+      this.positions[idx + 1] = 0;
+      this.positions[idx + 2] = 0;
+      
+      this.colors[idx] = 0;
+      this.colors[idx + 1] = 0;
+      this.colors[idx + 2] = 0;
+      
+      this.sizes[i] = 0.625 + Math.random() * 0.3125;
+      this.brightness[i] = 0; // Start invisible
     }
     
     this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
     this.geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
     this.geometry.setAttribute('size', new THREE.BufferAttribute(this.sizes, 1));
-    
-    // Set draw range to 0 initially (no particles to draw)
-    this.geometry.setDrawRange(0, 0);
+    this.geometry.setAttribute('brightness', new THREE.BufferAttribute(this.brightness, 1));
     
     this.points = new THREE.Points(this.geometry, this.material);
     this.points.visible = false;
@@ -425,6 +446,9 @@ class DustParticleSystem {
   }
   
   spawnParticle() {
+    // Pick a random index
+    const slotIndex = Math.floor(Math.random() * this.maxParticles);
+    
     // Sample pixel index weighted by population
     const rand = Math.random() * this.totalPopulation;
     let pixelIndex = 0;
@@ -446,35 +470,14 @@ class DustParticleSystem {
     const z = r * Math.sin(theta) * Math.sin(phi);
     const y = r * Math.cos(theta); // HEALPix z -> THREE y
     
-    // Find slot for new particle
-    let slotIndex = -1;
-    if (this.activeParticles < this.maxParticles) {
-      // Find first empty slot
-      for (let i = 0; i < this.maxParticles; i++) {
-        if (this.particles[i] === null) {
-          slotIndex = i;
-          break;
-        }
-      }
-    } else {
-      // Delete a random particle
-      slotIndex = Math.floor(Math.random() * this.maxParticles);
-    }
+    // Update particle
+    this.particles[slotIndex].position.set(x, y, -z);
+    this.particles[slotIndex].velocity.set(0, 0, 0);
+    this.particles[slotIndex].age = 0;
+    this.particles[slotIndex].lifetime = 3 + Math.random() * 2; // Live for 3-5 seconds
+    this.particles[slotIndex].active = true;
     
-    // Create new particle
-    this.particles[slotIndex] = {
-      position: new THREE.Vector3(x, y, -z), // Transform to THREE.js coords
-      velocity: new THREE.Vector3(0, 0, 0),
-      age: 0,
-      lifetime: 3 + Math.random() * 2 // Live for 3-5 seconds
-    };
-    
-    // Update count
-    if (slotIndex >= this.activeParticles) {
-      this.activeParticles = slotIndex + 1;
-    }
-    
-    // Set initial position in buffer
+    // Set position in buffer
     const idx = slotIndex * 3;
     this.positions[idx] = x;
     this.positions[idx + 1] = y;
@@ -485,11 +488,8 @@ class DustParticleSystem {
     this.colors[idx + 1] = Math.random();
     this.colors[idx + 2] = Math.random();
     
-    // Set size (1/16 of original size - reduced by 4x again)
-    this.sizes[slotIndex] = 0.625 + Math.random() * 0.3125;
-    
-    // Update draw range
-    this.geometry.setDrawRange(0, this.activeParticles);
+    // Set brightness to 1 (visible)
+    this.brightness[slotIndex] = 1.0;
   }
   
   update(deltaTime) {
@@ -508,21 +508,14 @@ class DustParticleSystem {
     // Update existing particles
     for (let i = 0; i < this.maxParticles; i++) {
       const particle = this.particles[i];
-      if (particle === null) continue;
+      if (!particle.active) continue;
       
       particle.age += deltaTime;
       
       // Check if particle should die
       if (particle.age > particle.lifetime * 1000) {
-        this.particles[i] = null;
-        // Recalculate active particles count
-        this.activeParticles = 0;
-        for (let j = 0; j < this.maxParticles; j++) {
-          if (this.particles[j] !== null) {
-            this.activeParticles = j + 1;
-          }
-        }
-        this.geometry.setDrawRange(0, this.activeParticles);
+        particle.active = false;
+        this.brightness[i] = 0; // Make invisible
         continue;
       }
       
@@ -565,6 +558,7 @@ class DustParticleSystem {
     
     this.geometry.attributes.position.needsUpdate = true;
     this.geometry.attributes.color.needsUpdate = true;
+    this.geometry.attributes.brightness.needsUpdate = true;
     this.material.uniforms.time.value += deltaTime;
   }
 }
