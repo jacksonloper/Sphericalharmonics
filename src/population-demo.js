@@ -399,6 +399,9 @@ class DustParticleSystem {
     // Initialize cumulative distribution for sampling
     this.initializeCumulativeDist();
     
+    // Get relief value for height calculation
+    const relief = window.populationMaterial ? window.populationMaterial.uniforms.relief.value : 1.0;
+    
     // Initialize all particles immediately with full brightness
     for (let i = 0; i < this.maxParticles; i++) {
       // Sample pixel index weighted by population for center location
@@ -416,8 +419,8 @@ class DustParticleSystem {
       const theta = angResult.theta;
       const phi = angResult.phi;
       
-      // Convert to Cartesian (center at radius ~1.05)
-      const r = 1.05 + Math.random() * 0.1;
+      // Convert to Cartesian with random height between 1 and 1+relief
+      const r = 1.0 + Math.random() * relief;
       const x = r * Math.sin(theta) * Math.cos(phi);
       const z = r * Math.sin(theta) * Math.sin(phi);
       const y = r * Math.cos(theta); // HEALPix z -> THREE y
@@ -439,7 +442,7 @@ class DustParticleSystem {
       this.colors[idx + 1] = Math.random();
       this.colors[idx + 2] = Math.random();
       
-      this.sizes[i] = 0.208 + Math.random() * 0.104; // 1/3 of previous size
+      this.sizes[i] = 0.208; // Fixed size (no random variation)
       this.brightness[i] = 1.0; // Start visible
     }
     
@@ -484,8 +487,11 @@ class DustParticleSystem {
     const theta = angResult.theta;
     const phi = angResult.phi;
     
-    // Convert to Cartesian (center at radius ~1.05)
-    const r = 1.05 + Math.random() * 0.1;
+    // Get relief value for height calculation
+    const relief = window.populationMaterial ? window.populationMaterial.uniforms.relief.value : 1.0;
+    
+    // Convert to Cartesian with random height between 1 and 1+relief
+    const r = 1.0 + Math.random() * relief;
     const x = r * Math.sin(theta) * Math.cos(phi);
     const z = r * Math.sin(theta) * Math.sin(phi);
     const y = r * Math.cos(theta); // HEALPix z -> THREE y
