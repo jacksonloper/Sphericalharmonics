@@ -357,19 +357,23 @@ class DustParticleSystem {
     // Particle material with glow effect
     this.material = new THREE.ShaderMaterial({
       uniforms: {
-        time: { value: 0 }
+        time: { value: 0 },
+        relief: { value: 1.0 } // Add relief uniform for vertex shader
       },
       vertexShader: `
         attribute float size;
         attribute vec3 color;
         attribute float brightness;
+        uniform float relief;
         varying vec3 vColor;
         varying float vBrightness;
         
         void main() {
           vColor = color;
           vBrightness = brightness;
-          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          // Apply relief scaling to position
+          vec3 scaledPosition = position * (relief + 1.0);
+          vec4 mvPosition = modelViewMatrix * vec4(scaledPosition, 1.0);
           gl_PointSize = size * (300.0 / -mvPosition.z);
           gl_Position = projectionMatrix * mvPosition;
         }
@@ -399,10 +403,8 @@ class DustParticleSystem {
     // Initialize cumulative distribution for sampling
     this.initializeCumulativeDist();
     
-    // Get relief value for height calculation
-    const relief = window.populationMaterial ? window.populationMaterial.uniforms.relief.value : 1.0;
-    
     // Initialize all particles immediately with full brightness
+    // Positions are in range 1.0 to 1.25, relief scaling happens in shader
     for (let i = 0; i < this.maxParticles; i++) {
       // Sample pixel index weighted by population for center location
       const rand = Math.random() * this.totalPopulation;
@@ -419,9 +421,8 @@ class DustParticleSystem {
       const theta = angResult.theta;
       const phi = angResult.phi;
       
-      // Convert to Cartesian with random height between 1.0 and 1.0 + relief*0.25
-      // (relief=0 → r=1.0, relief=1.0 → r up to 1.25)
-      const r = 1.0 + Math.random() * (relief * 0.25);
+      // Convert to Cartesian with random height between 1.0 and 1.25
+      const r = 1.0 + Math.random() * 0.25;
       const x = r * Math.sin(theta) * Math.cos(phi);
       const z = r * Math.sin(theta) * Math.sin(phi);
       const y = r * Math.cos(theta); // HEALPix z -> THREE y
@@ -487,12 +488,8 @@ class DustParticleSystem {
     const theta = angResult.theta;
     const phi = angResult.phi;
     
-    // Get relief value for height calculation
-    const relief = window.populationMaterial ? window.populationMaterial.uniforms.relief.value : 1.0;
-    
-    // Convert to Cartesian with random height between 1.0 and 1.0 + relief*0.25
-    // (relief=0 → r=1.0, relief=1.0 → r up to 1.25)
-    const r = 1.0 + Math.random() * (relief * 0.25);
+    // Convert to Cartesian with random height between 1.0 and 1.25
+    const r = 1.0 + Math.random() * 0.25;
     const x = r * Math.sin(theta) * Math.cos(phi);
     const z = r * Math.sin(theta) * Math.sin(phi);
     const y = r * Math.cos(theta); // HEALPix z -> THREE y
@@ -508,10 +505,15 @@ class DustParticleSystem {
   }
   
   update(deltaTime) {
-    const dt = deltaTime / 1000; // Convert to seconds
+    const dt = deltaTime / 4000; // Convert to seconds and slow down by factor of 4
     const theta = 3.0; // Mean reversion strength (doubled to make particles wander half as far)
     const sigma = 0.15; // Noise intensity (halved to make particles wander half as far)
     const minRadius = 1.01; // Keep outside Earth sphere
+    
+    // Update relief uniform from pyramid material
+    if (window.populationMaterial) {
+      this.material.uniforms.relief.value = window.populationMaterial.uniforms.relief.value;
+    }
     
     // Handle center updates
     this.spawnTimer += deltaTime;
