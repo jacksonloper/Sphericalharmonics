@@ -324,7 +324,7 @@ function createModeToggle() {
 
 // Create dark Earth sphere
 function createEarthSphere() {
-  const geometry = new THREE.SphereGeometry(0.825, 64, 64);
+  const geometry = new THREE.SphereGeometry(1.0, 64, 64);
   const material = new THREE.MeshPhongMaterial({
     color: 0x1a1a2e,
     shininess: 5,
@@ -506,7 +506,9 @@ class DustParticleSystem {
   }
   
   update(deltaTime) {
-    const dt = deltaTime / 4000; // Convert to seconds and slow down by factor of 4
+    // Cap deltaTime to prevent huge jumps when page loses focus
+    const cappedDeltaTime = Math.min(deltaTime, 100); // Max 100ms per frame
+    const dt = cappedDeltaTime / 4000; // Convert to seconds and slow down by factor of 4
     const gamma = 2.0; // Damping coefficient
     const sigma = 0.3; // Noise intensity
     const minRadius = 1.01; // Keep outside Earth sphere
@@ -517,7 +519,7 @@ class DustParticleSystem {
     }
     
     // Handle center updates
-    this.spawnTimer += deltaTime;
+    this.spawnTimer += cappedDeltaTime;
     if (this.spawnTimer >= this.spawnInterval) {
       this.updateParticleCenter();
       this.spawnTimer -= this.spawnInterval;
