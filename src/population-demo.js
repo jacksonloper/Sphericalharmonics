@@ -324,7 +324,7 @@ function createModeToggle() {
 
 // Create dark Earth sphere
 function createEarthSphere() {
-  const geometry = new THREE.SphereGeometry(0.99, 64, 64);
+  const geometry = new THREE.SphereGeometry(0.825, 64, 64);
   const material = new THREE.MeshPhongMaterial({
     color: 0x1a1a2e,
     shininess: 5,
@@ -342,7 +342,7 @@ class DustParticleSystem {
   constructor(populationData, nside) {
     this.populationData = populationData;
     this.nside = nside;
-    this.maxParticles = 100;
+    this.maxParticles = 300;
     this.particles = [];
     this.spawnTimer = 0;
     this.spawnInterval = 100; // Spawn every 100ms (1/10th second)
@@ -419,7 +419,7 @@ class DustParticleSystem {
       this.colors[idx + 1] = 0;
       this.colors[idx + 2] = 0;
       
-      this.sizes[i] = 0.625 + Math.random() * 0.3125;
+      this.sizes[i] = 0.208 + Math.random() * 0.104; // 1/3 of previous size
       this.brightness[i] = 0; // Start invisible
     }
     
@@ -494,8 +494,8 @@ class DustParticleSystem {
   
   update(deltaTime) {
     const dt = deltaTime / 1000; // Convert to seconds
-    const theta = 1.5; // Mean reversion strength
-    const sigma = 0.3; // Noise intensity
+    const theta = 3.0; // Mean reversion strength (doubled to make particles wander half as far)
+    const sigma = 0.15; // Noise intensity (halved to make particles wander half as far)
     const minRadius = 1.01; // Keep outside Earth sphere
     
     // Handle spawning
