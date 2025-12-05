@@ -104,25 +104,25 @@
 </head>
 <body>
   <h1>Fun with functions on spheres</h1>
-  <p class="subtitle">Interactive visualizations of spherical data</p>
+  <p class="subtitle">Three examples of functions S² → ℝ, exploring different visualization strategies</p>
 
   <div class="demo-grid">
     <a href="shflow.html" class="demo-card">
       <h2>🌊 SH Flow</h2>
-      <p>A lava lamp-style visualization with stochastic coefficients evolving via Ornstein-Uhlenbeck processes. Watch the sphere morph smoothly through harmonic space.</p>
-      <span class="tag">Interactive • WebGL</span>
+      <p><strong>Smooth & signed function:</strong> Values evolve continuously via spherical harmonics. Visualized by radially displacing the sphere surface—positive values push outward, negative inward. Smoothness enables direct geometric deformation.</p>
+      <span class="tag">Continuous • Signed • Radial displacement</span>
     </a>
 
     <a href="etopo-range.html" class="demo-card">
       <h2>📊 ETOPO Range</h2>
-      <p>Earth surface elevation range (min to max) for each HEALPix cell. Each line segment shows the elevation variation within a region, visualizing terrain roughness and topographic diversity.</p>
-      <span class="tag">Interactive • WebGL</span>
+      <p><strong>Jagged & signed function:</strong> Earth elevation range per HEALPix cell with discontinuous boundaries. Visualized as line segments showing [min, max] at each region's center, preserving both sign and local variation without assuming smoothness.</p>
+      <span class="tag">Discrete • Signed • Range bars</span>
     </a>
 
     <a href="population.html" class="demo-card">
       <h2>🌍 World Population</h2>
-      <p>2024 global population distribution visualized as 3D truncated pyramids. Each HEALPix region's pyramid height represents population density, showing where people live across the planet.</p>
-      <span class="tag">Interactive • WebGL</span>
+      <p><strong>Jagged & nonnegative function:</strong> Population counts per region—strictly positive values with sharp boundaries. Visualized as 3D pyramids where height encodes density, leveraging the natural interpretation of counts as "volume" or "mass".</p>
+      <span class="tag">Discrete • Counts • Height field</span>
     </a>
   </div>
 
