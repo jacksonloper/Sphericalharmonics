@@ -114,7 +114,10 @@ export function ShflowControls(props) {
           <input
             type="range"
             id="slider"
-            {...getSliderConfig()}
+            min={getSliderConfig().min}
+            max={getSliderConfig().max}
+            step={getSliderConfig().step}
+            value={getSliderConfig().value}
             onInput={handleSliderChange}
           />
           <div class="back-btn" onClick={closeSlider}>← Back</div>
