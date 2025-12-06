@@ -171,7 +171,7 @@ moteCountOptions.forEach(count => {
   const option = document.createElement('option');
   option.value = count;
   option.textContent = `${count} motes`;
-  if (count === 1200) option.selected = true;
+  if (count === 150) option.selected = true;
   moteCountSelector.appendChild(option);
 });
 
@@ -435,7 +435,7 @@ class DustParticleSystem {
   constructor(populationData, nside) {
     this.populationData = populationData;
     this.nside = nside;
-    this.maxParticles = 1200;
+    this.maxParticles = 150;
     this.particles = [];
     this.spawnTimer = 0;
     this.spawnInterval = 100; // Spawn every 100ms (1/10th second)
