@@ -59,31 +59,9 @@ controls.autoRotate = false;
 // Info card for introduction and loading (already in HTML)
 const infoCard = document.getElementById('infoCard');
 
-// About button (initially hidden)
-const aboutButton = document.createElement('button');
-aboutButton.id = 'aboutButton';
-aboutButton.textContent = 'About';
-aboutButton.style.position = 'absolute';
-aboutButton.style.top = '15px';
-aboutButton.style.left = '15px';
-aboutButton.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-aboutButton.style.color = 'white';
-aboutButton.style.border = 'none';
-aboutButton.style.padding = '10px 20px';
-aboutButton.style.borderRadius = '6px';
-aboutButton.style.fontSize = '14px';
-aboutButton.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-aboutButton.style.cursor = 'pointer';
-aboutButton.style.display = 'none';
-aboutButton.style.zIndex = '1000';
-aboutButton.style.transition = 'background-color 0.2s';
+// Get existing About button from HTML
+const aboutButton = document.getElementById('aboutButton');
 
-aboutButton.addEventListener('mouseenter', () => {
-  aboutButton.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
-});
-aboutButton.addEventListener('mouseleave', () => {
-  aboutButton.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-});
 aboutButton.addEventListener('click', () => {
   // Show the info card again
   infoCard.style.display = 'block';
@@ -100,8 +78,6 @@ aboutButton.addEventListener('click', () => {
     infoCard.appendChild(enterBtn);
   }
 });
-
-document.body.appendChild(aboutButton);
 
 // Global state
 let healpixMesh = null; // MIN elevation mesh (solid)
@@ -267,82 +243,10 @@ function getEstimatedTimeMessage(nside) {
 }
 
 /**
- * Create loading overlay for resolution switching
+ * Setup loading overlay for resolution switching
  */
-function createLoadingOverlay() {
-  const overlay = document.createElement('div');
-  overlay.id = 'loadingOverlay';
-  overlay.style.position = 'fixed';
-  overlay.style.top = '20px';
-  overlay.style.right = '20px';
-  overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
-  overlay.style.display = 'none';
-  overlay.style.padding = '20px 25px';
-  overlay.style.borderRadius = '12px';
-  overlay.style.zIndex = '2000';
-  overlay.style.color = 'white';
-  overlay.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-  overlay.style.fontSize = '14px';
-  overlay.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.5)';
-  overlay.style.minWidth = '250px';
-  
-  const content = document.createElement('div');
-  content.style.display = 'flex';
-  content.style.alignItems = 'center';
-  content.style.gap = '15px';
-  
-  // Spinning loader
-  const spinner = document.createElement('div');
-  spinner.id = 'loadingSpinner';
-  spinner.style.width = '24px';
-  spinner.style.height = '24px';
-  spinner.style.border = '3px solid rgba(255, 255, 255, 0.3)';
-  spinner.style.borderTop = '3px solid #4ecdc4';
-  spinner.style.borderRadius = '50%';
-  spinner.style.animation = 'spin 1s linear infinite';
-  
-  // Add keyframe animation
-  if (!document.getElementById('spinnerStyles')) {
-    const style = document.createElement('style');
-    style.id = 'spinnerStyles';
-    style.textContent = `
-      @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-      }
-    `;
-    document.head.appendChild(style);
-  }
-  
-  const textContainer = document.createElement('div');
-  const loadingText = document.createElement('div');
-  loadingText.id = 'loadingText';
-  loadingText.textContent = 'Loading higher resolution...';
-  loadingText.style.fontWeight = '500';
-  loadingText.style.marginBottom = '5px';
-  
-  // Add current viewing resolution text
-  const currentViewText = document.createElement('div');
-  currentViewText.id = 'currentViewText';
-  currentViewText.style.fontSize = '12px';
-  currentViewText.style.color = '#ffaa00';
-  currentViewText.style.fontWeight = '600';
-  currentViewText.style.marginBottom = '5px';
-  
-  const estimateText = document.createElement('div');
-  estimateText.id = 'estimateText';
-  estimateText.style.fontSize = '12px';
-  estimateText.style.color = '#aaa';
-  
-  textContainer.appendChild(loadingText);
-  textContainer.appendChild(currentViewText);
-  textContainer.appendChild(estimateText);
-  
-  content.appendChild(spinner);
-  content.appendChild(textContainer);
-  overlay.appendChild(content);
-  
-  document.body.appendChild(overlay);
+function setupLoadingOverlay() {
+  const overlay = document.getElementById('loadingOverlay');
   return overlay;
 }
 
@@ -351,10 +255,10 @@ function createLoadingOverlay() {
  */
 function showLoading(targetNside) {
   if (!loadingOverlay) {
-    loadingOverlay = createLoadingOverlay();
+    loadingOverlay = setupLoadingOverlay();
   }
   
-  const loadingText = document.getElementById('loadingText');
+  const loadingText = loadingOverlay.querySelector('.loading-text');
   if (loadingText) {
     loadingText.textContent = `Loading ${getNpix(targetNside).toLocaleString()} vertex resolution...`;
   }
@@ -391,25 +295,7 @@ function createEnterButton() {
   const enterButton = document.createElement('button');
   enterButton.id = 'enterButton';
   enterButton.textContent = 'Enter Visualization';
-  enterButton.style.marginTop = '20px';
-  enterButton.style.padding = '14px 30px';
-  enterButton.style.fontSize = '16px';
-  enterButton.style.fontWeight = 'bold';
-  enterButton.style.backgroundColor = '#4ecdc4';
-  enterButton.style.color = 'black';
-  enterButton.style.border = 'none';
-  enterButton.style.borderRadius = '6px';
-  enterButton.style.cursor = 'pointer';
-  enterButton.style.width = '100%';
-  enterButton.style.transition = 'background-color 0.2s';
-  enterButton.style.touchAction = 'manipulation';
   
-  enterButton.addEventListener('mouseenter', () => {
-    enterButton.style.backgroundColor = '#45b8af';
-  });
-  enterButton.addEventListener('mouseleave', () => {
-    enterButton.style.backgroundColor = '#4ecdc4';
-  });
   enterButton.addEventListener('click', () => {
     // Hide the info card
     infoCard.style.display = 'none';
