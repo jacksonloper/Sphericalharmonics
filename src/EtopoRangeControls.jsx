@@ -58,7 +58,7 @@ export function EtopoRangeControls(props) {
           onChange={() => onMeshTypeChange('min')}
           style={{ cursor: 'pointer' }}
         />
-        <label for="minMeshRadio" style={{ cursor: 'pointer' }}>Min</label>
+        <label htmlFor="minMeshRadio" style={{ cursor: 'pointer' }}>Min</label>
 
         <input
           type="radio"
@@ -68,7 +68,7 @@ export function EtopoRangeControls(props) {
           onChange={() => onMeshTypeChange('mean')}
           style={{ cursor: 'pointer' }}
         />
-        <label for="meanMeshRadio" style={{ cursor: 'pointer' }}>Mean</label>
+        <label htmlFor="meanMeshRadio" style={{ cursor: 'pointer' }}>Mean</label>
 
         <input
           type="radio"
@@ -78,7 +78,7 @@ export function EtopoRangeControls(props) {
           onChange={() => onMeshTypeChange('max')}
           style={{ cursor: 'pointer' }}
         />
-        <label for="maxMeshRadio" style={{ cursor: 'pointer' }}>Max</label>
+        <label htmlFor="maxMeshRadio" style={{ cursor: 'pointer' }}>Max</label>
       </div>
 
       {/* Flip oceans checkbox */}
@@ -94,7 +94,7 @@ export function EtopoRangeControls(props) {
           onChange={(e) => onFlipSignChange(e.target.checked)}
           style={{ cursor: 'pointer' }}
         />
-        <label for="flipOceansCheckbox" style={{ cursor: 'pointer' }}>
+        <label htmlFor="flipOceansCheckbox" style={{ cursor: 'pointer' }}>
           Flip oceans
         </label>
       </div>
@@ -112,7 +112,7 @@ export function EtopoRangeControls(props) {
           onChange={(e) => onShowHealpixDotsChange(e.target.checked)}
           style={{ cursor: 'pointer' }}
         />
-        <label for="dotsCheckbox" style={{ cursor: 'pointer' }}>
+        <label htmlFor="dotsCheckbox" style={{ cursor: 'pointer' }}>
           Show HEALPix dots
         </label>
       </div>
@@ -130,7 +130,7 @@ export function EtopoRangeControls(props) {
           onChange={(e) => onUseWaterColormapChange(e.target.checked)}
           style={{ cursor: 'pointer' }}
         />
-        <label for="waterColormapCheckbox" style={{ cursor: 'pointer' }}>
+        <label htmlFor="waterColormapCheckbox" style={{ cursor: 'pointer' }}>
           Water colormap
         </label>
       </div>

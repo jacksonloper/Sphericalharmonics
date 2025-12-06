@@ -1,4 +1,4 @@
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Show, createMemo } from 'solid-js';
 
 export function ShflowControls(props) {
   const {
@@ -41,7 +41,7 @@ export function ShflowControls(props) {
     }
   };
 
-  const getSliderConfig = () => {
+  const sliderConfig = createMemo(() => {
     const param = currentParam();
     if (param === 'maxOrder') {
       return { min: 1, max: 4, step: 1, value: ouParams.maxOrder };
@@ -51,7 +51,7 @@ export function ShflowControls(props) {
       return { min: 0, max: 1, step: 0.05, value: ouParams.sigma };
     }
     return { min: 0, max: 1, step: 0.01, value: 0 };
-  };
+  });
 
   const formatValue = (param) => {
     if (param === 'maxOrder') {
@@ -114,10 +114,10 @@ export function ShflowControls(props) {
           <input
             type="range"
             id="slider"
-            min={getSliderConfig().min}
-            max={getSliderConfig().max}
-            step={getSliderConfig().step}
-            value={getSliderConfig().value}
+            min={sliderConfig().min}
+            max={sliderConfig().max}
+            step={sliderConfig().step}
+            value={sliderConfig().value}
             onInput={handleSliderChange}
           />
           <div class="back-btn" onClick={closeSlider}>← Back</div>
