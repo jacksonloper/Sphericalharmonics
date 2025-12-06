@@ -12,6 +12,9 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createEtopoRangeMaterial } from './etopoRangeMaterial.js';
 import EtopoRangeWorker from './etopoRangeWorker.js?worker';
+import { render } from 'solid-js/web';
+import { createSignal } from 'solid-js';
+import { EtopoRangeControls } from './EtopoRangeControls.jsx';
 
 // HEALPix parameters
 const INITIAL_NSIDE = 64; // Initial resolution
@@ -98,6 +101,7 @@ let loadingOverlay = null; // Loading overlay for resolution switching
 let healpixDotsPoints = null; // Points mesh for HEALPix location dots
 let showHealpixDots = false; // Toggle for showing HEALPix location dots
 let circleTexture = null; // Cached circular texture for point sprites
+let useWaterColormap = true; // Toggle for water colormap
 
 // Cache for pre-triangulated meshes
 const meshCache = {};
@@ -559,294 +563,91 @@ function cleanupOldGeometry() {
 }
 
 function addControlPanel() {
-  const panel = document.createElement('div');
-  panel.style.position = 'absolute';
-  panel.style.bottom = '15px';
-  panel.style.left = '50%';
-  panel.style.transform = 'translateX(-50%)';
-  panel.style.color = 'white';
-  panel.style.fontFamily = 'monospace';
-  panel.style.fontSize = '12px';
-  panel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-  panel.style.padding = '12px 15px';
-  panel.style.borderRadius = '8px';
-  panel.style.display = 'flex';
-  panel.style.alignItems = 'center';
-  panel.style.gap = '15px';
-  panel.style.flexWrap = 'wrap';
-  panel.style.justifyContent = 'center';
+  const controlsContainer = document.createElement('div');
+  document.body.appendChild(controlsContainer);
 
-  // Radio buttons for min/mean/max mesh selection
-  const meshTypeGroup = document.createElement('div');
-  meshTypeGroup.style.display = 'flex';
-  meshTypeGroup.style.alignItems = 'center';
-  meshTypeGroup.style.gap = '12px';
-
-  // Min mesh radio button (min elevation)
-  const minRadio = document.createElement('input');
-  minRadio.type = 'radio';
-  minRadio.name = 'meshType';
-  minRadio.id = 'minMeshRadio';
-  minRadio.checked = (currentMeshType === 'min');
-  minRadio.style.cursor = 'pointer';
-
-  const minLabel = document.createElement('label');
-  minLabel.htmlFor = 'minMeshRadio';
-  minLabel.textContent = 'Min';
-  minLabel.style.cursor = 'pointer';
-
-  // Mean mesh radio button (mean elevation)
-  const meanRadio = document.createElement('input');
-  meanRadio.type = 'radio';
-  meanRadio.name = 'meshType';
-  meanRadio.id = 'meanMeshRadio';
-  meanRadio.checked = (currentMeshType === 'mean');
-  meanRadio.style.cursor = 'pointer';
-
-  const meanLabel = document.createElement('label');
-  meanLabel.htmlFor = 'meanMeshRadio';
-  meanLabel.textContent = 'Mean';
-  meanLabel.style.cursor = 'pointer';
-
-  // Max mesh radio button (max elevation)
-  const maxRadio = document.createElement('input');
-  maxRadio.type = 'radio';
-  maxRadio.name = 'meshType';
-  maxRadio.id = 'maxMeshRadio';
-  maxRadio.checked = (currentMeshType === 'max');
-  maxRadio.style.cursor = 'pointer';
-
-  const maxLabel = document.createElement('label');
-  maxLabel.htmlFor = 'maxMeshRadio';
-  maxLabel.textContent = 'Max';
-  maxLabel.style.cursor = 'pointer';
-
-  // Radio button change handlers
-  const handleMeshTypeChange = () => {
-    if (minRadio.checked) {
-      currentMeshType = 'min';
-    } else if (meanRadio.checked) {
-      currentMeshType = 'mean';
-    } else {
-      currentMeshType = 'max';
-    }
-    
-    // Hide all meshes first
-    if (healpixMesh && healpixMesh.parent) scene.remove(healpixMesh);
-    if (meanHealpixMesh && meanHealpixMesh.parent) scene.remove(meanHealpixMesh);
-    if (maxHealpixMesh && maxHealpixMesh.parent) scene.remove(maxHealpixMesh);
-    
-    // Show the selected mesh
-    if (currentMeshType === 'min' && healpixMesh && !healpixMesh.parent) {
-      scene.add(healpixMesh);
-    } else if (currentMeshType === 'mean' && meanHealpixMesh && !meanHealpixMesh.parent) {
-      scene.add(meanHealpixMesh);
-    } else if (currentMeshType === 'max' && maxHealpixMesh && !maxHealpixMesh.parent) {
-      scene.add(maxHealpixMesh);
-    }
-  };
-
-  minRadio.addEventListener('change', handleMeshTypeChange);
-  meanRadio.addEventListener('change', handleMeshTypeChange);
-  maxRadio.addEventListener('change', handleMeshTypeChange);
-
-  meshTypeGroup.appendChild(minRadio);
-  meshTypeGroup.appendChild(minLabel);
-  meshTypeGroup.appendChild(meanRadio);
-  meshTypeGroup.appendChild(meanLabel);
-  meshTypeGroup.appendChild(maxRadio);
-  meshTypeGroup.appendChild(maxLabel);
-  panel.appendChild(meshTypeGroup);
-
-  // Flip oceans checkbox
-  const flipOceansGroup = document.createElement('div');
-  flipOceansGroup.style.display = 'flex';
-  flipOceansGroup.style.alignItems = 'center';
-  flipOceansGroup.style.gap = '8px';
-
-  const flipCheckbox = document.createElement('input');
-  flipCheckbox.type = 'checkbox';
-  flipCheckbox.id = 'flipOceansCheckbox';
-  flipCheckbox.checked = flipSign;
-  flipCheckbox.style.cursor = 'pointer';
-
-  const flipLabel = document.createElement('label');
-  flipLabel.htmlFor = 'flipOceansCheckbox';
-  flipLabel.textContent = 'Flip oceans';
-  flipLabel.style.cursor = 'pointer';
-
-  flipCheckbox.addEventListener('change', (e) => {
-    flipSign = e.target.checked;
-    // Update uniforms in materials to use absolute elevation
-    if (material) {
-      material.uniforms.flipOceans.value = flipSign ? 1.0 : 0.0;
-    }
-    if (meanMaterial) {
-      meanMaterial.uniforms.flipOceans.value = flipSign ? 1.0 : 0.0;
-    }
-    if (maxMaterial) {
-      maxMaterial.uniforms.flipOceans.value = flipSign ? 1.0 : 0.0;
-    }
-  });
-
-  flipOceansGroup.appendChild(flipCheckbox);
-  flipOceansGroup.appendChild(flipLabel);
-  panel.appendChild(flipOceansGroup);
-
-  // Show HEALPix dots checkbox
-  const dotsGroup = document.createElement('div');
-  dotsGroup.style.display = 'flex';
-  dotsGroup.style.alignItems = 'center';
-  dotsGroup.style.gap = '8px';
-
-  const dotsCheckbox = document.createElement('input');
-  dotsCheckbox.type = 'checkbox';
-  dotsCheckbox.id = 'dotsCheckbox';
-  dotsCheckbox.checked = showHealpixDots;
-  dotsCheckbox.style.cursor = 'pointer';
-
-  const dotsLabel = document.createElement('label');
-  dotsLabel.htmlFor = 'dotsCheckbox';
-  dotsLabel.textContent = 'Show HEALPix dots';
-  dotsLabel.style.cursor = 'pointer';
-
-  dotsCheckbox.addEventListener('change', (e) => {
-    showHealpixDots = e.target.checked;
-    if (healpixDotsPoints) {
-      if (showHealpixDots) {
-        scene.add(healpixDotsPoints);
-      } else {
-        scene.remove(healpixDotsPoints);
-      }
-    }
-  });
-
-  dotsGroup.appendChild(dotsCheckbox);
-  dotsGroup.appendChild(dotsLabel);
-  panel.appendChild(dotsGroup);
-
-  // Water colormap checkbox
-  const waterColormapGroup = document.createElement('div');
-  waterColormapGroup.style.display = 'flex';
-  waterColormapGroup.style.alignItems = 'center';
-  waterColormapGroup.style.gap = '8px';
-
-  const waterColormapCheckbox = document.createElement('input');
-  waterColormapCheckbox.type = 'checkbox';
-  waterColormapCheckbox.id = 'waterColormapCheckbox';
-  waterColormapCheckbox.checked = true; // Default to water colormap
-  waterColormapCheckbox.style.cursor = 'pointer';
-
-  const waterColormapLabel = document.createElement('label');
-  waterColormapLabel.htmlFor = 'waterColormapCheckbox';
-  waterColormapLabel.textContent = 'Water colormap';
-  waterColormapLabel.style.cursor = 'pointer';
-
-  waterColormapCheckbox.addEventListener('change', (e) => {
-    const useWaterColormap = e.target.checked;
-    // Update uniforms in materials to toggle colormap
-    if (material) {
-      material.uniforms.useWaterColormap.value = useWaterColormap;
-    }
-    if (meanMaterial) {
-      meanMaterial.uniforms.useWaterColormap.value = useWaterColormap;
-    }
-    if (maxMaterial) {
-      maxMaterial.uniforms.useWaterColormap.value = useWaterColormap;
-    }
-  });
-
-  waterColormapGroup.appendChild(waterColormapCheckbox);
-  waterColormapGroup.appendChild(waterColormapLabel);
-  panel.appendChild(waterColormapGroup);
-
-  // Nside selector dropdown
-  const nsideGroup = document.createElement('div');
-  nsideGroup.style.display = 'flex';
-  nsideGroup.style.alignItems = 'center';
-  nsideGroup.style.gap = '8px';
-
-  const nsideLabel = document.createElement('span');
-  nsideLabel.textContent = 'Resolution:';
-  nsideGroup.appendChild(nsideLabel);
-
-  const nsideSelect = document.createElement('select');
-  nsideSelect.id = 'nsideSelect';
-  nsideSelect.style.cursor = 'pointer';
-  nsideSelect.style.padding = '4px 8px';
-  nsideSelect.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-  nsideSelect.style.color = 'white';
-  nsideSelect.style.border = '1px solid rgba(255, 255, 255, 0.3)';
-  nsideSelect.style.borderRadius = '4px';
-  nsideSelect.style.fontFamily = 'monospace';
-  nsideSelect.style.fontSize = '12px';
-
-  // Add options: named by number of vertices (computed dynamically)
-  AVAILABLE_NSIDES.forEach(nside => {
-    const optionEl = document.createElement('option');
-    optionEl.value = nside;
-    optionEl.textContent = `${getNpix(nside).toLocaleString()} vertices`;
-    if (nside === currentNside) {
-      optionEl.selected = true;
-    }
-    nsideSelect.appendChild(optionEl);
-  });
-
-  nsideSelect.addEventListener('change', async (e) => {
-    const newNside = parseInt(e.target.value);
-    await switchToNside(newNside);
-  });
-
-  nsideGroup.appendChild(nsideSelect);
-  panel.appendChild(nsideGroup);
-
-  // Relief slider
-  const reliefGroup = document.createElement('div');
-  reliefGroup.style.display = 'flex';
-  reliefGroup.style.alignItems = 'center';
-  reliefGroup.style.gap = '8px';
-
-  const reliefLabel = document.createElement('span');
-  reliefLabel.textContent = 'Relief:';
-  reliefGroup.appendChild(reliefLabel);
-
-  const slider = document.createElement('input');
-  slider.type = 'range';
-  slider.min = '0.01';
-  slider.max = '0.5';
-  slider.step = '0.01';
-  slider.value = '0.1';
-  slider.style.width = '120px';
-  slider.style.cursor = 'pointer';
-
-  const valueDisplay = document.createElement('span');
-  valueDisplay.textContent = slider.value;
-  valueDisplay.style.minWidth = '35px';
-  valueDisplay.style.color = '#4ecdc4';
-
-  slider.addEventListener('input', (e) => {
-    const newAlpha = parseFloat(e.target.value);
-    valueDisplay.textContent = newAlpha.toFixed(2);
-    alphaValue = newAlpha;
-    
-    if (material) {
-      material.uniforms.alpha.value = newAlpha;
-    }
-    if (meanMaterial) {
-      meanMaterial.uniforms.alpha.value = newAlpha;
-    }
-    if (maxMaterial) {
-      maxMaterial.uniforms.alpha.value = newAlpha;
-    }
-    // Vertex shader handles displacement based on alpha uniform
-    // No need to regenerate geometry
-  });
-
-  reliefGroup.appendChild(slider);
-  reliefGroup.appendChild(valueDisplay);
-  panel.appendChild(reliefGroup);
-
-  document.body.appendChild(panel);
+  render(() => {
+    return EtopoRangeControls({
+      currentMeshType,
+      onMeshTypeChange: (meshType) => {
+        currentMeshType = meshType;
+        
+        // Hide all meshes first
+        if (healpixMesh && healpixMesh.parent) scene.remove(healpixMesh);
+        if (meanHealpixMesh && meanHealpixMesh.parent) scene.remove(meanHealpixMesh);
+        if (maxHealpixMesh && maxHealpixMesh.parent) scene.remove(maxHealpixMesh);
+        
+        // Show the selected mesh
+        if (meshType === 'min' && healpixMesh && !healpixMesh.parent) {
+          scene.add(healpixMesh);
+        } else if (meshType === 'mean' && meanHealpixMesh && !meanHealpixMesh.parent) {
+          scene.add(meanHealpixMesh);
+        } else if (meshType === 'max' && maxHealpixMesh && !maxHealpixMesh.parent) {
+          scene.add(maxHealpixMesh);
+        }
+      },
+      flipSign,
+      onFlipSignChange: (checked) => {
+        flipSign = checked;
+        const flipValue = checked ? 1.0 : 0.0;
+        
+        if (material) {
+          material.uniforms.flipOceans.value = flipValue;
+        }
+        if (meanMaterial) {
+          meanMaterial.uniforms.flipOceans.value = flipValue;
+        }
+        if (maxMaterial) {
+          maxMaterial.uniforms.flipOceans.value = flipValue;
+        }
+      },
+      showHealpixDots,
+      onShowHealpixDotsChange: (checked) => {
+        showHealpixDots = checked;
+        if (healpixDotsPoints) {
+          if (checked) {
+            scene.add(healpixDotsPoints);
+          } else {
+            scene.remove(healpixDotsPoints);
+          }
+        }
+      },
+      useWaterColormap,
+      onUseWaterColormapChange: (checked) => {
+        useWaterColormap = checked;
+        
+        if (material) {
+          material.uniforms.useWaterColormap.value = checked;
+        }
+        if (meanMaterial) {
+          meanMaterial.uniforms.useWaterColormap.value = checked;
+        }
+        if (maxMaterial) {
+          maxMaterial.uniforms.useWaterColormap.value = checked;
+        }
+      },
+      currentNside,
+      onNsideChange: async (newNside) => {
+        await switchToNside(newNside);
+      },
+      availableNsides: AVAILABLE_NSIDES,
+      alphaValue,
+      onAlphaChange: (newAlpha) => {
+        alphaValue = newAlpha;
+        
+        if (material) {
+          material.uniforms.alpha.value = newAlpha;
+        }
+        if (meanMaterial) {
+          meanMaterial.uniforms.alpha.value = newAlpha;
+        }
+        if (maxMaterial) {
+          maxMaterial.uniforms.alpha.value = newAlpha;
+        }
+      },
+      getNpix
+    });
+  }, controlsContainer);
 }
 
 // Animation loop
