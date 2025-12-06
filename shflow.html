@@ -157,41 +157,8 @@
   <!-- About button (initially hidden) -->
   <button id="aboutButton" class="btn" style="display: none;">About</button>
   
-  <!-- Hamburger button -->
-  <div id="hamburger">
-    <span></span>
-    <span></span>
-    <span></span>
-  </div>
-
-  <!-- Parameter list menu -->
-  <div id="frequency-list">
-    <div class="freq-item" data-freq="maxOrder">
-      <span>Max Harmonic Order (l)</span>
-      <span class="freq-value" id="maxOrder-display">3</span>
-    </div>
-    <div class="freq-item" data-freq="theta">
-      <span>Mean Reversion (θ)</span>
-      <span class="freq-value" id="theta-display">0.50</span>
-    </div>
-    <div class="freq-item" data-freq="sigma">
-      <span>Volatility (σ)</span>
-      <span class="freq-value" id="sigma-display">0.30</span>
-    </div>
-    <div class="freq-item" id="wireframe-toggle">
-      <span>Wireframe</span>
-      <span class="freq-value" id="wireframe-status">OFF</span>
-    </div>
-  </div>
-
-  <!-- Slider panel -->
-  <div id="slider-panel">
-    <div class="title" id="slider-title"></div>
-    <div class="value-display" id="slider-value-display">3</div>
-    <input type="range" id="slider" min="1" max="4" step="1" value="3">
-    <div class="back-btn">← Back</div>
-  </div>
-
+  <!-- Control panel will be rendered by SolidJS -->
+  
   <script type="module" src="/src/shflow-demo.js"></script>
 </body>
 </html>
