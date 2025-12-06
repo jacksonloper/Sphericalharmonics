@@ -115,31 +115,11 @@ const infoCard = document.getElementById('infoCard');
 const loadingStatus = document.getElementById('loadingStatus');
 const populationInfo = document.getElementById('populationInfo');
 
-// About button (initially hidden)
-const aboutButton = document.createElement('button');
-aboutButton.id = 'aboutButton';
-aboutButton.textContent = 'About';
-aboutButton.style.position = 'absolute';
-aboutButton.style.top = '15px';
-aboutButton.style.left = '15px';
-aboutButton.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-aboutButton.style.color = 'white';
-aboutButton.style.border = 'none';
-aboutButton.style.padding = '10px 20px';
-aboutButton.style.borderRadius = '6px';
-aboutButton.style.fontSize = '14px';
-aboutButton.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-aboutButton.style.cursor = 'pointer';
-aboutButton.style.display = 'none';
-aboutButton.style.zIndex = '1000';
-aboutButton.style.transition = 'background-color 0.2s';
+// Get existing UI elements from HTML
+const aboutButton = document.getElementById('aboutButton');
+const moteCountSelector = document.getElementById('moteCountSelector');
 
-aboutButton.addEventListener('mouseenter', () => {
-  aboutButton.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
-});
-aboutButton.addEventListener('mouseleave', () => {
-  aboutButton.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-});
+// Setup About button event listener
 aboutButton.addEventListener('click', () => {
   infoCard.style.display = 'block';
   aboutButton.style.display = 'none';
@@ -147,34 +127,7 @@ aboutButton.addEventListener('click', () => {
   loadingStatus.style.display = 'none';
 });
 
-document.body.appendChild(aboutButton);
-
-// Create mote count selector
-const moteCountSelector = document.createElement('select');
-moteCountSelector.id = 'moteCountSelector';
-moteCountSelector.style.position = 'absolute';
-moteCountSelector.style.top = '15px';
-moteCountSelector.style.left = '95px'; // To the right of About button
-moteCountSelector.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-moteCountSelector.style.color = 'white';
-moteCountSelector.style.border = '1px solid rgba(78, 205, 196, 0.3)';
-moteCountSelector.style.padding = '10px 15px';
-moteCountSelector.style.borderRadius = '6px';
-moteCountSelector.style.fontSize = '14px';
-moteCountSelector.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-moteCountSelector.style.cursor = 'pointer';
-moteCountSelector.style.display = 'none';
-moteCountSelector.style.zIndex = '1000';
-
-const moteCountOptions = [150, 300, 600, 1200];
-moteCountOptions.forEach(count => {
-  const option = document.createElement('option');
-  option.value = count;
-  option.textContent = `${count} motes`;
-  if (count === 150) option.selected = true;
-  moteCountSelector.appendChild(option);
-});
-
+// Setup mote count selector event listener
 moteCountSelector.addEventListener('change', (e) => {
   const newCount = parseInt(e.target.value);
   if (window.dustParticleSystem) {
@@ -182,30 +135,12 @@ moteCountSelector.addEventListener('change', (e) => {
   }
 });
 
-document.body.appendChild(moteCountSelector);
-
 // Create Enter button
 function createEnterButton() {
   const btn = document.createElement('button');
   btn.id = 'enterButton';
   btn.textContent = 'Enter';
-  btn.style.marginTop = '20px';
-  btn.style.padding = '12px 30px';
-  btn.style.backgroundColor = '#4ecdc4';
-  btn.style.color = '#000';
-  btn.style.border = 'none';
-  btn.style.borderRadius = '6px';
-  btn.style.fontSize = '16px';
-  btn.style.fontWeight = 'bold';
-  btn.style.cursor = 'pointer';
-  btn.style.transition = 'background-color 0.2s';
   
-  btn.addEventListener('mouseenter', () => {
-    btn.style.backgroundColor = '#3db9b0';
-  });
-  btn.addEventListener('mouseleave', () => {
-    btn.style.backgroundColor = '#4ecdc4';
-  });
   btn.addEventListener('click', () => {
     infoCard.style.display = 'none';
     aboutButton.style.display = 'block';
@@ -228,41 +163,10 @@ function createEnterButton() {
   return btn;
 }
 
-// Create relief slider control
-function createReliefSlider() {
-  const reliefControl = document.createElement('div');
-  reliefControl.id = 'reliefControl';
-  reliefControl.style.position = 'absolute';
-  reliefControl.style.top = '70px';
-  reliefControl.style.left = '15px';
-  reliefControl.style.display = 'none';  // Hidden initially
-  reliefControl.style.flexDirection = 'row';
-  reliefControl.style.alignItems = 'center';
-  reliefControl.style.gap = '10px';
-  reliefControl.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-  reliefControl.style.color = 'white';
-  reliefControl.style.padding = '10px 15px';
-  reliefControl.style.borderRadius = '6px';
-  reliefControl.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-  reliefControl.style.fontSize = '14px';
-  reliefControl.style.zIndex = '1000';
-  
-  const label = document.createElement('span');
-  label.textContent = 'Relief:';
-  label.style.minWidth = '50px';
-  
-  const slider = document.createElement('input');
-  slider.type = 'range';
-  slider.min = '0';
-  slider.max = '100';
-  slider.value = '100';
-  slider.style.width = '150px';
-  slider.style.cursor = 'pointer';
-  
-  const valueDisplay = document.createElement('span');
-  valueDisplay.textContent = '1.00';
-  valueDisplay.style.minWidth = '40px';
-  valueDisplay.style.textAlign = 'right';
+// Setup relief slider control
+function setupReliefSlider() {
+  const slider = document.getElementById('reliefSlider');
+  const valueDisplay = document.getElementById('reliefValue');
   
   slider.addEventListener('input', (e) => {
     const value = parseFloat(e.target.value) / 100;
@@ -272,48 +176,12 @@ function createReliefSlider() {
       window.populationMaterial.uniforms.relief.value = value;
     }
   });
-  
-  reliefControl.appendChild(label);
-  reliefControl.appendChild(slider);
-  reliefControl.appendChild(valueDisplay);
-  document.body.appendChild(reliefControl);
 }
 
-// Create mote size slider control
-function createMoteSizeSlider() {
-  const sizeControl = document.createElement('div');
-  sizeControl.id = 'sizeControl';
-  sizeControl.style.position = 'absolute';
-  sizeControl.style.top = '125px';
-  sizeControl.style.left = '15px';
-  sizeControl.style.display = 'none';  // Hidden initially
-  sizeControl.style.flexDirection = 'row';
-  sizeControl.style.alignItems = 'center';
-  sizeControl.style.gap = '10px';
-  sizeControl.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-  sizeControl.style.color = 'white';
-  sizeControl.style.padding = '10px 15px';
-  sizeControl.style.borderRadius = '6px';
-  sizeControl.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-  sizeControl.style.fontSize = '14px';
-  sizeControl.style.zIndex = '1000';
-  
-  const label = document.createElement('span');
-  label.textContent = 'Mote size:';
-  label.style.minWidth = '75px';
-  
-  const slider = document.createElement('input');
-  slider.type = 'range';
-  slider.min = '10';
-  slider.max = '100';
-  slider.value = '50';  // Default to middle (0.208 * 1.0)
-  slider.style.width = '150px';
-  slider.style.cursor = 'pointer';
-  
-  const valueDisplay = document.createElement('span');
-  valueDisplay.textContent = '1.00';
-  valueDisplay.style.minWidth = '40px';
-  valueDisplay.style.textAlign = 'right';
+// Setup mote size slider control
+function setupMoteSizeSlider() {
+  const slider = document.getElementById('sizeSlider');
+  const valueDisplay = document.getElementById('sizeValue');
   
   slider.addEventListener('input', (e) => {
     const multiplier = parseFloat(e.target.value) / 50;  // 50 = 1.0x
@@ -323,72 +191,13 @@ function createMoteSizeSlider() {
       window.dustParticleSystem.setMoteSize(multiplier);
     }
   });
-  
-  sizeControl.appendChild(label);
-  sizeControl.appendChild(slider);
-  sizeControl.appendChild(valueDisplay);
-  document.body.appendChild(sizeControl);
 }
 
-// Create mode toggle control
-function createModeToggle() {
-  const modeControl = document.createElement('div');
-  modeControl.id = 'modeControl';
-  modeControl.style.position = 'absolute';
-  modeControl.style.bottom = '15px';
-  modeControl.style.left = '15px';
-  modeControl.style.display = 'none';  // Hidden initially
-  modeControl.style.flexDirection = 'row';
-  modeControl.style.alignItems = 'center';
-  modeControl.style.gap = '15px';
-  modeControl.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-  modeControl.style.color = 'white';
-  modeControl.style.padding = '10px 15px';
-  modeControl.style.borderRadius = '6px';
-  modeControl.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-  modeControl.style.fontSize = '14px';
-  modeControl.style.zIndex = '1000';
-  
-  const label = document.createElement('span');
-  label.textContent = 'Mode:';
-  
-  const pyramidsOption = document.createElement('label');
-  pyramidsOption.style.display = 'flex';
-  pyramidsOption.style.alignItems = 'center';
-  pyramidsOption.style.gap = '5px';
-  pyramidsOption.style.cursor = 'pointer';
-  
-  const pyramidsRadio = document.createElement('input');
-  pyramidsRadio.type = 'radio';
-  pyramidsRadio.name = 'vizMode';
-  pyramidsRadio.value = 'pyramids';
-  pyramidsRadio.checked = false;
-  pyramidsRadio.style.cursor = 'pointer';
-
-  const pyramidsLabel = document.createElement('span');
-  pyramidsLabel.textContent = 'Boxes';
-
-  pyramidsOption.appendChild(pyramidsRadio);
-  pyramidsOption.appendChild(pyramidsLabel);
-
-  const dustOption = document.createElement('label');
-  dustOption.style.display = 'flex';
-  dustOption.style.alignItems = 'center';
-  dustOption.style.gap = '5px';
-  dustOption.style.cursor = 'pointer';
-
-  const dustRadio = document.createElement('input');
-  dustRadio.type = 'radio';
-  dustRadio.name = 'vizMode';
-  dustRadio.value = 'dust';
-  dustRadio.checked = true;
-  dustRadio.style.cursor = 'pointer';
-
-  const dustLabel = document.createElement('span');
-  dustLabel.textContent = 'Dust';
-  
-  dustOption.appendChild(dustRadio);
-  dustOption.appendChild(dustLabel);
+// Setup mode toggle control
+function setupModeToggle() {
+  const modeControl = document.getElementById('modeControl');
+  const pyramidsRadio = modeControl.querySelector('input[value="pyramids"]');
+  const dustRadio = modeControl.querySelector('input[value="dust"]');
   
   // Handle mode change
   const handleModeChange = (e) => {
@@ -408,11 +217,6 @@ function createModeToggle() {
   
   pyramidsRadio.addEventListener('change', handleModeChange);
   dustRadio.addEventListener('change', handleModeChange);
-  
-  modeControl.appendChild(label);
-  modeControl.appendChild(pyramidsOption);
-  modeControl.appendChild(dustOption);
-  document.body.appendChild(modeControl);
 }
 
 // Create dark Earth sphere
@@ -887,14 +691,10 @@ worker.onmessage = (e) => {
     const enterBtn = createEnterButton();
     infoCard.appendChild(enterBtn);
     
-    // Create relief slider (hidden initially, shown after Enter)
-    createReliefSlider();
-    
-    // Create mote size slider (hidden initially, shown after Enter)
-    createMoteSizeSlider();
-    
-    // Create mode toggle (hidden initially, shown after Enter)
-    createModeToggle();
+    // Setup control sliders and toggles (hidden initially, shown after Enter)
+    setupReliefSlider();
+    setupMoteSizeSlider();
+    setupModeToggle();
     
     console.log('Population visualization loaded successfully!');
   } else if (type === 'error') {

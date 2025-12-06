@@ -1,0 +1,377 @@
+/* 
+ * Unified CSS for Spherical Harmonics Visualization Project
+ * Common styles used across all demo pages
+ */
+
+/* CSS Variables for consistent theming */
+:root {
+  --primary-color: #4ecdc4;
+  --primary-hover: #3db9b0;
+  --bg-dark: rgba(0, 0, 0, 0.7);
+  --bg-darker: rgba(0, 0, 0, 0.9);
+  --bg-darkest: rgba(0, 0, 0, 0.95);
+  --border-color: rgba(78, 205, 196, 0.3);
+  --text-light: #aaa;
+  --text-lighter: #888;
+  --font-system: system-ui, -apple-system, sans-serif;
+  --font-mono: 'Monaco', 'Courier New', monospace;
+  --border-radius: 6px;
+  --border-radius-large: 12px;
+}
+
+/* Global reset and base styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-system);
+  color: white;
+}
+
+canvas {
+  display: block;
+}
+
+/* Button styles */
+.btn {
+  background-color: var(--bg-dark);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: var(--border-radius);
+  font-size: 14px;
+  font-family: var(--font-system);
+  cursor: pointer;
+  transition: background-color 0.2s;
+  z-index: 1000;
+}
+
+.btn:hover {
+  background-color: var(--bg-darker);
+}
+
+.btn-primary {
+  background-color: var(--primary-color);
+  color: black;
+  font-weight: bold;
+  padding: 12px 30px;
+  font-size: 16px;
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-hover);
+}
+
+.btn-fixed-top-left {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  display: none;
+}
+
+/* About button specific positioning - uses .btn styles as base */
+#aboutButton {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  display: none;
+}
+
+/* Select/Dropdown styles */
+select {
+  background-color: var(--bg-dark);
+  color: white;
+  border: 1px solid var(--border-color);
+  padding: 10px 15px;
+  border-radius: var(--border-radius);
+  font-size: 14px;
+  font-family: var(--font-system);
+  cursor: pointer;
+  z-index: 1000;
+}
+
+#moteCountSelector {
+  position: absolute;
+  top: 15px;
+  left: 95px;
+  display: none;
+}
+
+/* Control panel styles (sliders, toggles) */
+.control-panel {
+  position: absolute;
+  display: none;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  background-color: var(--bg-dark);
+  color: white;
+  padding: 10px 15px;
+  border-radius: var(--border-radius);
+  font-family: var(--font-system);
+  font-size: 14px;
+  z-index: 1000;
+}
+
+.control-panel.show {
+  display: flex;
+}
+
+.control-panel label,
+.control-panel span {
+  white-space: nowrap;
+}
+
+.control-panel input[type="range"] {
+  width: 150px;
+  cursor: pointer;
+}
+
+.control-panel .value-display {
+  min-width: 40px;
+  text-align: right;
+}
+
+/* Specific control panel positions */
+#reliefControl {
+  top: 70px;
+  left: 15px;
+}
+
+#sizeControl {
+  top: 125px;
+  left: 15px;
+}
+
+#modeControl {
+  bottom: 15px;
+  left: 15px;
+}
+
+/* Info card/modal styles */
+#infoCard {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: var(--bg-darkest);
+  color: white;
+  font-size: 16px;
+  padding: 30px;
+  border-radius: var(--border-radius-large);
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  line-height: 1.6;
+  z-index: 1000;
+}
+
+#infoCard h2 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 24px;
+  font-weight: bold;
+  color: var(--primary-color);
+}
+
+#infoCard p {
+  margin: 0 0 12px 0;
+}
+
+#infoCard a {
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+#infoCard a:hover {
+  text-decoration: underline;
+}
+
+#loadingStatus {
+  margin-top: 20px;
+  text-align: center;
+  color: var(--primary-color);
+  font-weight: bold;
+}
+
+#populationInfo {
+  margin-top: 10px;
+  text-align: center;
+  color: var(--text-lighter);
+  font-size: 14px;
+}
+
+.small-text {
+  font-size: 14px;
+  color: var(--text-light);
+}
+
+.citation {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-left: 3px solid var(--primary-color);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.citation strong {
+  color: var(--primary-color);
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  #infoCard {
+    font-size: 14px;
+    padding: 20px;
+    max-height: 85vh;
+  }
+
+  #infoCard h2 {
+    font-size: 20px;
+    margin-bottom: 12px;
+  }
+
+  #infoCard p {
+    margin: 0 0 10px 0;
+  }
+
+  .citation {
+    margin-top: 15px;
+    padding: 12px;
+    font-size: 12px;
+  }
+}
+
+/* Loading overlay styles */
+#loadingOverlay {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background-color: rgba(0, 0, 0, 0.85);
+  display: none;
+  padding: 20px 25px;
+  border-radius: var(--border-radius-large);
+  z-index: 2000;
+  color: white;
+  font-family: var(--font-system);
+  font-size: 14px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  min-width: 250px;
+}
+
+#loadingOverlay .content {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+#loadingOverlay .spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top: 3px solid var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+#loadingOverlay .text-container {
+  flex: 1;
+}
+
+#loadingOverlay .loading-text {
+  font-weight: 500;
+  margin-bottom: 5px;
+}
+
+#loadingOverlay .current-view-text {
+  font-size: 12px;
+  color: #ffaa00;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+#loadingOverlay .estimate-text {
+  font-size: 12px;
+  color: var(--text-light);
+}
+
+/* Enter button inside info card */
+#enterButton {
+  margin-top: 20px;
+  padding: 14px 30px;
+  font-size: 16px;
+  font-weight: bold;
+  background-color: var(--primary-color);
+  color: black;
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  width: 100%;
+  transition: background-color 0.2s;
+  touch-action: manipulation;
+}
+
+#enterButton:hover {
+  background-color: var(--primary-hover);
+}
+
+/* Radio button group for mode control */
+.radio-group {
+  display: flex;
+  gap: 15px;
+}
+
+.radio-group label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.radio-group input[type="radio"] {
+  cursor: pointer;
+}
+
+/* Control panel for mesh visualization */
+#controlPanel {
+  position: absolute;
+  bottom: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: white;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background-color: var(--bg-dark);
+  padding: 12px 15px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+#controlPanel .control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#controlPanel .control-group label {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}

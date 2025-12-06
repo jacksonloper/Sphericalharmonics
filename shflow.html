@@ -4,16 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Spherical Harmonics Lava Lamp</title>
+  <link rel="stylesheet" href="/styles.css">
   <style>
+    /* Additional styles specific to shflow demo */
     body {
-      margin: 0;
-      overflow: hidden;
       background: #000;
-      font-family: 'Monaco', 'Courier New', monospace;
-      color: #fff;
-    }
-    canvas {
-      display: block;
+      overflow: hidden;
     }
 
     /* Hamburger button */
@@ -143,6 +139,24 @@
   </style>
 </head>
 <body>
+  <!-- Info card for introduction (initially visible) -->
+  <div id="infoCard">
+    <h2>🌊 Spherical Harmonics Flow</h2>
+    <div id="cardContent">
+      <p>This visualization shows a smooth, infinitely differentiable function on the sphere, defined by spherical harmonic coefficients up to order l=4.</p>
+      
+      <p>The function evolves over time using an Ornstein-Uhlenbeck (OU) process on the sphere, creating a mesmerizing "lava lamp" effect. Positive values are shown in orange/red, negative values in teal.</p>
+      
+      <p class="small-text"><strong>Controls:</strong> Use the menu button (☰) at the bottom to adjust the maximum harmonic order (l), mean reversion rate (θ), and volatility (σ). You can also toggle wireframe mode to see the underlying mesh structure.</p>
+      
+      <p class="small-text"><strong>Technical Details:</strong> The surface displacement is computed using real spherical harmonics Y_l^m, with coefficients evolving as a constrained OU process on an n-sphere to maintain smooth, bounded deformations.</p>
+    </div>
+    <button id="enterButton">Enter</button>
+  </div>
+  
+  <!-- About button (initially hidden) -->
+  <button id="aboutButton" class="btn" style="display: none;">About</button>
+  
   <!-- Hamburger button -->
   <div id="hamburger">
     <span></span>
@@ -173,8 +187,8 @@
   <!-- Slider panel -->
   <div id="slider-panel">
     <div class="title" id="slider-title"></div>
-    <div class="value-display" id="slider-value-display">0.0</div>
-    <input type="range" id="slider" min="0" max="2" step="0.1" value="0">
+    <div class="value-display" id="slider-value-display">3</div>
+    <input type="range" id="slider" min="1" max="4" step="1" value="3">
     <div class="back-btn">← Back</div>
   </div>
 

@@ -4,118 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>World Population Visualization - HEALPix 3D</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      overflow: hidden;
-      font-family: system-ui, -apple-system, sans-serif;
-    }
-
-    canvas {
-      display: block;
-    }
-
-    #infoCard {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background-color: rgba(0, 0, 0, 0.95);
-      color: white;
-      font-size: 16px;
-      padding: 30px;
-      border-radius: 12px;
-      width: 90%;
-      max-width: 600px;
-      max-height: 90vh;
-      overflow-y: auto;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-      line-height: 1.6;
-      z-index: 1000;
-    }
-
-    /* Mobile optimizations */
-    @media (max-width: 768px) {
-      #infoCard {
-        font-size: 14px;
-        padding: 20px;
-        max-height: 85vh;
-      }
-
-      #infoCard h2 {
-        font-size: 20px;
-        margin-bottom: 12px;
-      }
-
-      #infoCard p {
-        margin: 0 0 10px 0;
-      }
-
-      .citation {
-        margin-top: 15px;
-        padding: 12px;
-        font-size: 12px;
-      }
-    }
-
-    #infoCard h2 {
-      margin-top: 0;
-      margin-bottom: 15px;
-      font-size: 24px;
-      font-weight: bold;
-      color: #4ecdc4;
-    }
-
-    #infoCard p {
-      margin: 0 0 12px 0;
-    }
-
-    #infoCard a {
-      color: #4ecdc4;
-      text-decoration: none;
-    }
-
-    #infoCard a:hover {
-      text-decoration: underline;
-    }
-
-    #loadingStatus {
-      margin-top: 20px;
-      text-align: center;
-      color: #4ecdc4;
-      font-weight: bold;
-    }
-
-    #populationInfo {
-      margin-top: 10px;
-      text-align: center;
-      color: #888;
-      font-size: 14px;
-    }
-
-    .small-text {
-      font-size: 14px;
-      color: #aaa;
-    }
-
-    .citation {
-      margin-top: 20px;
-      padding: 15px;
-      background-color: rgba(255, 255, 255, 0.05);
-      border-left: 3px solid #4ecdc4;
-      border-radius: 4px;
-      font-size: 13px;
-    }
-
-    .citation strong {
-      color: #4ecdc4;
-    }
-  </style>
+  <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <div id="infoCard">
@@ -139,6 +28,47 @@
       <div id="populationInfo"></div>
     </div>
   </div>
+  
+  <!-- About button (initially hidden) -->
+  <button id="aboutButton" class="btn" style="display: none;">About</button>
+  
+  <!-- Mote count selector (initially hidden) -->
+  <select id="moteCountSelector" style="display: none;">
+    <option value="150" selected>150 motes</option>
+    <option value="300">300 motes</option>
+    <option value="600">600 motes</option>
+    <option value="1200">1200 motes</option>
+  </select>
+  
+  <!-- Relief control slider (initially hidden) -->
+  <div id="reliefControl" class="control-panel">
+    <span>Relief:</span>
+    <input type="range" id="reliefSlider" min="0" max="100" value="100">
+    <span id="reliefValue">1.00</span>
+  </div>
+  
+  <!-- Mote size control slider (initially hidden) -->
+  <div id="sizeControl" class="control-panel">
+    <span>Mote size:</span>
+    <input type="range" id="sizeSlider" min="10" max="100" value="50">
+    <span id="sizeValue">1.00</span>
+  </div>
+  
+  <!-- Mode toggle control (initially hidden) -->
+  <div id="modeControl" class="control-panel">
+    <span>Mode:</span>
+    <div class="radio-group">
+      <label>
+        <input type="radio" name="vizMode" value="pyramids">
+        <span>Boxes</span>
+      </label>
+      <label>
+        <input type="radio" name="vizMode" value="dust" checked>
+        <span>Dust</span>
+      </label>
+    </div>
+  </div>
+  
   <script type="module" src="/src/population-demo.js"></script>
 </body>
 </html>

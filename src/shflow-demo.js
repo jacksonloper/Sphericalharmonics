@@ -159,6 +159,9 @@ function updateOU(dt) {
 let currentParam = null;
 
 // UI elements
+const infoCard = document.getElementById('infoCard');
+const aboutButton = document.getElementById('aboutButton');
+const enterButton = document.getElementById('enterButton');
 const hamburger = document.getElementById('hamburger');
 const frequencyList = document.getElementById('frequency-list');
 const sliderPanel = document.getElementById('slider-panel');
@@ -166,6 +169,18 @@ const slider = document.getElementById('slider');
 const sliderTitle = document.getElementById('slider-title');
 const sliderValueDisplay = document.getElementById('slider-value-display');
 const backBtn = document.querySelector('.back-btn');
+
+// Setup About button
+aboutButton.addEventListener('click', () => {
+  infoCard.style.display = 'block';
+  aboutButton.style.display = 'none';
+});
+
+// Setup Enter button
+enterButton.addEventListener('click', () => {
+  infoCard.style.display = 'none';
+  aboutButton.style.display = 'block';
+});
 
 // Toggle hamburger menu
 hamburger.addEventListener('click', () => {
