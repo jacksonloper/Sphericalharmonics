@@ -104,25 +104,25 @@
 </head>
 <body>
   <h1>Fun with functions on spheres</h1>
-  <p class="subtitle">Interactive visualizations of spherical data</p>
+  <p class="subtitle">Three examples of functions S² → ℝ, exploring different visualization strategies</p>
 
   <div class="demo-grid">
     <a href="shflow.html" class="demo-card">
       <h2>🌊 SH Flow</h2>
-      <p>A lava lamp-style visualization with stochastic coefficients evolving via Ornstein-Uhlenbeck processes. Watch the sphere morph smoothly through harmonic space.</p>
-      <span class="tag">Interactive • WebGL</span>
+      <p><strong>Smooth & signed (toy example):</strong> Infinitely differentiable function defined by spherical harmonic coefficients. Values range freely over positive and negative reals.</p>
+      <span class="tag">Smooth • Signed</span>
     </a>
 
     <a href="etopo-range.html" class="demo-card">
       <h2>📊 ETOPO Range</h2>
-      <p>Earth surface elevation range (min to max) for each HEALPix cell. Each line segment shows the elevation variation within a region, visualizing terrain roughness and topographic diversity.</p>
-      <span class="tag">Interactive • WebGL</span>
+      <p><strong>Jagged & signed (Earth elevation):</strong> Piecewise constant on HEALPix cells. Each cell maps to elevation range [min, max] in meters, spanning negative (below sea level) to positive values.</p>
+      <span class="tag">Jagged • Signed</span>
     </a>
 
     <a href="population.html" class="demo-card">
       <h2>🌍 World Population</h2>
-      <p>2024 global population distribution visualized as 3D truncated pyramids. Each HEALPix region's pyramid height represents population density, showing where people live across the planet.</p>
-      <span class="tag">Interactive • WebGL</span>
+      <p><strong>Jagged & nonnegative:</strong> Piecewise constant on HEALPix cells. Each cell maps to population count—strictly positive integers representing people per region.</p>
+      <span class="tag">Jagged • Counts</span>
     </a>
   </div>
 

@@ -35,7 +35,7 @@ controls.maxDistance = 10;
 controls.autoRotate = false;
 
 // Visualization mode state
-let visualizationMode = 'pyramids'; // 'pyramids' or 'dust'
+let visualizationMode = 'dust'; // 'pyramids' or 'dust' - default to dust
 
 // Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -107,6 +107,7 @@ function createLatLonGrid() {
 }
 
 const referenceGrid = createLatLonGrid();
+referenceGrid.visible = false; // Hidden by default for dust mode
 scene.add(referenceGrid);
 
 // Info card
@@ -148,6 +149,41 @@ aboutButton.addEventListener('click', () => {
 
 document.body.appendChild(aboutButton);
 
+// Create mote count selector
+const moteCountSelector = document.createElement('select');
+moteCountSelector.id = 'moteCountSelector';
+moteCountSelector.style.position = 'absolute';
+moteCountSelector.style.top = '15px';
+moteCountSelector.style.left = '95px'; // To the right of About button
+moteCountSelector.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+moteCountSelector.style.color = 'white';
+moteCountSelector.style.border = '1px solid rgba(78, 205, 196, 0.3)';
+moteCountSelector.style.padding = '10px 15px';
+moteCountSelector.style.borderRadius = '6px';
+moteCountSelector.style.fontSize = '14px';
+moteCountSelector.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+moteCountSelector.style.cursor = 'pointer';
+moteCountSelector.style.display = 'none';
+moteCountSelector.style.zIndex = '1000';
+
+const moteCountOptions = [150, 300, 600, 1200];
+moteCountOptions.forEach(count => {
+  const option = document.createElement('option');
+  option.value = count;
+  option.textContent = `${count} motes`;
+  if (count === 150) option.selected = true;
+  moteCountSelector.appendChild(option);
+});
+
+moteCountSelector.addEventListener('change', (e) => {
+  const newCount = parseInt(e.target.value);
+  if (window.dustParticleSystem) {
+    window.dustParticleSystem.setMoteCount(newCount);
+  }
+});
+
+document.body.appendChild(moteCountSelector);
+
 // Create Enter button
 function createEnterButton() {
   const btn = document.createElement('button');
@@ -173,6 +209,7 @@ function createEnterButton() {
   btn.addEventListener('click', () => {
     infoCard.style.display = 'none';
     aboutButton.style.display = 'block';
+    moteCountSelector.style.display = 'block';
     // Show relief slider and mode control when entering
     const reliefControl = document.getElementById('reliefControl');
     if (reliefControl) {
@@ -325,27 +362,28 @@ function createModeToggle() {
   pyramidsRadio.type = 'radio';
   pyramidsRadio.name = 'vizMode';
   pyramidsRadio.value = 'pyramids';
-  pyramidsRadio.checked = true;
+  pyramidsRadio.checked = false;
   pyramidsRadio.style.cursor = 'pointer';
-  
+
   const pyramidsLabel = document.createElement('span');
-  pyramidsLabel.textContent = 'Pyramids';
-  
+  pyramidsLabel.textContent = 'Boxes';
+
   pyramidsOption.appendChild(pyramidsRadio);
   pyramidsOption.appendChild(pyramidsLabel);
-  
+
   const dustOption = document.createElement('label');
   dustOption.style.display = 'flex';
   dustOption.style.alignItems = 'center';
   dustOption.style.gap = '5px';
   dustOption.style.cursor = 'pointer';
-  
+
   const dustRadio = document.createElement('input');
   dustRadio.type = 'radio';
   dustRadio.name = 'vizMode';
   dustRadio.value = 'dust';
+  dustRadio.checked = true;
   dustRadio.style.cursor = 'pointer';
-  
+
   const dustLabel = document.createElement('span');
   dustLabel.textContent = 'Dust';
   
@@ -386,7 +424,7 @@ function createEarthSphere() {
     side: THREE.FrontSide
   });
   const sphere = new THREE.Mesh(geometry, material);
-  sphere.visible = false;
+  sphere.visible = true; // Visible by default for dust mode
   scene.add(sphere);
   window.earthSphere = sphere;
   return sphere;
@@ -397,7 +435,7 @@ class DustParticleSystem {
   constructor(populationData, nside) {
     this.populationData = populationData;
     this.nside = nside;
-    this.maxParticles = 600;
+    this.maxParticles = 150;
     this.particles = [];
     this.spawnTimer = 0;
     this.spawnInterval = 100; // Spawn every 100ms (1/10th second)
@@ -512,7 +550,7 @@ class DustParticleSystem {
     this.geometry.setAttribute('brightness', new THREE.BufferAttribute(this.brightness, 1));
     
     this.points = new THREE.Points(this.geometry, this.material);
-    this.points.visible = false;
+    this.points.visible = true; // Visible by default for dust mode
     scene.add(this.points);
     window.dustParticles = this.points;
   }
@@ -654,6 +692,88 @@ class DustParticleSystem {
     }
     this.geometry.attributes.size.needsUpdate = true;
   }
+
+  setMoteCount(newCount) {
+    const oldCount = this.maxParticles;
+    this.maxParticles = newCount;
+
+    // Resize arrays
+    const newPositions = new Float32Array(this.maxParticles * 3);
+    const newColors = new Float32Array(this.maxParticles * 3);
+    const newSizes = new Float32Array(this.maxParticles);
+    const newBrightness = new Float32Array(this.maxParticles);
+
+    // Copy existing particles
+    const copyCount = Math.min(oldCount, newCount);
+    newPositions.set(this.positions.subarray(0, copyCount * 3));
+    newColors.set(this.colors.subarray(0, copyCount * 3));
+    newSizes.set(this.sizes.subarray(0, copyCount));
+    newBrightness.set(this.brightness.subarray(0, copyCount));
+
+    // If increasing count, initialize new particles
+    if (newCount > oldCount) {
+      const newParticles = [];
+      for (let i = oldCount; i < newCount; i++) {
+        // Sample pixel index weighted by population
+        const rand = Math.random() * this.totalPopulation;
+        let pixelIndex = 0;
+        for (let j = 0; j < this.cumulativeDist.length; j++) {
+          if (rand < this.cumulativeDist[j]) {
+            pixelIndex = j;
+            break;
+          }
+        }
+
+        // Get pixel position using HEALPix
+        const angResult = pix2ang_nest(this.nside, pixelIndex);
+        const theta = angResult.theta;
+        const phi = angResult.phi;
+
+        // Convert to Cartesian with random height
+        const r = 1.0 + Math.random() * 0.25;
+        const x = r * Math.sin(theta) * Math.cos(phi);
+        const z = r * Math.sin(theta) * Math.sin(phi);
+        const y = r * Math.cos(theta);
+
+        newParticles.push({
+          center: new THREE.Vector3(x, y, -z),
+          position: new THREE.Vector3(x, y, -z),
+          velocity: new THREE.Vector3(0, 0, 0)
+        });
+
+        // Set initial position in buffer
+        const idx = i * 3;
+        newPositions[idx] = x;
+        newPositions[idx + 1] = y;
+        newPositions[idx + 2] = -z;
+
+        // Set random color
+        newColors[idx] = Math.random();
+        newColors[idx + 1] = Math.random();
+        newColors[idx + 2] = Math.random();
+
+        newSizes[i] = 0.208;
+        newBrightness[i] = 1.0;
+      }
+
+      this.particles = this.particles.concat(newParticles);
+    } else {
+      // If decreasing count, trim particles
+      this.particles = this.particles.slice(0, newCount);
+    }
+
+    // Update arrays
+    this.positions = newPositions;
+    this.colors = newColors;
+    this.sizes = newSizes;
+    this.brightness = newBrightness;
+
+    // Update geometry attributes
+    this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
+    this.geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
+    this.geometry.setAttribute('size', new THREE.BufferAttribute(this.sizes, 1));
+    this.geometry.setAttribute('brightness', new THREE.BufferAttribute(this.brightness, 1));
+  }
 }
 
 let dustSystem = null;
@@ -736,8 +856,9 @@ worker.onmessage = (e) => {
     
     // Create mesh and add to scene
     const mesh = new THREE.Mesh(geometry, material);
+    mesh.visible = false; // Start hidden, dust mode is default
     scene.add(mesh);
-    
+
     // Store mesh reference for mode toggle
     window.populationMesh = mesh;
     

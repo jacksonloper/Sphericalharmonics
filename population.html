@@ -121,9 +121,11 @@
   <div id="infoCard">
     <h2>🌍 World Population Visualization</h2>
     <div id="cardContent">
-      <p>This visualization shows the 2024 world population distribution using 3D truncated pyramids. Each region is a <a href="https://healpix.sourceforge.io/" target="_blank">HEALPix</a> cell (nside=64), with pyramid height proportional to the population in that region.</p>
-      
-      <p><strong>Technical Details:</strong> The data is loaded at nside=128 resolution and downsampled to nside=64 by summing populations. Each pyramid extends from radius 1 (Earth's surface) to an outer radius determined by the formula: <code>r = (1 + 3p/(CA))^(1/3)</code>, where p is the population, A is the HEALPix pixel area, and C is a scaling constant chosen so the maximum radius is approximately 2.</p>
+      <p>This visualization shows the 2024 world population distribution. Each glowing particle (mote) is randomly sampled from the global population, with denser regions spawning more motes.</p>
+
+      <p><strong>Challenge:</strong> Start with 150 motes and gradually increase the count until you think you can identify the continents. How few motes do you need to recognize the major landmasses? Once you've made your guess, switch to "Boxes" mode to check—each box represents a <a href="https://healpix.sourceforge.io/" target="_blank">HEALPix</a> region (nside=64) with height proportional to population density.</p>
+
+      <p class="small-text"><strong>Technical Details:</strong> Motes are sampled from HEALPix cells (nside=64) weighted by population. Each box extends from radius 1 (Earth's surface) to an outer radius: <code>r = (1 + 3p/(CA))^(1/3)</code>, where p is the population, A is the HEALPix pixel area, and C is a scaling constant.</p>
 
       <div class="citation">
         <strong>Data Source:</strong><br>
@@ -132,8 +134,6 @@
         <strong>Citation:</strong><br>
         Bondarenko M., Priyatikanto R., Tejedor-Garavito N., Zhang W., McKeen T., Cunningham A., Woods T., Hilton J., Cihan D., Nosatiuk B., Brinkhoff T., Tatem A., Sorichetta A. 2025. The spatial distribution of population in 2015-2030 at a resolution of 30 arc (approximately 1km at the equator) R2025A version v1. WorldPop - School of Geography and Environmental Science, University of Southampton. DOI:10.5258/SOTON/WP00845
       </div>
-
-      <p class="small-text">For more information on data sources and processing, see <a href="https://github.com/jacksonloper/Sphericalharmonics/tree/main/public/earthtoposources" target="_blank">earthtoposources/README.md</a>.</p>
 
       <div id="loadingStatus">Initializing...</div>
       <div id="populationInfo"></div>
