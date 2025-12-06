@@ -74,26 +74,12 @@ canvas {
   display: none;
 }
 
-/* About button specific positioning */
+/* About button specific positioning - uses .btn styles as base */
 #aboutButton {
   position: absolute;
   top: 15px;
   left: 15px;
-  background-color: var(--bg-dark);
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: var(--border-radius);
-  font-size: 14px;
-  font-family: var(--font-system);
-  cursor: pointer;
   display: none;
-  z-index: 1000;
-  transition: background-color 0.2s;
-}
-
-#aboutButton:hover {
-  background-color: var(--bg-darker);
 }
 
 /* Select/Dropdown styles */
