@@ -375,3 +375,274 @@ select {
   align-items: center;
   gap: 5px;
 }
+
+/* ========================================
+   Index Page Specific Styles
+   ======================================== */
+
+body.index-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
+  font-family: 'Monaco', 'Courier New', monospace;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.index-page h1 {
+  font-size: 2rem;
+  margin-bottom: 10px;
+  color: #4ecdc4;
+  text-align: center;
+}
+
+.index-page .subtitle {
+  color: #888;
+  margin-bottom: 40px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.index-page .demo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  max-width: 800px;
+  width: 100%;
+}
+
+.index-page .demo-card {
+  background: rgba(30, 30, 50, 0.8);
+  border: 1px solid rgba(78, 205, 196, 0.3);
+  border-radius: 12px;
+  padding: 25px;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.index-page .demo-card:hover {
+  border-color: #4ecdc4;
+  transform: translateY(-4px);
+  box-shadow: 0 10px 30px rgba(78, 205, 196, 0.2);
+}
+
+.index-page .demo-card h2 {
+  font-size: 1.2rem;
+  color: #4ecdc4;
+}
+
+.index-page .demo-card p {
+  color: #aaa;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.index-page .demo-card .tag {
+  display: inline-block;
+  background: rgba(78, 205, 196, 0.2);
+  color: #4ecdc4;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  margin-top: auto;
+}
+
+.index-page footer {
+  margin-top: 40px;
+  color: #555;
+  font-size: 12px;
+  text-align: center;
+}
+
+.index-page footer a {
+  color: #4ecdc4;
+  text-decoration: none;
+}
+
+.index-page footer a:hover {
+  text-decoration: underline;
+}
+
+/* ========================================
+   Shflow Demo Specific Styles
+   ======================================== */
+
+body.shflow-page {
+  background: #000;
+  overflow: hidden;
+}
+
+/* Hamburger button */
+.shflow-page #hamburger {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 50px;
+  height: 50px;
+  background: rgba(0, 0, 0, 0.9);
+  border: 2px solid #4ecdc4;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  z-index: 500;
+  transition: transform 0.3s;
+}
+
+.shflow-page #hamburger:active {
+  transform: translateX(-50%) scale(0.95);
+}
+
+.shflow-page #hamburger span {
+  width: 24px;
+  height: 2px;
+  background: #4ecdc4;
+  transition: all 0.3s;
+}
+
+.shflow-page #hamburger.open span:nth-child(1) {
+  transform: rotate(45deg) translate(5px, 5px);
+}
+
+.shflow-page #hamburger.open span:nth-child(2) {
+  opacity: 0;
+}
+
+.shflow-page #hamburger.open span:nth-child(3) {
+  transform: rotate(-45deg) translate(5px, -5px);
+}
+
+/* Frequency list */
+.shflow-page #frequency-list {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.95);
+  border: 1px solid #4ecdc4;
+  border-radius: 12px;
+  padding: 10px;
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 200px;
+  max-width: 280px;
+  backdrop-filter: blur(10px);
+}
+
+.shflow-page #frequency-list.show {
+  display: flex;
+}
+
+.shflow-page .freq-item {
+  padding: 12px 15px;
+  background: rgba(78, 205, 196, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.shflow-page .freq-item:active {
+  background: rgba(78, 205, 196, 0.3);
+}
+
+.shflow-page .freq-item .freq-value {
+  color: #4ecdc4;
+  font-size: 11px;
+}
+
+/* Control group with slider */
+.shflow-page .control-group {
+  padding: 10px 15px;
+  background: rgba(78, 205, 196, 0.05);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shflow-page .control-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.shflow-page .control-label .freq-value {
+  color: #4ecdc4;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.shflow-page .control-slider {
+  width: 100%;
+  cursor: pointer;
+}
+
+/* Slider panel (legacy - no longer used but kept for compatibility) */
+.shflow-page #slider-panel {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.95);
+  border: 1px solid #4ecdc4;
+  border-radius: 12px;
+  padding: 15px;
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 250px;
+  max-width: 300px;
+  backdrop-filter: blur(10px);
+}
+
+.shflow-page #slider-panel.show {
+  display: flex;
+}
+
+.shflow-page #slider-panel .title {
+  font-size: 12px;
+  color: #aaa;
+  text-align: center;
+}
+
+.shflow-page #slider-panel input[type="range"] {
+  width: 100%;
+}
+
+.shflow-page #slider-panel .value-display {
+  text-align: center;
+  font-size: 18px;
+  color: #4ecdc4;
+  font-weight: bold;
+}
+
+.shflow-page #slider-panel .back-btn {
+  padding: 8px;
+  background: rgba(78, 205, 196, 0.2);
+  border-radius: 6px;
+  text-align: center;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.shflow-page #slider-panel .back-btn:active {
+  background: rgba(78, 205, 196, 0.4);
+}

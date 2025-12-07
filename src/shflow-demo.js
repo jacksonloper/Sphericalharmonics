@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import vertexShader from './shflow-shaders/vertex.glsl?raw';
 import fragmentShader from './shflow-shaders/fragment.glsl?raw';
+import { render } from 'solid-js/web';
+import { createSignal } from 'solid-js';
+import { ShflowControls } from './ShflowControls.jsx';
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -156,19 +159,10 @@ function updateOU(dt) {
   }
 }
 
-let currentParam = null;
-
-// UI elements
+// UI elements for info card and about button
 const infoCard = document.getElementById('infoCard');
 const aboutButton = document.getElementById('aboutButton');
 const enterButton = document.getElementById('enterButton');
-const hamburger = document.getElementById('hamburger');
-const frequencyList = document.getElementById('frequency-list');
-const sliderPanel = document.getElementById('slider-panel');
-const slider = document.getElementById('slider');
-const sliderTitle = document.getElementById('slider-title');
-const sliderValueDisplay = document.getElementById('slider-value-display');
-const backBtn = document.querySelector('.back-btn');
 
 // Setup About button
 aboutButton.addEventListener('click', () => {
@@ -182,107 +176,48 @@ enterButton.addEventListener('click', () => {
   aboutButton.style.display = 'block';
 });
 
-// Toggle hamburger menu
-hamburger.addEventListener('click', () => {
-  const isOpen = frequencyList.classList.contains('show');
-  if (isOpen) {
-    frequencyList.classList.remove('show');
-    sliderPanel.classList.remove('show');
-    hamburger.classList.remove('open');
-  } else {
-    frequencyList.classList.add('show');
-    hamburger.classList.add('open');
-  }
-});
+// Wireframe state
+const [wireframeEnabled, setWireframeEnabled] = createSignal(false);
 
-// Open slider for specific parameter
-document.querySelectorAll('.freq-item').forEach(item => {
-  item.addEventListener('click', () => {
-    const paramId = item.dataset.freq;
+// Initialize SolidJS control panel
+const controlsContainer = document.createElement('div');
+document.body.appendChild(controlsContainer);
 
-    // Skip if no data-freq attribute (wireframe toggle)
-    if (!paramId) return;
-
-    currentParam = paramId;
-
-    sliderTitle.textContent = ouParamLabels[paramId];
-    slider.value = ouParams[paramId];
-
-    // Update slider range based on parameter
-    if (paramId === 'maxOrder') {
-      slider.min = 1;
-      slider.max = 4;
-      slider.step = 1;
-      sliderValueDisplay.textContent = Math.round(ouParams[paramId]).toString();
-    } else if (paramId === 'theta') {
-      slider.min = 0;
-      slider.max = 2;
-      slider.step = 0.05;
-      sliderValueDisplay.textContent = ouParams[paramId].toFixed(2);
-    } else if (paramId === 'sigma') {
-      slider.min = 0;
-      slider.max = 1;
-      slider.step = 0.05;
-      sliderValueDisplay.textContent = ouParams[paramId].toFixed(2);
-    }
-
-    frequencyList.classList.remove('show');
-    sliderPanel.classList.add('show');
+render(() => {
+  return ShflowControls({
+    ouParams,
+    onMaxOrderChange: (intValue) => {
+      if (ouParams.maxOrder !== intValue) {
+        ouParams.maxOrder = intValue;
+        
+        // Reinitialize system with new order
+        activeIndices = getActiveIndices(ouParams.maxOrder);
+        initializeSystem();
+        
+        // Reset all coefficients to zero first
+        for (let i = 0; i < coefficients.length; i++) {
+          coefficients[i] = 0;
+        }
+        // Update active coefficients
+        for (let i = 0; i < n; i++) {
+          coefficients[activeIndices[i]] = x[i];
+        }
+      }
+    },
+    onThetaChange: (value) => {
+      ouParams.theta = value;
+    },
+    onSigmaChange: (value) => {
+      ouParams.sigma = value;
+    },
+    onWireframeToggle: () => {
+      const newValue = !wireframeEnabled();
+      setWireframeEnabled(newValue);
+      material.wireframe = newValue;
+    },
+    wireframeEnabled
   });
-});
-
-// Update parameter from slider
-slider.addEventListener('input', (e) => {
-  const value = parseFloat(e.target.value);
-
-  if (currentParam === 'maxOrder') {
-    const intValue = Math.round(value);
-    sliderValueDisplay.textContent = intValue.toString();
-
-    // Only update if value actually changed
-    if (ouParams.maxOrder !== intValue) {
-      ouParams.maxOrder = intValue;
-      document.getElementById(`${currentParam}-display`).textContent = intValue.toString();
-
-      // Reinitialize system with new order
-      activeIndices = getActiveIndices(ouParams.maxOrder);
-      initializeSystem();
-
-      // Reset all coefficients to zero first
-      for (let i = 0; i < coefficients.length; i++) {
-        coefficients[i] = 0;
-      }
-      // Update active coefficients
-      for (let i = 0; i < n; i++) {
-        coefficients[activeIndices[i]] = x[i];
-      }
-    }
-  } else {
-    sliderValueDisplay.textContent = value.toFixed(2);
-    ouParams[currentParam] = value;
-    document.getElementById(`${currentParam}-display`).textContent = value.toFixed(2);
-  }
-});
-
-// Back button
-backBtn.addEventListener('click', () => {
-  sliderPanel.classList.remove('show');
-  frequencyList.classList.add('show');
-});
-
-// Wireframe toggle
-const wireframeToggle = document.getElementById('wireframe-toggle');
-const wireframeStatus = document.getElementById('wireframe-status');
-let wireframeEnabled = false;
-
-wireframeToggle.addEventListener('click', (e) => {
-  // Prevent opening slider for wireframe toggle
-  e.stopPropagation();
-
-  wireframeEnabled = !wireframeEnabled;
-  material.wireframe = wireframeEnabled;
-  wireframeStatus.textContent = wireframeEnabled ? 'ON' : 'OFF';
-});
+}, controlsContainer);
 
 // Animation loop
 let time = 0;
