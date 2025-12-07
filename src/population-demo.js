@@ -8,6 +8,9 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import PopulationWorker from './populationWorker.js?worker';
 import { pix2ang_nest } from '@hscmap/healpix';
+import { render } from 'solid-js/web';
+import { createSignal } from 'solid-js';
+import { PopulationControls } from './PopulationControls.jsx';
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -117,7 +120,6 @@ const populationInfo = document.getElementById('populationInfo');
 
 // Get existing UI elements from HTML
 const aboutButton = document.getElementById('aboutButton');
-const moteCountSelector = document.getElementById('moteCountSelector');
 
 // Setup About button event listener
 aboutButton.addEventListener('click', () => {
@@ -127,13 +129,10 @@ aboutButton.addEventListener('click', () => {
   loadingStatus.style.display = 'none';
 });
 
-// Setup mote count selector event listener
-moteCountSelector.addEventListener('change', (e) => {
-  const newCount = parseInt(e.target.value);
-  if (window.dustParticleSystem) {
-    window.dustParticleSystem.setMoteCount(newCount);
-  }
-});
+// State for controls
+let relief = 1.0;
+let moteSize = 1.0;
+let moteCount = 150;
 
 // Create Enter button
 function createEnterButton() {
@@ -144,79 +143,9 @@ function createEnterButton() {
   btn.addEventListener('click', () => {
     infoCard.style.display = 'none';
     aboutButton.style.display = 'block';
-    moteCountSelector.style.display = 'block';
-    // Show relief slider and mode control when entering
-    const reliefControl = document.getElementById('reliefControl');
-    if (reliefControl) {
-      reliefControl.style.display = 'flex';
-    }
-    const sizeControl = document.getElementById('sizeControl');
-    if (sizeControl) {
-      sizeControl.style.display = 'flex';
-    }
-    const modeControl = document.getElementById('modeControl');
-    if (modeControl) {
-      modeControl.style.display = 'flex';
-    }
   });
   
   return btn;
-}
-
-// Setup relief slider control
-function setupReliefSlider() {
-  const slider = document.getElementById('reliefSlider');
-  const valueDisplay = document.getElementById('reliefValue');
-  
-  slider.addEventListener('input', (e) => {
-    const value = parseFloat(e.target.value) / 100;
-    valueDisplay.textContent = value.toFixed(2);
-    
-    if (window.populationMaterial) {
-      window.populationMaterial.uniforms.relief.value = value;
-    }
-  });
-}
-
-// Setup mote size slider control
-function setupMoteSizeSlider() {
-  const slider = document.getElementById('sizeSlider');
-  const valueDisplay = document.getElementById('sizeValue');
-  
-  slider.addEventListener('input', (e) => {
-    const multiplier = parseFloat(e.target.value) / 50;  // 50 = 1.0x
-    valueDisplay.textContent = multiplier.toFixed(2);
-    
-    if (window.dustParticleSystem) {
-      window.dustParticleSystem.setMoteSize(multiplier);
-    }
-  });
-}
-
-// Setup mode toggle control
-function setupModeToggle() {
-  const modeControl = document.getElementById('modeControl');
-  const pyramidsRadio = modeControl.querySelector('input[value="pyramids"]');
-  const dustRadio = modeControl.querySelector('input[value="dust"]');
-  
-  // Handle mode change
-  const handleModeChange = (e) => {
-    visualizationMode = e.target.value;
-    if (visualizationMode === 'pyramids') {
-      if (window.populationMesh) window.populationMesh.visible = true;
-      if (window.dustParticles) window.dustParticles.visible = false;
-      if (window.earthSphere) window.earthSphere.visible = false;
-      referenceGrid.visible = true;
-    } else {
-      if (window.populationMesh) window.populationMesh.visible = false;
-      if (window.dustParticles) window.dustParticles.visible = true;
-      if (window.earthSphere) window.earthSphere.visible = true;
-      referenceGrid.visible = false;
-    }
-  };
-  
-  pyramidsRadio.addEventListener('change', handleModeChange);
-  dustRadio.addEventListener('change', handleModeChange);
 }
 
 // Create dark Earth sphere
@@ -691,10 +620,50 @@ worker.onmessage = (e) => {
     const enterBtn = createEnterButton();
     infoCard.appendChild(enterBtn);
     
-    // Setup control sliders and toggles (hidden initially, shown after Enter)
-    setupReliefSlider();
-    setupMoteSizeSlider();
-    setupModeToggle();
+    // Initialize SolidJS control panel
+    const controlsContainer = document.createElement('div');
+    document.body.appendChild(controlsContainer);
+    
+    render(() => {
+      return PopulationControls({
+        visualizationMode,
+        onModeChange: (mode) => {
+          visualizationMode = mode;
+          if (visualizationMode === 'pyramids') {
+            if (window.populationMesh) window.populationMesh.visible = true;
+            if (window.dustParticles) window.dustParticles.visible = false;
+            if (window.earthSphere) window.earthSphere.visible = false;
+            referenceGrid.visible = true;
+          } else {
+            if (window.populationMesh) window.populationMesh.visible = false;
+            if (window.dustParticles) window.dustParticles.visible = true;
+            if (window.earthSphere) window.earthSphere.visible = true;
+            referenceGrid.visible = false;
+          }
+        },
+        relief,
+        onReliefChange: (value) => {
+          relief = value;
+          if (window.populationMaterial) {
+            window.populationMaterial.uniforms.relief.value = value;
+          }
+        },
+        moteSize,
+        onMoteSizeChange: (multiplier) => {
+          moteSize = multiplier;
+          if (window.dustParticleSystem) {
+            window.dustParticleSystem.setMoteSize(multiplier);
+          }
+        },
+        moteCount,
+        onMoteCountChange: (newCount) => {
+          moteCount = newCount;
+          if (window.dustParticleSystem) {
+            window.dustParticleSystem.setMoteCount(newCount);
+          }
+        }
+      });
+    }, controlsContainer);
     
     console.log('Population visualization loaded successfully!');
   } else if (type === 'error') {

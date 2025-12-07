@@ -32,42 +32,7 @@
   <!-- About button (initially hidden) -->
   <button id="aboutButton" class="btn" style="display: none;">About</button>
   
-  <!-- Mote count selector (initially hidden) -->
-  <select id="moteCountSelector" style="display: none;">
-    <option value="150" selected>150 motes</option>
-    <option value="300">300 motes</option>
-    <option value="600">600 motes</option>
-    <option value="1200">1200 motes</option>
-  </select>
-  
-  <!-- Relief control slider (initially hidden) -->
-  <div id="reliefControl" class="control-panel">
-    <span>Relief:</span>
-    <input type="range" id="reliefSlider" min="0" max="100" value="100">
-    <span id="reliefValue">1.00</span>
-  </div>
-  
-  <!-- Mote size control slider (initially hidden) -->
-  <div id="sizeControl" class="control-panel">
-    <span>Mote size:</span>
-    <input type="range" id="sizeSlider" min="10" max="100" value="50">
-    <span id="sizeValue">1.00</span>
-  </div>
-  
-  <!-- Mode toggle control (initially hidden) -->
-  <div id="modeControl" class="control-panel">
-    <span>Mode:</span>
-    <div class="radio-group">
-      <label>
-        <input type="radio" name="vizMode" value="pyramids">
-        <span>Boxes</span>
-      </label>
-      <label>
-        <input type="radio" name="vizMode" value="dust" checked>
-        <span>Dust</span>
-      </label>
-    </div>
-  </div>
+  <!-- Control panel will be rendered by SolidJS -->
   
   <script type="module" src="/src/population-demo.js"></script>
 </body>

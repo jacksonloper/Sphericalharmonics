@@ -1,31 +1,18 @@
 import { createSignal } from 'solid-js';
 
-export function EtopoRangeControls(props) {
+export function PopulationControls(props) {
   const {
-    currentMeshType,
-    onMeshTypeChange,
-    flipSign,
-    onFlipSignChange,
-    showHealpixDots,
-    onShowHealpixDotsChange,
-    useWaterColormap,
-    onUseWaterColormapChange,
-    currentNside,
-    onNsideChange,
-    availableNsides,
-    alphaValue,
-    onAlphaChange,
-    getNpix
+    visualizationMode,
+    onModeChange,
+    relief,
+    onReliefChange,
+    moteSize,
+    onMoteSizeChange,
+    moteCount,
+    onMoteCountChange
   } = props;
 
-  const [localAlpha, setLocalAlpha] = createSignal(alphaValue);
   const [isOpen, setIsOpen] = createSignal(false);
-
-  const handleAlphaChange = (e) => {
-    const newAlpha = parseFloat(e.target.value);
-    setLocalAlpha(newAlpha);
-    onAlphaChange(newAlpha);
-  };
 
   const toggleMenu = () => setIsOpen(!isOpen());
 
@@ -99,7 +86,7 @@ export function EtopoRangeControls(props) {
         'font-family': 'monospace',
         'font-size': '12px'
       }}>
-        {/* Radio buttons for min/mean/max mesh selection */}
+        {/* Mode toggle */}
         <div style={{
           display: 'flex',
           'align-items': 'center',
@@ -108,92 +95,34 @@ export function EtopoRangeControls(props) {
           background: 'rgba(78, 205, 196, 0.05)',
           'border-radius': '6px'
         }}>
-          <input
-            type="radio"
-            name="meshType"
-            id="minMeshRadio"
-            checked={currentMeshType === 'min'}
-            onChange={() => onMeshTypeChange('min')}
-            style={{ cursor: 'pointer' }}
-          />
-          <label htmlFor="minMeshRadio" style={{ cursor: 'pointer' }}>Min</label>
-
-          <input
-            type="radio"
-            name="meshType"
-            id="meanMeshRadio"
-            checked={currentMeshType === 'mean'}
-            onChange={() => onMeshTypeChange('mean')}
-            style={{ cursor: 'pointer' }}
-          />
-          <label htmlFor="meanMeshRadio" style={{ cursor: 'pointer' }}>Mean</label>
-
-          <input
-            type="radio"
-            name="meshType"
-            id="maxMeshRadio"
-            checked={currentMeshType === 'max'}
-            onChange={() => onMeshTypeChange('max')}
-            style={{ cursor: 'pointer' }}
-          />
-          <label htmlFor="maxMeshRadio" style={{ cursor: 'pointer' }}>Max</label>
-        </div>
-
-        {/* Checkboxes */}
-        <div style={{ display: 'flex', 'flex-direction': 'column', gap: '8px' }}>
-          <div style={{
-            display: 'flex',
-            'align-items': 'center',
-            gap: '8px'
-          }}>
-            <input
-              type="checkbox"
-              id="flipOceansCheckbox"
-              checked={flipSign}
-              onChange={(e) => onFlipSignChange(e.target.checked)}
-              style={{ cursor: 'pointer' }}
-            />
-            <label htmlFor="flipOceansCheckbox" style={{ cursor: 'pointer' }}>
-              Flip oceans
+          <span>Mode:</span>
+          <div style={{ display: 'flex', gap: '12px', 'align-items': 'center' }}>
+            <label style={{ display: 'flex', 'align-items': 'center', gap: '4px', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="vizMode"
+                value="pyramids"
+                checked={visualizationMode === 'pyramids'}
+                onChange={(e) => onModeChange(e.target.value)}
+                style={{ cursor: 'pointer' }}
+              />
+              <span>Boxes</span>
             </label>
-          </div>
-
-          <div style={{
-            display: 'flex',
-            'align-items': 'center',
-            gap: '8px'
-          }}>
-            <input
-              type="checkbox"
-              id="dotsCheckbox"
-              checked={showHealpixDots}
-              onChange={(e) => onShowHealpixDotsChange(e.target.checked)}
-              style={{ cursor: 'pointer' }}
-            />
-            <label htmlFor="dotsCheckbox" style={{ cursor: 'pointer' }}>
-              Show HEALPix dots
-            </label>
-          </div>
-
-          <div style={{
-            display: 'flex',
-            'align-items': 'center',
-            gap: '8px'
-          }}>
-            <input
-              type="checkbox"
-              id="waterColormapCheckbox"
-              checked={useWaterColormap}
-              onChange={(e) => onUseWaterColormapChange(e.target.checked)}
-              style={{ cursor: 'pointer' }}
-            />
-            <label htmlFor="waterColormapCheckbox" style={{ cursor: 'pointer' }}>
-              Water colormap
+            <label style={{ display: 'flex', 'align-items': 'center', gap: '4px', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="vizMode"
+                value="dust"
+                checked={visualizationMode === 'dust'}
+                onChange={(e) => onModeChange(e.target.value)}
+                style={{ cursor: 'pointer' }}
+              />
+              <span>Dust</span>
             </label>
           </div>
         </div>
 
-        {/* Resolution selector */}
+        {/* Mote count selector */}
         <div style={{
           display: 'flex',
           'align-items': 'center',
@@ -202,11 +131,10 @@ export function EtopoRangeControls(props) {
           background: 'rgba(78, 205, 196, 0.05)',
           'border-radius': '6px'
         }}>
-          <span>Resolution:</span>
+          <span>Motes:</span>
           <select
-            id="nsideSelect"
-            value={currentNside}
-            onChange={(e) => onNsideChange(parseInt(e.target.value))}
+            value={moteCount}
+            onChange={(e) => onMoteCountChange(parseInt(e.target.value))}
             style={{
               cursor: 'pointer',
               padding: '4px 8px',
@@ -219,11 +147,10 @@ export function EtopoRangeControls(props) {
               flex: '1'
             }}
           >
-            {availableNsides.map(nside => (
-              <option value={nside}>
-                {getNpix(nside).toLocaleString()} vertices
-              </option>
-            ))}
+            <option value="150">150 motes</option>
+            <option value="300">300 motes</option>
+            <option value="600">600 motes</option>
+            <option value="1200">1200 motes</option>
           </select>
         </div>
 
@@ -243,16 +170,49 @@ export function EtopoRangeControls(props) {
           }}>
             <span>Relief:</span>
             <span style={{ color: '#4ecdc4', 'font-weight': 'bold' }}>
-              {localAlpha().toFixed(2)}
+              {relief.toFixed(2)}
             </span>
           </div>
           <input
             type="range"
-            min="0.01"
-            max="0.5"
-            step="0.01"
-            value={localAlpha()}
-            onInput={handleAlphaChange}
+            min="0"
+            max="100"
+            step="1"
+            value={relief * 100}
+            onInput={(e) => onReliefChange(parseFloat(e.target.value) / 100)}
+            style={{
+              width: '100%',
+              cursor: 'pointer'
+            }}
+          />
+        </div>
+
+        {/* Mote size slider */}
+        <div style={{
+          display: 'flex',
+          'flex-direction': 'column',
+          gap: '8px',
+          padding: '8px',
+          background: 'rgba(78, 205, 196, 0.05)',
+          'border-radius': '6px'
+        }}>
+          <div style={{
+            display: 'flex',
+            'justify-content': 'space-between',
+            'align-items': 'center'
+          }}>
+            <span>Mote size:</span>
+            <span style={{ color: '#4ecdc4', 'font-weight': 'bold' }}>
+              {moteSize.toFixed(2)}
+            </span>
+          </div>
+          <input
+            type="range"
+            min="10"
+            max="100"
+            step="1"
+            value={moteSize * 50}
+            onInput={(e) => onMoteSizeChange(parseFloat(e.target.value) / 50)}
             style={{
               width: '100%',
               cursor: 'pointer'

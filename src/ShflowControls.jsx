@@ -1,4 +1,4 @@
-import { createSignal, Show, createMemo } from 'solid-js';
+import { createSignal } from 'solid-js';
 
 export function ShflowControls(props) {
   const {
@@ -11,62 +11,8 @@ export function ShflowControls(props) {
   } = props;
 
   const [isOpen, setIsOpen] = createSignal(false);
-  const [showSlider, setShowSlider] = createSignal(false);
-  const [currentParam, setCurrentParam] = createSignal(null);
 
   const toggleMenu = () => setIsOpen(!isOpen());
-
-  const openSlider = (param) => {
-    setCurrentParam(param);
-    setShowSlider(true);
-    setIsOpen(false);
-  };
-
-  const closeSlider = () => {
-    setShowSlider(false);
-    setIsOpen(true);
-  };
-
-  const handleSliderChange = (e) => {
-    const value = parseFloat(e.target.value);
-    const param = currentParam();
-
-    if (param === 'maxOrder') {
-      const intValue = Math.round(value);
-      onMaxOrderChange(intValue);
-    } else if (param === 'theta') {
-      onThetaChange(value);
-    } else if (param === 'sigma') {
-      onSigmaChange(value);
-    }
-  };
-
-  const sliderConfig = createMemo(() => {
-    const param = currentParam();
-    if (param === 'maxOrder') {
-      return { min: 1, max: 4, step: 1, value: ouParams.maxOrder };
-    } else if (param === 'theta') {
-      return { min: 0, max: 2, step: 0.05, value: ouParams.theta };
-    } else if (param === 'sigma') {
-      return { min: 0, max: 1, step: 0.05, value: ouParams.sigma };
-    }
-    return { min: 0, max: 1, step: 0.01, value: 0 };
-  });
-
-  const formatValue = (param) => {
-    if (param === 'maxOrder') {
-      return ouParams[param].toString();
-    }
-    return ouParams[param].toFixed(2);
-  };
-
-  const getParamLabel = () => {
-    const param = currentParam();
-    if (param === 'maxOrder') return 'Max Harmonic Order (l)';
-    if (param === 'theta') return 'Mean Reversion (θ)';
-    if (param === 'sigma') return 'Volatility (σ)';
-    return '';
-  };
 
   return (
     <>
@@ -81,48 +27,68 @@ export function ShflowControls(props) {
         <span></span>
       </div>
 
-      {/* Parameter list menu */}
+      {/* Control panel with all controls */}
       <div
         id="frequency-list"
         class={isOpen() ? 'show' : ''}
       >
-        <div class="freq-item" onClick={() => openSlider('maxOrder')}>
-          <span>Max Harmonic Order (l)</span>
-          <span class="freq-value">{ouParams.maxOrder}</span>
+        {/* Max Harmonic Order slider */}
+        <div class="control-group">
+          <div class="control-label">
+            <span>Max Harmonic Order (l)</span>
+            <span class="freq-value">{ouParams.maxOrder}</span>
+          </div>
+          <input
+            type="range"
+            min="1"
+            max="4"
+            step="1"
+            value={ouParams.maxOrder}
+            onInput={(e) => onMaxOrderChange(Math.round(parseFloat(e.target.value)))}
+            class="control-slider"
+          />
         </div>
-        <div class="freq-item" onClick={() => openSlider('theta')}>
-          <span>Mean Reversion (θ)</span>
-          <span class="freq-value">{ouParams.theta.toFixed(2)}</span>
+
+        {/* Mean Reversion slider */}
+        <div class="control-group">
+          <div class="control-label">
+            <span>Mean Reversion (θ)</span>
+            <span class="freq-value">{ouParams.theta.toFixed(2)}</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="2"
+            step="0.05"
+            value={ouParams.theta}
+            onInput={(e) => onThetaChange(parseFloat(e.target.value))}
+            class="control-slider"
+          />
         </div>
-        <div class="freq-item" onClick={() => openSlider('sigma')}>
-          <span>Volatility (σ)</span>
-          <span class="freq-value">{ouParams.sigma.toFixed(2)}</span>
+
+        {/* Volatility slider */}
+        <div class="control-group">
+          <div class="control-label">
+            <span>Volatility (σ)</span>
+            <span class="freq-value">{ouParams.sigma.toFixed(2)}</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={ouParams.sigma}
+            onInput={(e) => onSigmaChange(parseFloat(e.target.value))}
+            class="control-slider"
+          />
         </div>
+
+        {/* Wireframe toggle */}
         <div class="freq-item" onClick={onWireframeToggle}>
           <span>Wireframe</span>
           <span class="freq-value">{wireframeEnabled() ? 'ON' : 'OFF'}</span>
         </div>
       </div>
-
-      {/* Slider panel */}
-      <Show when={showSlider()}>
-        <div id="slider-panel" class="show">
-          <div class="title">{getParamLabel()}</div>
-          <div class="value-display">
-            {formatValue(currentParam())}
-          </div>
-          <input
-            type="range"
-            id="slider"
-            min={sliderConfig().min}
-            max={sliderConfig().max}
-            step={sliderConfig().step}
-            value={sliderConfig().value}
-            onInput={handleSliderChange}
-          />
-          <div class="back-btn" onClick={closeSlider}>← Back</div>
-        </div>
-      </Show>
     </>
   );
 }
