@@ -43,7 +43,7 @@ export function PopulationControls(props) {
           'justify-content': 'center',
           'align-items': 'center',
           gap: '4px',
-          'z-index': '1000',
+          'z-index': '500',
           transition: 'transform 0.3s'
         }}
       >

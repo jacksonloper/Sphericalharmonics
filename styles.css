@@ -380,7 +380,7 @@ select {
    Index Page Specific Styles
    ======================================== */
 
-.index-page body {
+body.index-page {
   min-height: 100vh;
   background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
   font-family: 'Monaco', 'Courier New', monospace;
@@ -474,7 +474,7 @@ select {
    Shflow Demo Specific Styles
    ======================================== */
 
-.shflow-page body {
+body.shflow-page {
   background: #000;
   overflow: hidden;
 }
@@ -496,7 +496,7 @@ select {
   justify-content: center;
   align-items: center;
   gap: 4px;
-  z-index: 1000;
+  z-index: 500;
   transition: transform 0.3s;
 }
 
