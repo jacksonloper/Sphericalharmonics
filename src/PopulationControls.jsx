@@ -1,5 +1,9 @@
 import { createSignal } from 'solid-js';
 
+// Scaling constants
+const RELIEF_SCALE = 100;  // Relief slider: 0-100 maps to 0.0-1.0
+const MOTE_SIZE_SCALE = 50;  // Mote size slider: 10-100 maps to 0.2-2.0 (50 = 1.0x)
+
 export function PopulationControls(props) {
   const {
     visualizationMode,
@@ -176,10 +180,10 @@ export function PopulationControls(props) {
           <input
             type="range"
             min="0"
-            max="100"
+            max={RELIEF_SCALE}
             step="1"
-            value={relief * 100}
-            onInput={(e) => onReliefChange(parseFloat(e.target.value) / 100)}
+            value={relief * RELIEF_SCALE}
+            onInput={(e) => onReliefChange(parseFloat(e.target.value) / RELIEF_SCALE)}
             style={{
               width: '100%',
               cursor: 'pointer'
@@ -211,8 +215,8 @@ export function PopulationControls(props) {
             min="10"
             max="100"
             step="1"
-            value={moteSize * 50}
-            onInput={(e) => onMoteSizeChange(parseFloat(e.target.value) / 50)}
+            value={moteSize * MOTE_SIZE_SCALE}
+            onInput={(e) => onMoteSizeChange(parseFloat(e.target.value) / MOTE_SIZE_SCALE)}
             style={{
               width: '100%',
               cursor: 'pointer'
